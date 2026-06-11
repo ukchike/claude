@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProfileHub</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- NAV -->
+<nav id="app-nav" style="display:none;">
+  <a class="nav-brand" href="/profile" id="nav-profile-link">ProfileHub</a>
+  <div class="nav-actions">
+    <div class="nav-user">
+      <div class="nav-avatar" id="nav-avatar">?</div>
+      <span id="nav-username" style="font-size:.875rem;color:var(--muted);"></span>
+    </div>
+    <button class="btn btn-ghost" id="logout-btn" style="padding:7px 14px;font-size:.875rem;">Logout</button>
+  </div>
+</nav>
+
+<!-- LOGIN PAGE -->
+<div id="page-login" class="page">
+  <div class="auth-wrapper">
+    <div class="auth-card">
+      <h1>Welcome back</h1>
+      <p>Sign in to your ProfileHub account</p>
+      <div class="alert" id="login-alert"></div>
+      <form id="login-form">
+        <div class="form-group">
+          <label for="login-email">Email address</label>
+          <input type="email" id="login-email" placeholder="you@example.com" required autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" placeholder="Your password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">Sign in</button>
+      </form>
+      <p class="auth-link">Don't have an account? <a href="#" id="go-register">Create one</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- REGISTER PAGE -->
+<div id="page-register" class="page">
+  <div class="auth-wrapper">
+    <div class="auth-card">
+      <h1>Create account</h1>
+      <p>Join ProfileHub today — it's free</p>
+      <div class="alert" id="register-alert"></div>
+      <form id="register-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="reg-fullname">Full name</label>
+            <input type="text" id="reg-fullname" placeholder="Uk Chike" autocomplete="name">
+          </div>
+          <div class="form-group">
+            <label for="reg-username">Username</label>
+            <input type="text" id="reg-username" placeholder="ukchike" required autocomplete="username">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="reg-email">Email address</label>
+          <input type="email" id="reg-email" placeholder="you@example.com" required autocomplete="email">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="reg-password">Password</label>
+            <input type="password" id="reg-password" placeholder="Min. 8 characters" required autocomplete="new-password">
+          </div>
+          <div class="form-group">
+            <label for="reg-confirm">Confirm password</label>
+            <input type="password" id="reg-confirm" placeholder="Repeat password" required autocomplete="new-password">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">Create account</button>
+      </form>
+      <p class="auth-link">Already have an account? <a href="#" id="go-login">Sign in</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- PROFILE PAGE -->
+<div id="page-profile" class="page">
+  <div class="container">
+
+    <!-- Profile Header -->
+    <div class="profile-header" id="profile-header">
+      <div style="color:var(--muted);font-size:.9rem;">Loading profile...</div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row" id="profile-stats"></div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="edit">Edit Profile</button>
+      <button class="tab-btn" data-tab="security">Security</button>
+      <button class="tab-btn" data-tab="danger">Account</button>
+    </div>
+
+    <!-- Tab: Edit -->
+    <div class="tab-content active" id="tab-edit">
+      <div class="card">
+        <div class="card-title">Profile Information</div>
+        <div class="alert" id="edit-alert"></div>
+        <form id="edit-profile-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-full-name">Full name</label>
+              <input type="text" id="edit-full-name" placeholder="Your full name">
+            </div>
+            <div class="form-group">
+              <label for="edit-phone">Phone number</label>
+              <input type="tel" id="edit-phone" placeholder="+234 xxx xxx xxxx">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="edit-bio">Bio</label>
+            <textarea id="edit-bio" placeholder="Tell us about yourself..."></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-location">Location</label>
+              <input type="text" id="edit-location" placeholder="Lagos, Nigeria">
+            </div>
+            <div class="form-group">
+              <label for="edit-website">Website</label>
+              <input type="url" id="edit-website" placeholder="https://ukc.ng">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">Save changes</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Tab: Security -->
+    <div class="tab-content" id="tab-security">
+      <div class="card">
+        <div class="card-title">Change Password</div>
+        <div class="alert" id="password-alert"></div>
+        <form id="password-form">
+          <div class="form-group">
+            <label for="current-password">Current password</label>
+            <input type="password" id="current-password" placeholder="Your current password" required autocomplete="current-password">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="new-password">New password</label>
+              <input type="password" id="new-password" placeholder="Min. 8 characters" required autocomplete="new-password">
+            </div>
+            <div class="form-group">
+              <label for="confirm-password">Confirm new password</label>
+              <input type="password" id="confirm-password" placeholder="Repeat new password" required autocomplete="new-password">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">Update password</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Tab: Danger Zone -->
+    <div class="tab-content" id="tab-danger">
+      <div class="card danger-zone">
+        <div class="card-title">Delete Account</div>
+        <div class="alert" id="danger-alert"></div>
+        <p style="font-size:.9rem;color:var(--muted);margin-bottom:20px;">
+          Permanently delete your account and all associated data. This action is irreversible.
+        </p>
+        <button class="btn btn-danger" id="delete-account-btn">Delete my account</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>
