@@ -6,6 +6,9 @@ on:
       - 'financeflow-android/**'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,21 +27,24 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Make gradlew executable
-        run: chmod +x financeflow-android/gradlew
-        working-directory: ${{ github.workspace }}
+        run: chmod +x gradlew
+        working-directory: financeflow-android
 
       - name: Build Release APK
         run: ./gradlew assembleRelease
         working-directory: financeflow-android
 
-      - name: Upload APK
+      - name: Rename APK
+        run: mv financeflow-android/app/build/outputs/apk/release/app-release-unsigned.apk financeflow-android/app/build/outputs/apk/release/FinanceFlow.apk
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: FinanceFlow-APK
-          path: financeflow-android/app/build/outputs/apk/release/app-release-unsigned.apk
-          retention-days: 30
+          path: financeflow-android/app/build/outputs/apk/release/FinanceFlow.apk
+          retention-days: 90
 
-      - name: Create Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
@@ -47,9 +53,9 @@ jobs:
             FinanceFlow Android APK
 
             **Install instructions:**
-            1. Download the APK file below
-            2. On your Android phone, go to Settings → Security → Enable "Unknown sources" (or "Install unknown apps")
-            3. Open the downloaded APK and tap Install
-          files: financeflow-android/app/build/outputs/apk/release/app-release-unsigned.apk
+            1. Download `FinanceFlow.apk` below
+            2. On your Android phone: Settings → Security → enable "Install unknown apps"
+            3. Open the APK and tap Install
+          files: financeflow-android/app/build/outputs/apk/release/FinanceFlow.apk
           draft: false
           prerelease: false
