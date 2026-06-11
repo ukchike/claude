@@ -35,7 +35,10 @@ jobs:
         working-directory: financeflow-android
 
       - name: Rename APK
-        run: mv financeflow-android/app/build/outputs/apk/release/app-release-unsigned.apk financeflow-android/app/build/outputs/apk/release/FinanceFlow.apk
+        run: |
+          APK=$(find financeflow-android/app/build/outputs/apk/release -name "*.apk" | head -1)
+          echo "Found APK: $APK"
+          mv "$APK" financeflow-android/app/build/outputs/apk/release/FinanceFlow.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
