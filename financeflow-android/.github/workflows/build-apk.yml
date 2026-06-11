@@ -1,0 +1,55 @@
+name: Build FinanceFlow APK
+
+on:
+  push:
+    paths:
+      - 'financeflow-android/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make gradlew executable
+        run: chmod +x financeflow-android/gradlew
+        working-directory: ${{ github.workspace }}
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
+        working-directory: financeflow-android
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FinanceFlow-APK
+          path: financeflow-android/app/build/outputs/apk/release/app-release-unsigned.apk
+          retention-days: 30
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: FinanceFlow v1.0.${{ github.run_number }}
+          body: |
+            FinanceFlow Android APK
+
+            **Install instructions:**
+            1. Download the APK file below
+            2. On your Android phone, go to Settings → Security → Enable "Unknown sources" (or "Install unknown apps")
+            3. Open the downloaded APK and tap Install
+          files: financeflow-android/app/build/outputs/apk/release/app-release-unsigned.apk
+          draft: false
+          prerelease: false
