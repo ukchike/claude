@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prolion — AI-Powered Intelligence Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: #05080A; color: #fff; overflow-x: hidden; }
+        .font-geist { font-family: 'Geist', sans-serif; }
+        ::selection { background: rgba(198,249,31,0.3); color: #c6f91f; }
+
+        /* Reveal Animation */
+        @keyframes reveal {
+            from { opacity: 0; transform: translateY(20px); filter: blur(8px); }
+            to { opacity: 1; transform: translateY(0); filter: blur(0); }
+        }
+        .reveal { animation: reveal 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+        .reveal-d1 { animation-delay: 0.1s; }
+        .reveal-d2 { animation-delay: 0.2s; }
+        .reveal-d3 { animation-delay: 0.3s; }
+        .reveal-d4 { animation-delay: 0.4s; }
+        .reveal-d5 { animation-delay: 0.5s; }
+        .reveal-d6 { animation-delay: 0.6s; }
+
+        /* Scroll-triggered reveal */
+        .scroll-reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            filter: blur(6px);
+            transition: all 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .scroll-reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+            filter: blur(0);
+        }
+
+        /* Marquee */
+        @keyframes marquee-scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .marquee-track { animation: marquee-scroll 40s linear infinite; }
+        .marquee-track:hover { animation-play-state: paused; }
+
+        /* Radar spin */
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .radar-spin { animation: spin 4s linear infinite; }
+
+        /* Pulse */
+        @keyframes pulse-ring {
+            0% { transform: scale(1); opacity: 0.6; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+        .pulse-ring { animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+        /* Gradient line */
+        @keyframes gradient-shift {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+        .gradient-line {
+            background: linear-gradient(90deg, transparent, rgba(198,249,31,0.6), transparent);
+            background-size: 200% 100%;
+            animation: gradient-shift 3s linear infinite;
+        }
+
+        /* Card hover glow */
+        .card-glow {
+            position: relative;
+            overflow: hidden;
+        }
+        .card-glow::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(198,249,31,0.04), transparent 40%);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        .card-glow:hover::before { opacity: 1; }
+
+        /* Sepia hero image */
+        .hero-sepia { filter: sepia(0.3) saturate(0.7) brightness(0.8); }
+
+        /* Noise overlay */
+        .noise-overlay::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: url('https://grainy-gradients.vercel.app/noise.svg');
+            opacity: 0.2;
+            pointer-events: none;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #05080A; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+        /* Mobile menu */
+        .mobile-menu {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .mobile-menu.open { max-height: 400px; }
+
+        /* Feature card number */
+        .feature-number {
+            font-size: 80px;
+            font-weight: 300;
+            line-height: 1;
+            background: linear-gradient(to bottom, rgba(255,255,255,0.08), transparent);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            position: absolute;
+            top: -10px;
+            right: 16px;
+            pointer-events: none;
+        }
+
+        /* Dashboard grid pattern */
+        .grid-pattern {
+            background-image:
+                linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        accent: '#c6f91f',
+                        dark: { 900: '#05080A', 800: '#0B0F13', 700: '#0E1216', 600: '#080B0E' }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="antialiased">
+
+    <!-- ==================== NAVIGATION ==================== -->
+    <nav class="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/[0.05]">
+        <div class="max-w-screen-2xl mx-auto px-6 sm:px-8">
+            <div class="grid grid-cols-12 items-center h-16 sm:h-20">
+                <!-- Logo -->
+                <div class="col-span-4 lg:col-span-2 flex items-center gap-3">
+                    <div class="w-8 h-8 bg-[#c6f91f] rounded-sm flex items-center justify-center">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/></svg>
+                    </div>
+                    <span class="font-geist font-semibold text-lg tracking-tight">Prolion</span>
+                </div>
+
+                <!-- Desktop Nav Links -->
+                <div class="hidden lg:flex col-span-8 items-center justify-center gap-1">
+                    <a href="#features" class="px-4 py-2 text-sm text-white/70 hover:text-white hover:bg-white/[0.04] rounded-md transition-colors">Features</a>
+                    <a href="#product" class="px-4 py-2 text-sm text-white/70 hover:text-white hover:bg-white/[0.04] rounded-md transition-colors">Product</a>
+                    <a href="#pricing" class="px-4 py-2 text-sm text-white/70 hover:text-white hover:bg-white/[0.04] rounded-md transition-colors">Pricing</a>
+                    <a href="#testimonials" class="px-4 py-2 text-sm text-white/70 hover:text-white hover:bg-white/[0.04] rounded-md transition-colors">Testimonials</a>
+                    <a href="#" class="px-4 py-2 text-sm text-white/70 hover:text-white hover:bg-white/[0.04] rounded-md transition-colors">Docs</a>
+                </div>
+
+                <!-- CTA + Mobile Toggle -->
+                <div class="col-span-8 lg:col-span-2 flex items-center justify-end gap-3">
+                    <a href="#" class="hidden sm:inline-flex text-sm text-white/70 hover:text-white transition-colors">Sign in</a>
+                    <a href="#" class="hidden sm:inline-flex items-center gap-2 bg-white text-black text-xs font-medium tracking-wide uppercase py-2.5 px-5 rounded-sm hover:bg-[#c6f91f] transition-colors">
+                        Get Started
+                    </a>
+                    <button id="mobile-toggle" class="lg:hidden p-2 text-white/70 hover:text-white transition-colors">
+                        <i data-lucide="menu" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mobile Menu -->
+            <div id="mobile-menu" class="mobile-menu lg:hidden">
+                <div class="py-4 border-t border-white/[0.05] flex flex-col gap-1">
+                    <a href="#features" class="px-4 py-3 text-sm text-white/70 hover:text-white hover:bg-white/[0.04] rounded-md transition-colors">Features</a>
+                    <a href="#product" class="px-4 py-3 text-sm text-white/70 hover:text-white hover:bg-white/[0.04] rounded-md transition-colors">Product</a>
+                    <a href="#pricing" class="px-4 py-3 text-sm text-white/70 hover:text-white hover:bg-white/[0.04] rounded-md transition-colors">Pricing</a>
+                    <a href="#testimonials" class="px-4 py-3 text-sm text-white/70 hover:text-white hover:bg-white/[0.04] rounded-md transition-colors">Testimonials</a>
+                    <a href="#" class="px-4 py-3 text-sm text-white/70 hover:text-white hover:bg-white/[0.04] rounded-md transition-colors">Docs</a>
+                    <div class="pt-3 mt-2 border-t border-white/[0.05] px-4">
+                        <a href="#" class="w-full inline-flex items-center justify-center bg-white text-black text-xs font-medium tracking-wide uppercase py-3 px-5 rounded-sm hover:bg-[#c6f91f] transition-colors">Get Started</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ==================== HERO SECTION ==================== -->
+    <section class="relative min-h-[90vh] flex items-center overflow-hidden noise-overlay">
+        <!-- Background effects -->
+        <div class="absolute inset-0">
+            <div class="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-[#c6f91f]/[0.03] rounded-full blur-[120px]"></div>
+            <div class="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-[#c6f91f]/[0.02] rounded-full blur-[100px]"></div>
+        </div>
+
+        <div class="relative max-w-screen-2xl mx-auto px-6 sm:px-8 lg:px-20 py-16 lg:py-24 w-full">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+                <!-- Left: Text Content -->
+                <div class="max-w-2xl">
+                    <!-- Badge -->
+                    <div class="reveal inline-flex items-center gap-2 bg-[#c6f91f]/[0.08] border border-[#c6f91f]/[0.15] rounded-full px-4 py-1.5 mb-8">
+                        <span class="w-1.5 h-1.5 bg-[#c6f91f] rounded-full"></span>
+                        <span class="text-[10px] font-semibold tracking-widest uppercase text-[#c6f91f]">New — Real-time Analytics</span>
+                    </div>
+
+                    <!-- Headline -->
+                    <h1 class="reveal reveal-d1 font-geist font-light text-5xl sm:text-6xl lg:text-7xl tracking-tighter leading-[1.1] mb-6">
+                        Intelligence<br>
+                        <span class="text-white/70">at scale,</span><br>
+                        <span class="text-[#c6f91f]">without limits.</span>
+                    </h1>
+
+                    <!-- Description -->
+                    <p class="reveal reveal-d2 text-lg lg:text-xl font-light text-white/60 leading-relaxed mb-10 max-w-lg">
+                        Prolion processes millions of data points in real-time, delivering actionable intelligence that transforms how teams make decisions.
+                    </p>
+
+                    <!-- CTAs -->
+                    <div class="reveal reveal-d3 flex flex-wrap items-center gap-4">
+                        <a href="#" class="group inline-flex items-center gap-2 bg-white text-black text-xs font-medium tracking-wide uppercase py-5 px-8 rounded-sm hover:bg-[#c6f91f] transition-colors">
+                            Start Free Trial
+                            <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+                        </a>
+                        <a href="#" class="group inline-flex items-center gap-2 border border-white/10 text-white text-xs font-medium tracking-wide uppercase py-5 px-8 rounded-sm hover:bg-white/[0.04] hover:border-white/20 transition-all">
+                            <i data-lucide="play" class="w-4 h-4"></i>
+                            Watch Demo
+                        </a>
+                    </div>
+
+                    <!-- Stats -->
+                    <div class="reveal reveal-d4 flex items-center gap-8 mt-12 pt-8 border-t border-dashed border-white/10">
+                        <div>
+                            <div class="font-geist font-light text-3xl tracking-tighter">99.9%</div>
+                            <div class="text-xs text-white/40 mt-1">Uptime SLA</div>
+                        </div>
+                        <div class="w-px h-10 bg-white/10"></div>
+                        <div>
+                            <div class="font-geist font-light text-3xl tracking-tighter">50ms</div>
+                            <div class="text-xs text-white/40 mt-1">Avg Response</div>
+                        </div>
+                        <div class="w-px h-10 bg-white/10"></div>
+                        <div>
+                            <div class="font-geist font-light text-3xl tracking-tighter">10M+</div>
+                            <div class="text-xs text-white/40 mt-1">Events/sec</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Hero Visual -->
+                <div class="reveal reveal-d3 relative hidden lg:block">
+                    <div class="relative">
+                        <!-- Dashboard mockup -->
+                        <div class="relative bg-[#0B0F13] border border-white/[0.08] rounded-xl overflow-hidden shadow-2xl">
+                            <!-- Top bar -->
+                            <div class="flex items-center gap-2 px-4 py-3 border-b border-white/[0.05] bg-[#080B0E]">
+                                <div class="w-3 h-3 rounded-full bg-white/10"></div>
+                                <div class="w-3 h-3 rounded-full bg-white/10"></div>
+                                <div class="w-3 h-3 rounded-full bg-white/10"></div>
+                                <div class="ml-4 flex-1 h-6 bg-white/[0.04] rounded-md max-w-xs"></div>
+                            </div>
+                            <!-- Dashboard content -->
+                            <div class="p-6 grid-pattern">
+                                <!-- Mini stats row -->
+                                <div class="grid grid-cols-3 gap-4 mb-6">
+                                    <div class="bg-white/[0.03] border border-white/[0.05] rounded-lg p-4">
+                                        <div class="text-[10px] text-white/40 uppercase tracking-widest mb-2">Threats Detected</div>
+                                        <div class="font-geist font-light text-2xl tracking-tighter text-[#c6f91f]">2,847</div>
+                                        <div class="text-xs text-white/30 mt-1">↑ 12.4% from yesterday</div>
+                                    </div>
+                                    <div class="bg-white/[0.03] border border-white/[0.05] rounded-lg p-4">
+                                        <div class="text-[10px] text-white/40 uppercase tracking-widest mb-2">Active Nodes</div>
+                                        <div class="font-geist font-light text-2xl tracking-tighter">1,204</div>
+                                        <div class="text-xs text-white/30 mt-1">All systems nominal</div>
+                                    </div>
+                                    <div class="bg-white/[0.03] border border-white/[0.05] rounded-lg p-4">
+                                        <div class="text-[10px] text-white/40 uppercase tracking-widest mb-2">Data Processed</div>
+                                        <div class="font-geist font-light text-2xl tracking-tighter">847 GB</div>
+                                        <div class="text-xs text-white/30 mt-1">Last 24 hours</div>
+                                    </div>
+                                </div>
+                                <!-- Chart area -->
+                                <div class="bg-white/[0.02] border border-white/[0.05] rounded-lg p-5">
+                                    <div class="flex items-center justify-between mb-4">
+                                        <div class="text-xs text-white/50 uppercase tracking-widest">Network Activity</div>
+                                        <div class="flex gap-2">
+                                            <span class="text-[10px] text-[#c6f91f] bg-[#c6f91f]/[0.1] px-2 py-0.5 rounded">Live</span>
+                                        </div>
+                                    </div>
+                                    <!-- SVG Chart -->
+                                    <svg class="w-full h-32" viewBox="0 0 600 120" preserveAspectRatio="none">
+                                        <defs>
+                                            <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stop-color="#c6f91f" stop-opacity="0.3"/>
+                                                <stop offset="100%" stop-color="#c6f91f" stop-opacity="0"/>
+                                            </linearGradient>
+                                        </defs>
+                                        <path d="M0,100 Q50,90 100,70 T200,50 T300,60 T400,30 T500,45 T600,20" fill="none" stroke="#c6f91f" stroke-width="2"/>
+                                        <path d="M0,100 Q50,90 100,70 T200,50 T300,60 T400,30 T500,45 T600,20 L600,120 L0,120Z" fill="url(#chartGrad)"/>
+                                        <path d="M0,95 Q50,85 100,80 T200,65 T300,75 T400,55 T500,60 T600,40" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1.5" stroke-dasharray="4,4"/>
+                                    </svg>
+                                </div>
+                                <!-- Bottom row -->
+                                <div class="grid grid-cols-2 gap-4 mt-4">
+                                    <div class="bg-white/[0.02] border border-white/[0.05] rounded-lg p-4">
+                                        <div class="text-[10px] text-white/40 uppercase tracking-widest mb-3">Recent Events</div>
+                                        <div class="space-y-2">
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-1.5 h-1.5 rounded-full bg-[#c6f91f]"></div>
+                                                <span class="text-xs text-white/50">Anomaly blocked — Node 847</span>
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-1.5 h-1.5 rounded-full bg-white/30"></div>
+                                                <span class="text-xs text-white/50">Scan complete — Cluster A</span>
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-1.5 h-1.5 rounded-full bg-[#c6f91f]"></div>
+                                                <span class="text-xs text-white/50">Pattern detected — 0x4F2A</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-white/[0.02] border border-white/[0.05] rounded-lg p-4 flex items-center justify-center">
+                                        <!-- Radar -->
+                                        <div class="relative w-24 h-24">
+                                            <div class="absolute inset-0 rounded-full border border-white/[0.06]"></div>
+                                            <div class="absolute inset-3 rounded-full border border-white/[0.06]"></div>
+                                            <div class="absolute inset-6 rounded-full border border-white/[0.06]"></div>
+                                            <div class="absolute inset-0 rounded-full overflow-hidden radar-spin">
+                                                <div class="absolute top-0 left-1/2 w-1/2 h-1/2 origin-bottom-left bg-gradient-to-t from-transparent to-[#c6f91f]/30"></div>
+                                            </div>
+                                            <div class="absolute top-4 left-7 w-1.5 h-1.5 bg-[#c6f91f] rounded-full"></div>
+                                            <div class="absolute bottom-5 right-5 w-1 h-1 bg-[#c6f91f]/60 rounded-full"></div>
+                                            <div class="absolute top-1/2 right-3 w-1 h-1 bg-white/30 rounded-full"></div>
+                                            <div class="absolute inset-0 flex items-center justify-center">
+                                                <div class="w-2 h-2 bg-[#c6f91f] rounded-full"></div>
+                                                <div class="absolute w-2 h-2 bg-[#c6f91f] rounded-full pulse-ring"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Floating accent card -->
+                        <div class="absolute -bottom-6 -left-6 bg-[#0E1216] border border-white/[0.08] rounded-lg p-4 shadow-2xl z-10">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-[#c6f91f]/[0.1] rounded-lg flex items-center justify-center">
+                                    <i data-lucide="shield-check" class="w-5 h-5 text-[#c6f91f]"></i>
+                                </div>
+                                <div>
+                                    <div class="text-sm font-medium">All Clear</div>
+                                    <div class="text-xs text-white/40">Zero critical threats</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom gradient line -->
+        <div class="absolute bottom-0 left-0 right-0 h-px gradient-line"></div>
+    </section>
+
+    <!-- ==================== LOGO STRIP ==================== -->
+    <section class="relative border-b border-dashed border-white/[0.06] py-12 overflow-hidden">
+        <div class="max-w-6xl mx-auto px-6 sm:px-8">
+            <p class="text-center text-xs text-white/30 uppercase tracking-widest mb-8">Trusted by teams at</p>
+        </div>
+        <div class="relative overflow-hidden">
+            <div class="absolute left-0 top-0 bottom-0 w-32 bg-gradient-to-r from-[#05080A] to-transparent z-10"></div>
+            <div class="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-[#05080A] to-transparent z-10"></div>
+            <div class="flex marquee-track" style="width: max-content;">
+                <!-- First set -->
+                <div class="flex items-center gap-16 px-8">
+                    <span class="text-white/20 font-geist font-semibold text-xl tracking-tight whitespace-nowrap">Quantum Labs</span>
+                    <span class="text-white/20 font-geist font-semibold text-xl tracking-tight whitespace-nowrap">Nexus Corp</span>
+                    <span class="text-white/20 font-geist font-semibold text-xl tracking-tight whitespace-nowrap">Helix Systems</span>
+                    <span class="text-white/20 font-geist font-semibold text-xl tracking-tight whitespace-nowrap">Cipher.io</span>
+                    <span class="text-white/20 font-geist font-semibold text-xl tracking-tight whitespace-nowrap">Vault Security</span>
+                    <span class="text-white/20 font-geist font-semibold text-xl tracking-tight whitespace-nowrap">Arctic AI</span>
+                    <span class="text-white/20 font-geist font-semibold text-xl tracking-tight whitespace-nowrap">Stratos Cloud</span>
+                    <span class="text-white/20 font-geist font-semibold text-xl tracking-tight whitespace-nowrap">Meridian Data</span>
+                </div>
+                <!-- Duplicate set -->
+                <div class="flex items-center gap-16 px-8">
+                    <span class="text-white/20 font-geist font-semibold text-xl tracking-tight whitespace-nowrap">Quantum Labs</span>
+                    <span class="text-white/20 font-geist font-semibold text-xl tracking-tight whitespace-nowrap">Nexus Corp</span>
+                    <span class="text-white/20 font-geist font-semibold text-xl tracking-tight whitespace-nowrap">Helix Systems</span>
+                    <span class="text-white/20 font-geist font-semibold text-xl tracking-tight whitespace-nowrap">Cipher.io</span>
+                    <span class="text-white/20 font-geist font-semibold text-xl tracking-tight whitespace-nowrap">Vault Security</span>
+                    <span class="text-white/20 font-geist font-semibold text-xl tracking-tight whitespace-nowrap">Arctic AI</span>
+                    <span class="text-white/20 font-geist font-semibold text-xl tracking-tight whitespace-nowrap">Stratos Cloud</span>
+                    <span class="text-white/20 font-geist font-semibold text-xl tracking-tight whitespace-nowrap">Meridian Data</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== FEATURES SECTION ==================== -->
+    <section id="features" class="relative py-24 lg:py-32">
+        <div class="max-w-6xl mx-auto px-6 sm:px-8">
+            <!-- Section Header -->
+            <div class="scroll-reveal max-w-2xl mb-16">
+                <div class="inline-flex items-center gap-2 mb-6">
+                    <div class="w-8 h-px bg-[#c6f91f]"></div>
+                    <span class="text-[10px] font-semibold tracking-widest uppercase text-[#c6f91f]">Core Capabilities</span>
+                </div>
+                <h2 class="font-geist font-light text-4xl sm:text-5xl lg:text-6xl tracking-tighter leading-[1.1] mb-6">
+                    Built for teams that<br><span class="text-white/50">move fast.</span>
+                </h2>
+                <p class="text-lg font-light text-white/50 leading-relaxed">
+                    Every feature is designed to reduce complexity and accelerate your workflow from detection to resolution.
+                </p>
+            </div>
+
+            <!-- Feature Cards Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Card 1 -->
+                <div class="scroll-reveal card-glow group relative bg-white/[0.02] border border-white/[0.06] rounded-xl p-8 hover:bg-white/[0.04] transition-all duration-300">
+                    <span class="feature-number">01</span>
+                    <div class="w-12 h-12 bg-[#c6f91f]/[0.08] border border-[#c6f91f]/[0.15] rounded-lg flex items-center justify-center mb-6">
+                        <i data-lucide="scan-eye" class="w-5 h-5 text-[#c6f91f]"></i>
+                    </div>
+                    <h3 class="font-geist font-medium text-lg mb-3">Real-Time Detection</h3>
+                    <p class="text-sm text-white/50 leading-relaxed">Identify anomalies and threats as they emerge with sub-50ms latency across all data streams.</p>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="scroll-reveal card-glow group relative bg-white/[0.02] border border-white/[0.06] rounded-xl p-8 hover:bg-white/[0.04] transition-all duration-300">
+                    <span class="feature-number">02</span>
+                    <div class="w-12 h-12 bg-[#c6f91f]/[0.08] border border-[#c6f91f]/[0.15] rounded-lg flex items-center justify-center mb-6">
+                        <i data-lucide="brain-circuit" class="w-5 h-5 text-[#c6f91f]"></i>
+                    </div>
+                    <h3 class="font-geist font-medium text-lg mb-3">Adaptive AI Models</h3>
+                    <p class="text-sm text-white/50 leading-relaxed">Self-tuning algorithms that learn from your environment and improve accuracy over time without manual retraining.</p>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="scroll-reveal card-glow group relative bg-white/[0.02] border border-white/[0.06] rounded-xl p-8 hover:bg-white/[0.04] transition-all duration-300">
+                    <span class="feature-number">03</span>
+                    <div class="w-12 h-12 bg-[#c6f91f]/[0.08] border border-[#c6f91f]/[0.15] rounded-lg flex items-center justify-center mb-6">
+                        <i data-lucide="layers" class="w-5 h-5 text-[#c6f91f]"></i>
+                    </div>
+                    <h3 class="font-geist font-medium text-lg mb-3">Multi-Source Fusion</h3>
+                    <p class="text-sm text-white/50 leading-relaxed">Aggregate and correlate data from logs, APIs, endpoints, and cloud services into a unified intelligence layer.</p>
+                </div>
+
+                <!-- Card 4 -->
+                <div class="scroll-reveal card-glow group relative bg-white/[0.02] border border-white/[0.06] rounded-xl p-8 hover:bg-white/[0.04] transition-all duration-300">
+                    <span class="feature-number">04</span>
+                    <div class="w-12 h-12 bg-[#c6f91f]/[0.08] border border-[#c6f91f]/[0.15] rounded-lg flex items-center justify-center mb-6">
+                        <i data-lucide="zap" class="w-5 h-5 text-[#c6f91f]"></i>
+                    </div>
+                    <h3 class="font-geist font-medium text-lg mb-3">Automated Response</h3>
+                    <p class="text-sm text-white/50 leading-relaxed">Trigger remediation workflows instantly. Isolate, contain, and resolve incidents before they escalate.</p>
+                </div>
+
+                <!-- Card 5 -->
+                <div class="scroll-reveal card-glow group relative bg-white/[0.02] border border-white/[0.06] rounded-xl p-8 hover:bg-white/[0.04] transition-all duration-300">
+                    <span class="feature-number">05</span>
+                    <div class="w-12 h-12 bg-[#c6f91f]/[0.08] border border-[#c6f91f]/[0.15] rounded-lg flex items-center justify-center mb-6">
+                        <i data-lucide="lock-keyhole" class="w-5 h-5 text-[#c6f91f]"></i>
+                    </div>
+                    <h3 class="font-geist font-medium text-lg mb-3">Zero-Trust Architecture</h3>
+                    <p class="text-sm text-white/50 leading-relaxed">Every request is verified. Built-in identity verification and least-privilege access controls at every layer.</p>
+                </div>
+
+                <!-- Card 6 -->
+                <div class="scroll-reveal card-glow group relative bg-white/[0.02] border border-white/[0.06] rounded-xl p-8 hover:bg-white/[0.04] transition-all duration-300">
+                    <span class="feature-number">06</span>
+                    <div class="w-12 h-12 bg-[#c6f91f]/[0.08] border border-[#c6f91f]/[0.15] rounded-lg flex items-center justify-center mb-6">
+                        <i data-lucide="bar-chart-3" class="w-5 h-5 text-[#c6f91f]"></i>
+                    </div>
+                    <h3 class="font-geist font-medium text-lg mb-3">Predictive Analytics</h3>
+                    <p class="text-sm text-white/50 leading-relaxed">Forecast potential threats and system vulnerabilities before they materialize using advanced ML models.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== PRODUCT SHOWCASE ==================== -->
+    <section id="product" class="relative py-24 lg:py-32 overflow-hidden">
+        <!-- Background glow -->
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-[#c6f91f]/[0.02] rounded-full blur-[120px]"></div>
+
+        <div class="relative max-w-6xl mx-auto px-6 sm:px-8">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+                <!-- Left: Image -->
+                <div class="scroll-reveal relative group">
+                    <div class="relative overflow-hidden rounded-xl border border-white/[0.08]">
+                        <img src="https://picsum.photos/seed/prolion-dashboard/800/600.jpg" alt="Product Dashboard" class="w-full aspect-[4/3] object-cover hero-sepia opacity-70 group-hover:scale-105 transition-transform duration-700">
+                        <div class="absolute inset-0 bg-gradient-to-t from-[#05080A] via-transparent to-transparent"></div>
+                        <!-- Overlay badge -->
+                        <div class="absolute bottom-6 left-6 right-6">
+                            <div class="bg-[#0B0F13]/90 backdrop-blur-xl border border-white/[0.08] rounded-lg p-4 flex items-center gap-4">
+                                <div class="w-10 h-10 bg-[#c6f91f]/[0.1] rounded-lg flex items-center justify-center shrink-0">
+                                    <i data-lucide="activity" class="w-5 h-5 text-[#c6f91f]"></i>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-sm font-medium truncate">Live Threat Monitor</div>
+                                    <div class="text-xs text-white/40">Processing 10.2M events/sec</div>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <div class="w-2 h-2 bg-[#c6f91f] rounded-full animate-pulse"></div>
+                                    <span class="text-xs text-[#c6f91f]">Live</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Corner accents -->
+                    <div class="absolute -top-px -left-px w-6 h-6 border-t border-l border-[#c6f91f]/30 rounded-tl-xl"></div>
+                    <div class="absolute -bottom-px -right-px w-6 h-6 border-b border-r border-[#c6f91f]/30 rounded-br-xl"></div>
+                </div>
+
+                <!-- Right: Content -->
+                <div class="scroll-reveal">
+                    <div class="inline-flex items-center gap-2 mb-6">
+                        <div class="w-8 h-px bg-[#c6f91f]"></div>
+                        <span class="text-[10px] font-semibold tracking-widest uppercase text-[#c6f91f]">How It Works</span>
+                    </div>
+
+                    <h2 class="font-geist font-light text-4xl sm:text-5xl tracking-tighter leading-[1.1] mb-6">
+                        From raw data to<br><span class="text-[#c6f91f]">actionable insight</span>
+                    </h2>
+
+                    <p class="text-lg font-light text-white/50 leading-relaxed mb-10">
+                        Prolion ingests, normalizes, and analyzes your data in a unified pipeline — giving your team visibility that was previously impossible.
+                    </p>
+
+                    <!-- Steps -->
+                    <div class="space-y-6">
+                        <div class="flex gap-4 group">
+                            <div class="flex flex-col items-center">
+                                <div class="w-8 h-8 bg-[#c6f91f]/[0.1] border border-[#c6f91f]/[0.2] rounded-full flex items-center justify-center text-xs font-semibold text-[#c6f91f] shrink-0">1</div>
+                                <div class="w-px flex-1 bg-dashed bg-white/[0.08] mt-2"></div>
+                            </div>
+                            <div class="pb-8">
+                                <h3 class="font-geist font-medium text-base mb-1">Connect Your Sources</h3>
+                                <p class="text-sm text-white/40 leading-relaxed">Plug in any data source — cloud services, on-prem systems, APIs, or streaming data — in minutes.</p>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-4 group">
+                            <div class="flex flex-col items-center">
+                                <div class="w-8 h-8 bg-[#c6f91f]/[0.1] border border-[#c6f91f]/[0.2] rounded-full flex items-center justify-center text-xs font-semibold text-[#c6f91f] shrink-0">2</div>
+                                <div class="w-px flex-1 bg-dashed bg-white/[0.08] mt-2"></div>
+                            </div>
+                            <div class="pb-8">
+                                <h3 class="font-geist font-medium text-base mb-1">AI Processes & Correlates</h3>
+                                <p class="text-sm text-white/40 leading-relaxed">Our models normalize, enrich, and correlate events across all sources in real-time.</p>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-4 group">
+                            <div class="flex flex-col items-center">
+                                <div class="w-8 h-8 bg-[#c6f91f]/[0.1] border border-[#c6f91f]/[0.2] rounded-full flex items-center justify-center text-xs font-semibold text-[#c6f91f] shrink-0">3</div>
+                            </div>
+                            <div>
+                                <h3 class="font-geist font-medium text-base mb-1">Act on Intelligence</h3>
+                                <p class="text-sm text-white/40 leading-relaxed">Receive prioritized alerts, automated responses, and deep-dive analytics — all in one place.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== DIVIDER ==================== -->
+    <div class="max-w-6xl mx-auto px-6 sm:px-8">
+        <div class="h-px gradient-line"></div>
+    </div>
+
+    <!-- ==================== STATS SECTION ==================== -->
+    <section class="relative py-24 lg:py-32">
+        <div class="max-w-6xl mx-auto px-6 sm:px-8">
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-4">
+                <div class="scroll-reveal text-center lg:text-left">
+                    <div class="font-geist font-light text-5xl lg:text-6xl tracking-tighter text-[#c6f91f] mb-2" data-count="10">10M+</div>
+                    <div class="text-sm text-white/40">Events processed per second</div>
+                </div>
+                <div class="scroll-reveal text-center lg:text-left">
+                    <div class="font-geist font-light text-5xl lg:text-6xl tracking-tighter mb-2">500+</div>
+                    <div class="text-sm text-white/40">Enterprise customers</div>
+                </div>
+                <div class="scroll-reveal text-center lg:text-left">
+                    <div class="font-geist font-light text-5xl lg:text-6xl tracking-tighter text-[#c6f91f] mb-2">99.9%</div>
+                    <div class="text-sm text-white/40">Guaranteed uptime</div>
+                </div>
+                <div class="scroll-reveal text-center lg:text-left">
+                    <div class="font-geist font-light text-5xl lg:text-6xl tracking-tighter mb-2">&lt;50ms</div>
+                    <div class="text-sm text-white/40">Average response time</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== DIVIDER ==================== -->
+    <div class="max-w-6xl mx-auto px-6 sm:px-8">
+        <div class="h-px gradient-line"></div>
+    </div>
+
+    <!-- ==================== PRICING SECTION ==================== -->
+    <section id="pricing" class="relative py-24 lg:py-32">
+        <div class="max-w-6xl mx-auto px-6 sm:px-8">
+            <!-- Section Header -->
+            <div class="scroll-reveal text-center max-w-2xl mx-auto mb-16">
+                <div class="inline-flex items-center gap-2 mb-6 justify-center">
+                    <div class="w-8 h-px bg-[#c6f91f]"></div>
+                    <span class="text-[10px] font-semibold tracking-widest uppercase text-[#c6f91f]">Pricing</span>
+                    <div class="w-8 h-px bg-[#c6f91f]"></div>
+                </div>
+                <h2 class="font-geist font-light text-4xl sm:text-5xl lg:text-6xl tracking-tighter leading-[1.1] mb-6">
+                    Simple, transparent<br><span class="text-white/50">pricing.</span>
+                </h2>
+                <p class="text-lg font-light text-white/50 leading-relaxed">No hidden fees. No surprises. Scale as you grow.</p>
+            </div>
+
+            <!-- Pricing Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Starter -->
+                <div class="scroll-reveal card-glow group relative bg-white/[0.02] border border-white/[0.06] rounded-xl p-8 hover:bg-white/[0.04] transition-all duration-300 flex flex-col">
+                    <div class="mb-8">
+                        <h3 class="font-geist font-medium text-lg mb-2">Starter</h3>
+                        <p class="text-sm text-white/40">For small teams getting started</p>
+                    </div>
+                    <div class="mb-8">
+                        <span class="font-geist font-light text-5xl tracking-tighter">$49</span>
+                        <span class="text-white/40 text-sm">/month</span>
+                    </div>
+                    <ul class="space-y-3 mb-10 flex-1">
+                        <li class="flex items-center gap-3 text-sm text-white/60">
+                            <i data-lucide="check" class="w-4 h-4 text-[#c6f91f] shrink-0"></i>
+                            100K events/month
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-white/60">
+                            <i data-lucide="check" class="w-4 h-4 text-[#c6f91f] shrink-0"></i>
+                            5 data sources
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-white/60">
+                            <i data-lucide="check" class="w-4 h-4 text-[#c6f91f] shrink-0"></i>
+                            7-day retention
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-white/60">
+                            <i data-lucide="check" class="w-4 h-4 text-[#c6f91f] shrink-0"></i>
+                            Email alerts
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-white/30">
+                            <i data-lucide="minus" class="w-4 h-4 shrink-0"></i>
+                            AI-powered detection
+                        </li>
+                    </ul>
+                    <a href="#" class="w-full inline-flex items-center justify-center border border-white/10 text-white text-xs font-medium tracking-wide uppercase py-4 px-6 rounded-sm hover:bg-white/[0.04] hover:border-white/20 transition-all">
+                        Get Started
+                    </a>
+                </div>
+
+                <!-- Pro (Featured) -->
+                <div class="scroll-reveal card-glow group relative bg-white/[0.02] border border-[#c6f91f]/[0.2] rounded-xl p-8 hover:bg-white/[0.04] transition-all duration-300 flex flex-col shadow-[0_0_15px_rgba(198,249,31,0.1)]">
+                    <!-- Popular badge -->
+                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#c6f91f] text-black text-[10px] font-semibold tracking-widest uppercase px-4 py-1 rounded-full">
+                        Most Popular
+                    </div>
+                    <div class="mb-8">
+                        <h3 class="font-geist font-medium text-lg mb-2">Pro</h3>
+                        <p class="text-sm text-white/40">For growing teams that need more</p>
+                    </div>
+                    <div class="mb-8">
+                        <span class="font-geist font-light text-5xl tracking-tighter text-[#c6f91f]">$199</span>
+                        <span class="text-white/40 text-sm">/month</span>
+                    </div>
+                    <ul class="space-y-3 mb-10 flex-1">
+                        <li class="flex items-center gap-3 text-sm text-white/60">
+                            <i data-lucide="check" class="w-4 h-4 text-[#c6f91f] shrink-0"></i>
+                            10M events/month
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-white/60">
+                            <i data-lucide="check" class="w-4 h-4 text-[#c6f91f] shrink-0"></i>
+                            Unlimited data sources
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-white/60">
+                            <i data-lucide="check" class="w-4 h-4 text-[#c6f91f] shrink-0"></i>
+                            90-day retention
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-white/60">
+                            <i data-lucide="check" class="w-4 h-4 text-[#c6f91f] shrink-0"></i>
+                            AI-powered detection
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-white/60">
+                            <i data-lucide="check" class="w-4 h-4 text-[#c6f91f] shrink-0"></i>
+                            Automated responses
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-white/60">
+                            <i data-lucide="check" class="w-4 h-4 text-[#c6f91f] shrink-0"></i>
+                            Slack & webhook alerts
+                        </li>
+                    </ul>
+                    <a href="#" class="w-full inline-flex items-center justify-center bg-[#c6f91f] text-black text-xs font-medium tracking-wide uppercase py-4 px-6 rounded-sm hover:bg-[#d4ff4a] transition-colors">
+                        Get Started
+                    </a>
+                </div>
+
+                <!-- Enterprise -->
+                <div class="scroll-reveal card-glow group relative bg-white/[0.02] border border-white/[0.06] rounded-xl p-8 hover:bg-white/[0.04] transition-all duration-300 flex flex-col">
+                    <div class="mb-8">
+                        <h3 class="font-geist font-medium text-lg mb-2">Enterprise</h3>
+                        <p class="text-sm text-white/40">For organizations at scale</p>
+                    </div>
+                    <div class="mb-8">
+                        <span class="font-geist font-light text-5xl tracking-tighter">Custom</span>
+                    </div>
+                    <ul class="space-y-3 mb-10 flex-1">
+                        <li class="flex items-center gap-3 text-sm text-white/60">
+                            <i data-lucide="check" class="w-4 h-4 text-[#c6f91f] shrink-0"></i>
+                            Unlimited events
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-white/60">
+                            <i data-lucide="check" class="w-4 h-4 text-[#c6f91f] shrink-0"></i>
+                            Custom data sources
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-white/60">
+                            <i data-lucide="check" class="w-4 h-4 text-[#c6f91f] shrink-0"></i>
+                            Unlimited retention
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-white/60">
+                            <i data-lucide="check" class="w-4 h-4 text-[#c6f91f] shrink-0"></i>
+                            Custom AI models
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-white/60">
+                            <i data-lucide="check" class="w-4 h-4 text-[#c6f91f] shrink-0"></i>
+                            Dedicated support
+                        </li>
+                        <li class="flex items-center gap-3 text-sm text-white/60">
+                            <i data-lucide="check" class="w-4 h-4 text-[#c6f91f] shrink-0"></i>
+                            SLA & compliance
+                        </li>
+                    </ul>
+                    <a href="#" class="w-full inline-flex items-center justify-center border border-white/10 text-white text-xs font-medium tracking-wide uppercase py-4 px-6 rounded-sm hover:bg-white/[0.04] hover:border-white/20 transition-all">
+                        Contact Sales
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== TESTIMONIALS ==================== -->
+    <section id="testimonials" class="relative py-24 lg:py-32 border-t border-dashed border-white/[0.06]">
+        <div class="max-w-6xl mx-auto px-6 sm:px-8">
+            <!-- Section Header -->
+            <div class="scroll-reveal text-center max-w-2xl mx-auto mb-16">
+                <div class="inline-flex items-center gap-2 mb-6 justify-center">
+                    <div class="w-8 h-px bg-[#c6f91f]"></div>
+                    <span class="text-[10px] font-semibold tracking-widest uppercase text-[#c6f91f]">Testimonials</span>
+                    <div class="w-8 h-px bg-[#c6f91f]"></div>
+                </div>
+                <h2 class="font-geist font-light text-4xl sm:text-5xl tracking-tighter leading-[1.1]">
+                    Loved by <span class="text-[#c6f91f]]">engineers</span>
+                </h2>
+            </div>
+
+            <!-- Testimonial Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Testimonial 1 -->
+                <div class="scroll-reveal card-glow bg-white/[0.02] border border-white/[0.06] rounded-xl p-8 hover:bg-white/[0.04] transition-all duration-300">
+                    <div class="flex items-center gap-1 mb-6">
+                        <i data-lucide="star" class="w-4 h-4 fill-[#c6f91f] text-[#c6f91f]"></i>
+                        <i data-lucide="star" class="w-4 h-4 fill-[#c6f91f] text-[#c6f91f]"></i>
+                        <i data-lucide="star" class="w-4 h-4 fill-[#c6f91f] text-[#c6f91f]"></i>
+                        <i data-lucide="star" class="w-4 h-4 fill-[#c6f91f] text-[#c6f91f]"></i>
+                        <i data-lucide="star" class="w-4 h-4 fill-[#c6f91f] text-[#c6f91f]"></i>
+                    </div>
+                    <p class="text-sm text-white/60 leading-relaxed mb-8">"Prolion cut our mean time to detection from 4 hours to under 30 seconds. The AI models are incredibly accurate — we've had zero false positives in the last quarter."</p>
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-[#c6f91f]/[0.1] flex items-center justify-center text-sm font-medium text-[#c6f91f]">SK</div>
+                        <div>
+                            <div class="text-sm font-medium">Sarah Kim</div>
+                            <div class="text-xs text-white/40">CTO, Nexus Corp</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Testimonial 2 -->
+                <div class="scroll-reveal card-glow bg-white/[0.02] border border-white/[0.06] rounded-xl p-8 hover:bg-white/[0.04] transition-all duration-300">
+                    <div class="flex items-center gap-1 mb-6">
+                        <i data-lucide="star" class="w-4 h-4 fill-[#c6f91f] text-[#c6f91f]"></i>
+                        <i data-lucide="star" class="w-4 h-4 fill-[#c6f91f] text-[#c6f91f]"></i>
+                        <i data-lucide="star" class="w-4 h-4 fill-[#c6f91f] text-[#c6f91f]"></i>
+                        <i data-lucide="star" class="w-4 h-4 fill-[#c6f91f] text-[#c6f91f]"></i>
+                        <i data-lucide="star" class="w-4 h-4 fill-[#c6f91f] text-[#c6f91f]"></i>
+                    </div>
+                    <p class="text-sm text-white/60 leading-relaxed mb-8">"We evaluated 12 platforms before choosing Prolion. The multi-source fusion capability is years ahead of anything else on the market. Setup took less than a day."</p>
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-[#c6f91f]/[0.1] flex items-center justify-center text-sm font-medium text-[#c6f91f]">MR</div>
+                        <div>
+                            <div class="text-sm font-medium">Marcus Rivera</div>
+                            <div class="text-xs text-white/40">VP Engineering, Helix Systems</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Testimonial 3 -->
+                <div class="scroll-reveal card-glow bg-white/[0.02] border border-white/[0.06] rounded-xl p-8 hover:bg-white/[0.04] transition-all duration-300">
+                    <div class="flex items-center gap-1 mb-6">
+                        <i data-lucide="star" class="w-4 h-4 fill-[#c6f91f] text-[#c6f91f]"></i>
+                        <i data-lucide="star" class="w-4 h-4 fill-[#c6f91f] text-[#c6f91f]"></i>
+                        <i data-lucide="star" class="w-4 h-4 fill-[#c6f91f] text-[#c6f91f]"></i>
+                        <i data-lucide="star" class="w-4 h-4 fill-[#c6f91f] text-[#c6f91f]"></i>
+                        <i data-lucide="star" class="w-4 h-4 fill-[#c6f91f] text-[#c6f91f]"></i>
+                    </div>
+                    <p class="text-sm text-white/60 leading-relaxed mb-8">"The automated response workflows saved our team 200+ hours per month. Prolion doesn't just detect — it actually resolves. That's the game-changer."</p>
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-[#c6f91f]/[0.1] flex items-center justify-center text-sm font-medium text-[#c6f91f]">AL</div>
+                        <div>
+                            <div class="text-sm font-medium">Anika Lehmann</div>
+                            <div class="text-xs text-white/40">Head of Security, Arctic AI</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== CTA SECTION ==================== -->
+    <section class="relative py-24 lg:py-32 overflow-hidden">
+        <!-- Background -->
+        <div class="absolute inset-0 bg-[#080B0E]"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#c6f91f]/[0.03] rounded-full blur-[120px]"></div>
+        <div class="absolute inset-0 grid-pattern opacity-30"></div>
+
+        <div class="relative max-w-4xl mx-auto px-6 sm:px-8 text-center">
+            <div class="scroll-reveal">
+                <div class="inline-flex items-center gap-2 bg-[#c6f91f]/[0.08] border border-[#c6f91f]/[0.15] rounded-full px-4 py-1.5 mb-8">
+                    <span class="w-1.5 h-1.5 bg-[#c6f91f] rounded-full"></span>
+                    <span class="text-[10px] font-semibold tracking-widest uppercase text-[#c6f91f]">Start Today — Free for 14 Days</span>
+                </div>
+            </div>
+
+            <h2 class="scroll-reveal font-geist font-light text-4xl sm:text-5xl lg:text-6xl tracking-tighter leading-[1.1] mb-6">
+                Ready to see what<br><span class="text-[#c6f91f]">Prolion</span> can do?
+            </h2>
+
+            <p class="scroll-reveal text-lg font-light text-white/50 leading-relaxed mb-10 max-w-xl mx-auto">
+                Deploy in minutes. No credit card required. Start processing millions of events with full AI-powered intelligence.
+            </p>
+
+            <div class="scroll-reveal flex flex-wrap items-center justify-center gap-4">
+                <a href="#" class="group inline-flex items-center gap-2 bg-[#c6f91f] text-black text-xs font-medium tracking-wide uppercase py-5 px-10 rounded-sm hover:bg-[#d4ff4a] transition-colors">
+                    Start Free Trial
+                    <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+                </a>
+                <a href="#" class="group inline-flex items-center gap-2 border border-white/10 text-white text-xs font-medium tracking-wide uppercase py-5 px-10 rounded-sm hover:bg-white/[0.04] hover:border-white/20 transition-all">
+                    Talk to Sales
+                </a>
+            </div>
+
+            <div class="scroll-reveal flex items-center justify-center gap-6 mt-10 text-xs text-white/30">
+                <span class="flex items-center gap-2"><i data-lucide="check" class="w-3 h-3 text-[#c6f91f]"></i> No credit card</span>
+                <span class="flex items-center gap-2"><i data-lucide="check" class="w-3 h-3 text-[#c6f91f]"></i> 14-day free trial</span>
+                <span class="flex items-center gap-2"><i data-lucide="check" class="w-3 h-3 text-[#c6f91f]"></i> Cancel anytime</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== FOOTER ==================== -->
+    <footer class="relative border-t border-dashed border-white/[0.06] pt-16 pb-8">
+        <div class="max-w-6xl mx-auto px-6 sm:px-8">
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8 mb-16">
+                <!-- Brand column -->
+                <div class="col-span-2 md:col-span-4 lg:col-span-1 mb-4 lg:mb-0">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-8 h-8 bg-[#c6f91f] rounded-sm flex items-center justify-center">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/></svg>
+                        </div>
+                        <span class="font-geist font-semibold text-lg tracking-tight">Prolion</span>
+                    </div>
+                    <p class="text-sm text-white/30 leading-relaxed max-w-xs">AI-powered intelligence platform for teams that move fast.</p>
+                    <!-- Social icons -->
+                    <div class="flex items-center gap-3 mt-6">
+                        <a href="#" class="w-9 h-9 border border-white/[0.08] rounded-lg flex items-center justify-center text-white/30 hover:text-white hover:border-white/20 transition-all">
+                            <i data-lucide="twitter" class="w-4 h-4"></i>
+                        </a>
+                        <a href="#" class="w-9 h-9 border border-white/[0.08] rounded-lg flex items-center justify-center text-white/30 hover:text-white hover:border-white/20 transition-all">
+                            <i data-lucide="github" class="w-4 h-4"></i>
+                        </a>
+                        <a href="#" class="w-9 h-9 border border-white/[0.08] rounded-lg flex items-center justify-center text-white/30 hover:text-white hover:border-white/20 transition-all">
+                            <i data-lucide="linkedin" class="w-4 h-4"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Product -->
+                <div>
+                    <h4 class="text-[10px] font-semibold tracking-widest uppercase text-white/30 mb-4">Product</h4>
+                    <ul class="space-y-3">
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">Features</a></li>
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">Pricing</a></li>
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">Integrations</a></li>
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">Changelog</a></li>
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">Roadmap</a></li>
+                    </ul>
+                </div>
+
+                <!-- Resources -->
+                <div>
+                    <h4 class="text-[10px] font-semibold tracking-widest uppercase text-white/30 mb-4">Resources</h4>
+                    <ul class="space-y-3">
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">Documentation</a></li>
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">API Reference</a></li>
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">Blog</a></li>
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">Tutorials</a></li>
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">Status</a></li>
+                    </ul>
+                </div>
+
+                <!-- Company -->
+                <div>
+                    <h4 class="text-[10px] font-semibold tracking-widest uppercase text-white/30 mb-4">Company</h4>
+                    <ul class="space-y-3">
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">About</a></li>
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">Careers</a></li>
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">Contact</a></li>
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">Partners</a></li>
+                    </ul>
+                </div>
+
+                <!-- Legal -->
+                <div>
+                    <h4 class="text-[10px] font-semibold tracking-widest uppercase text-white/30 mb-4">Legal</h4>
+                    <ul class="space-y-3">
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">Privacy</a></li>
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">Terms</a></li>
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">Security</a></li>
+                        <li><a href="#" class="text-sm text-white/50 hover:text-white transition-colors">DPA</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Bottom bar -->
+            <div class="pt-8 border-t border-dashed border-white/[0.06] flex flex-col sm:flex-row items-center justify-between gap-4">
+                <p class="text-xs text-white/20">© 2025 Prolion. All rights reserved.</p>
+                <div class="flex items-center gap-1 text-xs text-white/20">
+                    <span>Built with</span>
+                    <i data-lucide="heart" class="w-3 h-3 text-[#c6f91f]/50 fill-[#c6f91f]/50"></i>
+                    <span>for builders</span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ==================== SCRIPTS ==================== -->
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Mobile menu toggle
+        const mobileToggle = document.getElementById('mobile-toggle');
+        const mobileMenu = document.getElementById('mobile-menu');
+        let menuOpen = false;
+
+        mobileToggle.addEventListener('click', () => {
+            menuOpen = !menuOpen;
+            mobileMenu.classList.toggle('open', menuOpen);
+            // Update icon
+            const icon = mobileToggle.querySelector('i');
+            icon.setAttribute('data-lucide', menuOpen ? 'x' : 'menu');
+            lucide.createIcons();
+        });
+
+        // Close mobile menu on link click
+        mobileMenu.querySelectorAll('a[href^="#"]').forEach(link => {
+            link.addEventListener('click', () => {
+                menuOpen = false;
+                mobileMenu.classList.remove('open');
+                const icon = mobileToggle.querySelector('i');
+                icon.setAttribute('data-lucide', 'menu');
+                lucide.createIcons();
+            });
+        });
+
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                const href = this.getAttribute('href');
+                if (href === '#') return;
+                e.preventDefault();
+                const target = document.querySelector(href);
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+
+        // Scroll reveal with IntersectionObserver
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry, index) => {
+                if (entry.isIntersecting) {
+                    // Add staggered delay based on sibling index
+                    const siblings = entry.target.parentElement.querySelectorAll('.scroll-reveal');
+                    let siblingIndex = Array.from(siblings).indexOf(entry.target);
+                    const delay = siblingIndex * 0.1;
+
+                    entry.target.style.transitionDelay = `${delay}s`;
+                    entry.target.classList.add('visible');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.scroll-reveal').forEach(el => {
+            observer.observe(el);
+        });
+
+        // Card glow effect - track mouse position
+        document.querySelectorAll('.card-glow').forEach(card => {
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = ((e.clientX - rect.left) / rect.width) * 100;
+                const y = ((e.clientY - rect.top) / rect.height) * 100;
+                card.style.setProperty('--mouse-x', x + '%');
+                card.style.setProperty('--mouse-y', y + '%');
+            });
+        });
+
+        // Navbar background on scroll
+        const nav = document.querySelector('nav');
+        let lastScroll = 0;
+        window.addEventListener('scroll', () => {
+            const currentScroll = window.scrollY;
+            if (currentScroll > 100) {
+                nav.style.borderBottomColor = 'rgba(255,255,255,0.08)';
+            } else {
+                nav.style.borderBottomColor = 'rgba(255,255,255,0.05)';
+            }
+            lastScroll = currentScroll;
+        });
+    </script>
+</body>
+</html>
