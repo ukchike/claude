@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Prolion Integrated Services — Bookkeeping, Tax, Reporting & Advisory · Lagos</title>
+<meta name="description" content="Prolion Integrated Services is a Lagos finance practice: bookkeeping, tax returns, management accounts, financial statements, software implementation, financial modelling and business analytics for Nigerian businesses." />
+<meta property="og:title" content="Prolion Integrated Services — Finance, Tax & Reporting · Lagos" />
+<meta property="og:description" content="A complete finance and tax function for Nigerian business — from first ledger to board-ready report. Founder: Kingsley Uzoka, FMVA®, BIDA®." />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2040%2040'%3E%3Crect%20width='40'%20height='40'%20rx='9'%20fill='%230E241C'/%3E%3Cpath%20d='M13%2028V12h7.2c3.4%200%205.6%202%205.6%205.1%200%203.2-2.2%205.2-5.7%205.2H17.4V28H13Z'%20fill='%23B58E45'/%3E%3Cpath%20d='M17.4%2018.7h2.4c1.2%200%201.9-.6%201.9-1.6%200-1-.7-1.6-1.9-1.6h-2.4v3.2Z'%20fill='%230E241C'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   PROLION — MODERNISED 2026
+   Palette: warm grey + deep green + antique gold
+   Type: Fraunces · Plus Jakarta Sans · JetBrains Mono
+   ============================================================ */
+:root{
+  --grey:#E8E6DF; --grey-2:#F1EFE9; --card:#FCFBF7; --card-2:#F6F4EE;
+  --ink:#0E241C; --ink-2:#163228; --ink-3:#1E4135;
+  --gold:#B58E45; --gold-soft:#CDA75C; --gold-bright:#D4A84B; --gold-bg:#F1E7D2; --gold-dim:rgba(181,142,69,.12);
+  --green:#2C6A51; --green-2:#357E60; --green-deep:#1D4A39; --mint:#E2EDE7; --mint-2:#D4E8DE; --sage:#7C968B;
+  --line:rgba(14,36,28,.11); --line-soft:rgba(14,36,28,.06); --line-dk:rgba(233,229,219,.13);
+  --t-dark:#15201B; --t-mute:#52615A; --t-faint:#8A958E;
+  --t-light:#E9E5DB; --t-dim:#AEC0B6;
+  --maxw:1200px; --gutter:clamp(1.2rem,4vw,3rem); --r:22px; --r-sm:15px; --r-xs:10px;
+  --ease:cubic-bezier(.22,.61,.36,1); --ease-spring:cubic-bezier(.34,1.56,.64,1);
+  --fs-h1:clamp(2.7rem,1.4rem + 5.5vw,5.2rem);
+  --fs-h2:clamp(1.9rem,1.2rem + 3vw,3.2rem);
+  --fs-lead:clamp(1.05rem,.98rem + .5vw,1.3rem);
+  --shadow-card:0 1px 3px rgba(14,36,28,.04),0 8px 28px -12px rgba(14,36,28,.12);
+  --shadow-lift:0 4px 6px rgba(14,36,28,.03),0 20px 44px -16px rgba(14,36,28,.22);
+  --shadow-gold:0 16px 48px -20px rgba(181,142,69,.45);
+  --shadow-green:0 16px 48px -20px rgba(44,106,81,.45);
+}
+
+/* reset */
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{font-family:"Plus Jakarta Sans",system-ui,sans-serif;background:var(--grey);color:var(--t-dark);line-height:1.66;font-size:clamp(1rem,.97rem + .18vw,1.08rem);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+img{max-width:100%;display:block}
+::selection{background:var(--gold);color:var(--ink)}
+
+/* layout */
+.wrap{width:100%;max-width:var(--maxw);margin-inline:auto;padding-inline:var(--gutter)}
+.section{padding-block:clamp(4rem,2.5rem + 8vw,7.5rem)}
+section{scroll-margin-top:84px}
+
+/* type */
+h1,h2,h3,.serif{font-family:"Fraunces",Georgia,serif;font-weight:600;line-height:1.05;letter-spacing:-.02em}
+h2{font-size:var(--fs-h2)}
+.eyebrow{font-family:"JetBrains Mono",monospace;font-size:clamp(.7rem,.66rem + .22vw,.8rem);letter-spacing:.22em;text-transform:uppercase;color:var(--gold);display:inline-flex;align-items:center;gap:.65rem}
+.eyebrow::before{content:"";width:1.8rem;height:1.5px;background:linear-gradient(to right,var(--gold),transparent);opacity:.9}
+.lead{font-size:var(--fs-lead);line-height:1.54;color:var(--t-mute);max-width:52ch}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:.55rem;font-weight:700;font-size:.95rem;padding:.88em 1.6em;border-radius:100px;border:1.5px solid transparent;cursor:pointer;transition:transform .3s var(--ease-spring),background .25s,color .25s,border-color .25s,box-shadow .25s;letter-spacing:.01em}
+.btn:hover{transform:translateY(-3px)}
+.btn:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+.btn:active{transform:translateY(-1px)}
+.btn-gold{background:linear-gradient(135deg,var(--gold-bright),var(--gold));color:var(--ink);box-shadow:var(--shadow-gold)}
+.btn-gold:hover{box-shadow:0 20px 56px -18px rgba(181,142,69,.6)}
+.btn-green{background:linear-gradient(135deg,var(--green-2),var(--green));color:#fff;box-shadow:var(--shadow-green)}
+.btn-green:hover{background:linear-gradient(135deg,var(--green),var(--green-deep))}
+.btn-ink{background:var(--ink);color:var(--t-light);border-color:var(--ink)}
+.btn-ink:hover{background:var(--ink-3)}
+.btn-ghost-dk{border-color:rgba(233,229,219,.25);color:var(--t-light);backdrop-filter:blur(4px)}
+.btn-ghost-dk:hover{border-color:var(--gold);background:rgba(181,142,69,.08)}
+.btn-ghost{border-color:var(--line);color:var(--t-dark)}
+.btn-ghost:hover{border-color:var(--green);color:var(--green);background:var(--mint)}
+.arr{transition:transform .3s var(--ease)}.btn:hover .arr{transform:translateX(4px)}
+
+/* scroll progress */
+#progress{position:fixed;top:0;left:0;z-index:100;height:2.5px;width:0%;background:linear-gradient(to right,var(--gold),var(--gold-bright));transition:width .1s linear;pointer-events:none}
+
+/* ── HEADER ── */
+.hdr{position:sticky;top:0;z-index:60;transition:background .3s,border-color .3s,box-shadow .3s}
+.hdr::before{content:"";position:absolute;inset:0;background:rgba(232,230,223,.82);backdrop-filter:blur(18px) saturate(1.4);border-bottom:1px solid transparent;transition:border-color .3s,box-shadow .3s;z-index:-1}
+.hdr.scrolled::before{border-color:var(--line);box-shadow:0 8px 32px -20px rgba(14,36,28,.4)}
+.nav{display:flex;align-items:center;justify-content:space-between;gap:1.5rem;height:72px}
+.brand{display:flex;align-items:center;gap:.75rem;font-family:"Fraunces";font-weight:600;font-size:1.22rem;letter-spacing:-.01em}
+.brand .mk{width:40px;height:40px;flex:none;transition:transform .3s var(--ease-spring)}
+.brand:hover .mk{transform:scale(1.07) rotate(-3deg)}
+.brand small{display:block;font-family:"JetBrains Mono";font-weight:400;font-size:.57rem;letter-spacing:.18em;text-transform:uppercase;color:var(--t-mute);margin-top:-2px}
+.nlinks{display:flex;gap:.2rem}
+.nlinks a{font-weight:500;font-size:.93rem;padding:.5rem .95rem;border-radius:100px;color:var(--t-mute);transition:.22s;position:relative}
+.nlinks a::after{content:"";position:absolute;bottom:.35rem;left:50%;transform:translateX(-50%) scaleX(0);width:18px;height:1.5px;background:var(--gold);border-radius:1px;transition:transform .25s var(--ease)}
+.nlinks a:hover{color:var(--t-dark)}
+.nlinks a:hover::after{transform:translateX(-50%) scaleX(1)}
+.ncta{display:flex;align-items:center;gap:.5rem}
+.icon-link{width:42px;height:42px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;color:var(--t-mute);transition:.22s;flex:none}
+.icon-link:hover{border-color:var(--green);color:var(--green);background:var(--mint);transform:scale(1.08)}
+.icon-link svg{width:18px;height:18px}
+.tgl{display:none;width:44px;height:44px;border:0;background:none;border-radius:10px;cursor:pointer;color:var(--ink)}
+.tgl svg{width:26px;height:26px}
+
+/* ── HERO ── */
+.hero{background:var(--ink);color:var(--t-light);overflow:hidden;padding-block:clamp(4rem,2rem + 10vw,8rem);position:relative}
+.hero-bg{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.hero-bg::before{
+  content:"";position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 80% 60% at 110% -10%,rgba(181,142,69,.22),transparent 55%),
+    radial-gradient(ellipse 60% 80% at -10% 110%,rgba(44,106,81,.25),transparent 50%),
+    radial-gradient(ellipse 40% 40% at 60% 50%,rgba(30,65,53,.3),transparent 70%);
+}
+.hero-bg::after{
+  content:"";position:absolute;inset:0;
+  background-image:
+    repeating-linear-gradient(to right,transparent,transparent 79px,rgba(233,229,219,.03) 79px,rgba(233,229,219,.03) 80px),
+    repeating-linear-gradient(to bottom,transparent,transparent 79px,rgba(233,229,219,.03) 79px,rgba(233,229,219,.03) 80px);
+}
+.hgrid{display:grid;grid-template-columns:1.15fr .85fr;gap:clamp(2.5rem,5vw,5rem);align-items:center;position:relative;z-index:1}
+.hero .eyebrow{color:var(--gold-soft)}
+.hero .eyebrow::before{background:linear-gradient(to right,var(--gold-soft),transparent)}
+.hero h1{font-size:var(--fs-h1);color:#fff;margin:1.4rem 0 0;line-height:1.02;font-weight:600}
+.hero h1 .accent{color:var(--gold);font-style:italic;font-weight:400}
+.hero .lead{color:rgba(174,192,182,.88);margin-top:1.6rem;max-width:48ch;font-size:clamp(1.05rem,1rem + .4vw,1.2rem)}
+.hact{display:flex;flex-wrap:wrap;gap:.9rem;margin-top:2.2rem}
+.hmeta{display:flex;flex-wrap:wrap;gap:2rem;margin-top:2.8rem;padding-top:1.8rem;border-top:1px solid rgba(233,229,219,.1)}
+.hm-item{display:flex;flex-direction:column;gap:.15rem}
+.hm-item b{font-family:"Fraunces";font-size:1.8rem;color:var(--gold);font-weight:600;line-height:1;letter-spacing:-.02em}
+.hm-item span{font-family:"JetBrains Mono";font-size:.7rem;letter-spacing:.08em;color:var(--t-dim);text-transform:uppercase}
+
+/* hero card */
+.statement{
+  background:linear-gradient(160deg,rgba(22,50,40,.95),rgba(13,35,26,.98));
+  border:1px solid rgba(181,142,69,.18);
+  border-radius:var(--r);padding:1.6rem 1.6rem 1.4rem;
+  box-shadow:0 40px 100px -40px rgba(0,0,0,.7),inset 0 1px 0 rgba(181,142,69,.12);
+  position:relative;overflow:hidden
+}
+.statement::before{
+  content:"";position:absolute;top:-60px;right:-60px;width:200px;height:200px;
+  border-radius:50%;background:radial-gradient(circle,rgba(181,142,69,.08),transparent 70%);
+  pointer-events:none
+}
+.st-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem}
+.st-head .tag{font-family:"JetBrains Mono";font-size:.65rem;letter-spacing:.14em;text-transform:uppercase;color:var(--sage)}
+.live-dot{display:flex;align-items:center;gap:.45rem;font-family:"JetBrains Mono";font-size:.65rem;color:var(--sage);letter-spacing:.06em}
+.live-dot .d{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 4px rgba(181,142,69,.2);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 4px rgba(181,142,69,.2)}50%{box-shadow:0 0 0 7px rgba(181,142,69,.08)}}
+.st-row{display:flex;align-items:baseline;justify-content:space-between;padding:.65rem 0;border-bottom:1px solid rgba(233,229,219,.07);font-size:.91rem}
+.st-row:last-of-type{border-bottom:0}
+.st-row .lbl{color:var(--t-dim)}
+.st-row .val{font-family:"JetBrains Mono";color:var(--t-light);font-weight:500;font-size:.88rem}
+.st-divider{height:1.5px;background:linear-gradient(to right,var(--gold),transparent);margin:.6rem 0}
+.st-total{display:flex;align-items:baseline;justify-content:space-between;padding:.5rem 0}
+.st-total .lbl{color:#fff;font-weight:600;font-family:"Fraunces";font-size:1rem}
+.st-total .val{font-family:"JetBrains Mono";color:var(--gold);font-weight:700;font-size:1.08rem}
+.st-foot{display:flex;align-items:center;gap:.5rem;margin-top:1.1rem;font-size:.76rem;color:var(--sage);font-family:"JetBrains Mono";padding-top:.9rem;border-top:1px solid rgba(233,229,219,.07)}
+.st-foot .ok{color:#5cb87e}
+.st-badge{display:inline-flex;align-items:center;gap:.35rem;background:rgba(92,184,126,.1);border:1px solid rgba(92,184,126,.2);border-radius:100px;padding:.28rem .7rem;font-family:"JetBrains Mono";font-size:.68rem;color:#5cb87e;letter-spacing:.04em;margin-top:.85rem}
+.st-badge::before{content:"✓";font-weight:700}
+
+/* ── TRUST STRIP ── */
+.trust{background:var(--card-2);border-block:1px solid var(--line)}
+.trust .wrap{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1.2rem 2rem;padding-block:1.4rem}
+.trust .label{font-family:"JetBrains Mono";font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--t-faint)}
+.trust ul{list-style:none;display:flex;flex-wrap:wrap;gap:.6rem}
+.trust li{font-family:"JetBrains Mono";font-size:.78rem;color:var(--t-mute);background:var(--card);border:1px solid var(--line);border-radius:100px;padding:.38rem .9rem;transition:.22s}
+.trust li:hover{border-color:var(--gold);color:var(--t-dark);background:var(--gold-bg)}
+
+/* ── STATS ── */
+.stats{background:var(--green-deep);position:relative;overflow:hidden}
+.stats::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 80% 50%,rgba(181,142,69,.1),transparent 60%);pointer-events:none}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;position:relative;z-index:1}
+.stat-cell{padding:clamp(1.8rem,3vw,2.8rem) clamp(1.4rem,2.5vw,2rem);position:relative}
+.stat-cell::after{content:"";position:absolute;right:0;top:20%;bottom:20%;width:1px;background:rgba(233,229,219,.1)}
+.stat-cell:last-child::after{display:none}
+.stat-num{font-family:"Fraunces";font-size:clamp(2.2rem,2rem + 1.5vw,3.2rem);font-weight:600;color:var(--gold);line-height:1;letter-spacing:-.03em;display:block}
+.stat-label{font-family:"JetBrains Mono";font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--t-dim);margin-top:.5rem;display:block}
+.stat-desc{font-size:.88rem;color:rgba(174,192,182,.7);margin-top:.35rem;max-width:24ch}
+
+/* ── SECTION HEAD ── */
+.sh{max-width:66ch;margin-bottom:clamp(2.2rem,3.5vw,3.6rem)}
+.sh h2{margin:.9rem 0 .9rem}
+.sh .lead{max-width:56ch}
+
+/* ── SERVICES ── */
+.svc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem}
+.svc{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:1.9rem 1.9rem 1.7rem;display:flex;flex-direction:column;
+  transition:transform .35s var(--ease-spring),box-shadow .35s,border-color .3s;
+  position:relative;overflow:hidden;cursor:default
+}
+.svc::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;
+  background:linear-gradient(135deg,rgba(181,142,69,.06),transparent 60%);
+  opacity:0;transition:opacity .35s
+}
+.svc:hover{transform:translateY(-6px);box-shadow:var(--shadow-lift);border-color:rgba(181,142,69,.3)}
+.svc:hover::before{opacity:1}
+.svc-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.3rem}
+.svc .num{font-family:"JetBrains Mono";font-size:.7rem;color:rgba(181,142,69,.5);letter-spacing:.08em;font-weight:500;padding:.3rem .6rem;border:1px solid var(--gold-dim);border-radius:100px}
+.svc .ico{width:52px;height:52px;border-radius:14px;background:var(--mint);color:var(--green);display:grid;place-items:center;flex:none;transition:.3s}
+.svc .ico svg{width:24px;height:24px}
+.svc:hover .ico{background:var(--gold-bg);color:var(--gold)}
+.svc:nth-child(3n+2) .ico{background:var(--gold-bg);color:var(--gold)}
+.svc:nth-child(3n+2):hover .ico{background:var(--mint);color:var(--green)}
+.svc h3{font-size:1.22rem;margin-bottom:.5rem;font-weight:600;letter-spacing:-.01em}
+.svc p{font-size:.9rem;color:var(--t-mute);line-height:1.62}
+
+/* ── SECTORS ── */
+.sectors{background:var(--green-deep);overflow:hidden;position:relative}
+.sectors::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(to right,transparent,transparent 119px,rgba(233,229,219,.04) 119px,rgba(233,229,219,.04) 120px);pointer-events:none}
+.sectors .wrap{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:.9rem 1.6rem;padding-block:1.7rem;position:relative;z-index:1}
+.sectors .lbl{font-family:"JetBrains Mono";font-size:.7rem;font-weight:500;letter-spacing:.15em;text-transform:uppercase;color:var(--gold-soft)}
+.sectors .s{font-family:"Fraunces";font-size:1.05rem;color:rgba(255,255,255,.9)}
+.sectors .dot{width:3px;height:3px;border-radius:50%;background:var(--gold-soft);opacity:.6}
+
+/* ── APPROACH ── */
+.appr{background:var(--grey-2)}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:0;position:relative}
+.steps::before{
+  content:"";position:absolute;top:36px;left:calc(12.5%);right:calc(12.5%);
+  height:1.5px;background:linear-gradient(to right,var(--green),var(--gold),var(--green),var(--gold));
+  opacity:.25;z-index:0
+}
+.stp{
+  background:var(--card);border:1px solid var(--line);padding:2rem 1.6rem 1.8rem;position:relative;z-index:1;
+  transition:transform .35s var(--ease-spring),box-shadow .35s,border-color .3s
+}
+.stp:first-child{border-radius:var(--r-sm) 0 0 var(--r-sm)}
+.stp:last-child{border-radius:0 var(--r-sm) var(--r-sm) 0}
+.stp+.stp{border-left:0}
+.stp:hover{transform:translateY(-5px);box-shadow:var(--shadow-lift);border-color:var(--line);z-index:2}
+.stp .n{
+  width:50px;height:50px;border-radius:50%;
+  background:var(--green);color:#fff;
+  display:grid;place-items:center;
+  font-family:"Fraunces";font-weight:600;font-size:1.25rem;
+  margin-bottom:1.2rem;position:relative;
+  box-shadow:0 8px 20px -8px rgba(44,106,81,.45)
+}
+.stp:nth-child(2) .n,.stp:nth-child(4) .n{background:linear-gradient(135deg,var(--gold-bright),var(--gold));color:var(--ink);box-shadow:var(--shadow-gold)}
+.stp h3{font-size:1.15rem;margin-bottom:.45rem;font-weight:600}
+.stp p{font-size:.88rem;color:var(--t-mute);line-height:1.6}
+.stp-arrow{position:absolute;top:36px;right:-1px;width:24px;height:24px;display:grid;place-items:center;z-index:3;color:rgba(181,142,69,.4)}
+.stp:last-child .stp-arrow{display:none}
+
+/* ── SOFTWARE ── */
+.soft{background:var(--mint)}
+.soft-grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:clamp(2rem,4vw,4.5rem);align-items:center}
+.soft .eyebrow{color:var(--green)}.soft .eyebrow::before{background:linear-gradient(to right,var(--green),transparent)}
+.soft h2{font-size:clamp(1.7rem,1.3rem + 1.6vw,2.4rem);margin-top:.9rem}
+.soft p.l{color:var(--t-mute);margin-top:.8rem;max-width:40ch;font-size:.98rem}
+.apps{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.app{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:1.5rem;transition:transform .3s var(--ease-spring),box-shadow .3s,border-color .3s;
+  position:relative;overflow:hidden
+}
+.app::after{content:"";position:absolute;inset:0;border-radius:inherit;opacity:0;transition:opacity .3s}
+.app:hover{transform:translateY(-4px);box-shadow:var(--shadow-lift);border-color:rgba(181,142,69,.25)}
+.app .ah{display:flex;align-items:center;gap:.65rem;margin-bottom:.7rem}
+.app .g{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-family:"JetBrains Mono";font-weight:700;font-size:.88rem;flex:none}
+.app.credo .g{background:var(--ink);color:var(--gold)}
+.app.nexus .g{background:linear-gradient(135deg,var(--gold-bright),var(--gold));color:var(--ink)}
+.app b{font-family:"Fraunces";font-size:1.18rem;font-weight:600}
+.app p{font-size:.86rem;color:var(--t-mute);margin-bottom:.95rem;line-height:1.6}
+.app a.l{font-family:"JetBrains Mono";font-size:.76rem;color:var(--green);font-weight:500;display:inline-flex;gap:.4rem;align-items:center;border-bottom:1px solid rgba(44,106,81,.2);padding-bottom:1px;transition:.22s}
+.app a.l:hover{color:var(--gold);border-color:rgba(181,142,69,.3)}
+.app a.l:hover .arr{transform:translateX(4px)}
+
+/* ── ABOUT ── */
+.about{background:var(--grey)}
+.about-grid{display:grid;grid-template-columns:1fr 1fr;gap:clamp(2rem,5vw,5rem);align-items:center}
+.about-card{
+  background:linear-gradient(160deg,var(--ink-2),var(--ink));
+  color:var(--t-light);border-radius:var(--r);
+  padding:clamp(2rem,3.5vw,3rem);position:relative;overflow:hidden;
+  border:1px solid rgba(181,142,69,.1);
+  box-shadow:0 40px 80px -30px rgba(14,36,28,.5)
+}
+.about-card::before{content:"";position:absolute;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(181,142,69,.07),transparent 70%);bottom:-140px;right:-120px;pointer-events:none}
+.about-card::after{content:"";position:absolute;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(44,106,81,.15),transparent 70%);top:-60px;left:-60px;pointer-events:none}
+.about-card .qt{position:relative;z-index:1;font-family:"Fraunces";font-size:clamp(1.35rem,1.1rem + 1.2vw,1.85rem);line-height:1.36;color:#fff;font-weight:400}
+.about-card .qt .u{color:var(--gold);font-style:italic}
+.about-card .qt::before{content:"\201C";font-size:4rem;color:rgba(181,142,69,.18);font-family:"Fraunces";line-height:0;position:absolute;top:-.5rem;left:-.5rem}
+.about-card .by{position:relative;z-index:1;margin-top:1.8rem;display:flex;align-items:center;gap:.9rem}
+.about-card .av{width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,var(--gold-bright),var(--gold));color:var(--ink);display:grid;place-items:center;font-family:"Fraunces";font-weight:700;font-size:1.35rem;flex:none;box-shadow:0 8px 24px -8px rgba(181,142,69,.4)}
+.about-card .by b{display:block;font-family:"Plus Jakarta Sans";font-weight:700;font-size:1rem}
+.about-card .by span{font-size:.82rem;color:var(--t-dim)}
+.about-card .creds{position:relative;z-index:1;display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.4rem}
+.about-card .creds span{font-family:"JetBrains Mono";font-size:.69rem;letter-spacing:.05em;color:var(--gold-soft);border:1px solid rgba(181,142,69,.22);border-radius:100px;padding:.3rem .75rem;background:rgba(181,142,69,.06)}
+.about-card .li{position:relative;z-index:1;display:inline-flex;align-items:center;gap:.5rem;margin-top:1.5rem;font-family:"JetBrains Mono";font-size:.78rem;color:var(--t-light);border-bottom:1px solid rgba(181,142,69,.4);padding-bottom:2px;transition:.22s}
+.about-card .li:hover{color:var(--gold);border-color:var(--gold)}
+.about-card .li svg{width:15px;height:15px}
+.about-list{list-style:none;display:flex;flex-direction:column;gap:1.3rem}
+.about-list li{display:flex;gap:1rem;align-items:flex-start;padding:1.2rem;background:var(--card);border:1px solid var(--line);border-radius:var(--r-xs);transition:.3s}
+.about-list li:hover{border-color:rgba(44,106,81,.25);background:var(--card-2)}
+.about-list .ic{flex:none;width:44px;height:44px;border-radius:12px;background:var(--mint);color:var(--green);display:grid;place-items:center;transition:.3s}
+.about-list li:hover .ic{background:var(--gold-bg);color:var(--gold)}
+.about-list b{font-family:"Fraunces";font-weight:600;font-size:1.08rem}
+.about-list p{font-size:.9rem;color:var(--t-mute);margin-top:.15rem;line-height:1.56}
+
+/* ── CTA ── */
+.cta{
+  background:var(--ink);color:var(--t-light);text-align:center;position:relative;overflow:hidden;
+  background-image:radial-gradient(ellipse 80% 100% at 50% -10%,rgba(181,142,69,.18),transparent 55%),
+    radial-gradient(ellipse 50% 60% at 50% 110%,rgba(44,106,81,.2),transparent 55%)
+}
+.cta::before{
+  content:"";position:absolute;inset:0;
+  background-image:repeating-linear-gradient(to right,transparent,transparent 59px,rgba(233,229,219,.025) 59px,rgba(233,229,219,.025) 60px),
+    repeating-linear-gradient(to bottom,transparent,transparent 59px,rgba(233,229,219,.025) 59px,rgba(233,229,219,.025) 60px);
+}
+.cta .wrap{position:relative;z-index:1}
+.cta h2{color:#fff;max-width:22ch;margin:1rem auto 1rem;font-weight:500}
+.cta .lead{color:rgba(174,192,182,.8);margin-inline:auto;max-width:50ch}
+.ctaact{display:flex;flex-wrap:wrap;gap:.9rem;justify-content:center;margin-top:2.2rem}
+.ctach{display:flex;flex-wrap:wrap;justify-content:center;gap:1.6rem;margin-top:2.8rem;padding-top:2rem;border-top:1px solid rgba(233,229,219,.08)}
+.ctach a,.ctach span{font-family:"JetBrains Mono";font-size:.84rem;color:var(--t-dim);display:inline-flex;gap:.5rem;align-items:center;transition:.22s}
+.ctach a:hover{color:var(--gold)}
+
+/* ── FOOTER ── */
+.ft{background:#06100D;color:var(--t-dim);padding-block:3.5rem 2.2rem;position:relative}
+.ft::before{content:"";position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(to right,transparent,rgba(181,142,69,.3),transparent)}
+.ftgrid{display:grid;grid-template-columns:1.7fr 1fr 1fr 1fr;gap:2.5rem}
+.ft .brand{color:#fff}.ft .brand small{color:var(--sage)}
+.ftabout{font-size:.88rem;max-width:32ch;margin-top:1rem;line-height:1.62;color:var(--sage)}
+.ftsoc{display:flex;gap:.6rem;margin-top:1.3rem}
+.ftsoc a{width:38px;height:38px;border-radius:50%;border:1px solid rgba(233,229,219,.1);display:grid;place-items:center;color:var(--sage);transition:.22s}
+.ftsoc a:hover{border-color:var(--gold);color:var(--gold);background:rgba(181,142,69,.06);transform:scale(1.08)}
+.ftsoc svg{width:16px;height:16px}
+.ftcol h4{font-family:"JetBrains Mono";font-size:.68rem;letter-spacing:.15em;text-transform:uppercase;color:var(--sage);margin-bottom:1.1rem;font-weight:500}
+.ftcol ul{list-style:none;display:flex;flex-direction:column;gap:.65rem}
+.ftcol a{font-size:.88rem;color:rgba(174,192,182,.65);transition:.22s}
+.ftcol a:hover{color:var(--gold)}
+.ftbot{display:flex;flex-wrap:wrap;gap:1rem;justify-content:space-between;margin-top:3rem;padding-top:1.8rem;border-top:1px solid rgba(233,229,219,.07);font-family:"JetBrains Mono";font-size:.76rem;color:rgba(124,150,139,.6)}
+
+/* ── WHATSAPP FAB ── */
+.wa-fab{
+  position:fixed;bottom:1.8rem;right:1.8rem;z-index:50;
+  width:56px;height:56px;border-radius:50%;
+  background:linear-gradient(135deg,#25D366,#128C7E);
+  color:#fff;display:grid;place-items:center;
+  box-shadow:0 8px 30px -10px rgba(37,211,102,.6),0 2px 8px rgba(0,0,0,.2);
+  transition:transform .3s var(--ease-spring),box-shadow .3s;
+  opacity:0;pointer-events:none;transition:opacity .3s,transform .3s var(--ease-spring),box-shadow .3s
+}
+.wa-fab.show{opacity:1;pointer-events:auto}
+.wa-fab:hover{transform:scale(1.12) rotate(-5deg);box-shadow:0 12px 40px -10px rgba(37,211,102,.7)}
+.wa-fab svg{width:28px;height:28px}
+
+/* ── ANIMATIONS ── */
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .75s var(--ease),transform .75s var(--ease)}
+.reveal.in{opacity:1;transform:none}
+.reveal-left{opacity:0;transform:translateX(-28px);transition:opacity .75s var(--ease),transform .75s var(--ease)}
+.reveal-left.in{opacity:1;transform:none}
+.reveal-scale{opacity:0;transform:scale(.94);transition:opacity .6s var(--ease),transform .6s var(--ease-spring)}
+.reveal-scale.in{opacity:1;transform:scale(1)}
+
+.st-row{opacity:0;transform:translateY(8px);animation:rowIn .55s var(--ease) forwards}
+.st-row:nth-child(1){animation-delay:.25s}
+.st-row:nth-child(2){animation-delay:.4s}
+.st-row:nth-child(3){animation-delay:.55s}
+.st-row:nth-child(4){animation-delay:.7s}
+.st-total{opacity:0;animation:rowIn .55s var(--ease) .9s forwards}
+@keyframes rowIn{to{opacity:1;transform:none}}
+
+/* mobile */
+.mobile{display:none;background:rgba(232,230,223,.96);backdrop-filter:blur(18px);border-bottom:1px solid var(--line);position:sticky;top:72px;z-index:55}
+.nav.open~.mobile{display:block}
+.mobile .wrap{display:flex;flex-direction:column;padding-block:1rem 1.5rem;gap:.1rem}
+.mobile a{padding:.75rem .5rem;border-bottom:1px solid var(--line-soft);font-weight:500;color:var(--t-dark);transition:.18s}
+.mobile a:hover{color:var(--green)}
+.mobile a:last-of-type{border:0}
+.mobile .btn{margin-top:.9rem;justify-content:center;width:100%}
+
+/* responsive */
+@media(max-width:1020px){
+  .hgrid{grid-template-columns:1fr;gap:3rem}
+  .hero .lead{max-width:none}
+  .about-grid{grid-template-columns:1fr}
+  .soft-grid{grid-template-columns:1fr}
+  .steps{grid-template-columns:1fr 1fr}
+  .steps::before{display:none}
+  .stp:first-child,.stp:last-child{border-radius:0}
+  .stp:nth-child(1){border-radius:var(--r-sm) 0 0 0}
+  .stp:nth-child(2){border-radius:0 var(--r-sm) 0 0}
+  .stp:nth-child(3){border-radius:0 0 0 var(--r-sm);border-top:0}
+  .stp:nth-child(4){border-radius:0 0 var(--r-sm) 0;border-top:0;border-left:0}
+  .ftgrid{grid-template-columns:1fr 1fr}
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
+  .stat-cell:nth-child(2)::after{display:none}
+}
+@media(max-width:860px){
+  .nlinks,.ncta .btn{display:none}
+  .tgl{display:grid;place-items:center}
+  .svc-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:600px){
+  .svc-grid{grid-template-columns:1fr}
+  .steps{grid-template-columns:1fr}
+  .stp{border-left:1px solid var(--line)!important;border-radius:0!important}
+  .stp:first-child{border-radius:var(--r-sm) var(--r-sm) 0 0!important}
+  .stp:last-child{border-radius:0 0 var(--r-sm) var(--r-sm)!important}
+  .stp+.stp{border-top:0}
+  .apps{grid-template-columns:1fr}
+  .ftgrid{grid-template-columns:1fr}
+  .trust .wrap{flex-direction:column;align-items:flex-start}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .stat-cell::after{display:none}
+  .hmeta{gap:1.4rem}
+}
+
+@media(prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+  .reveal,.reveal-left,.reveal-scale,.st-row,.st-total{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+
+<!-- Scroll progress -->
+<div id="progress" role="progressbar" aria-hidden="true"></div>
+
+<header class="hdr" id="top">
+  <nav class="nav wrap" id="nav">
+    <a class="brand" href="#top" aria-label="Prolion home">
+      <svg class="mk" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+        <rect x="1" y="1" width="38" height="38" rx="11" fill="#0E241C"/>
+        <rect x="1.5" y="1.5" width="37" height="37" rx="10.5" stroke="#B58E45" stroke-opacity="0.45"/>
+        <path d="M13 28V12h7.2c3.4 0 5.6 2 5.6 5.1 0 3.2-2.2 5.2-5.7 5.2H17.4V28H13Z" fill="#B58E45"/>
+        <path d="M17.4 18.7h2.4c1.2 0 1.9-.6 1.9-1.6 0-1-.7-1.6-1.9-1.6h-2.4v3.2Z" fill="#0E241C"/>
+      </svg>
+      <span>Prolion<small>Integrated Services</small></span>
+    </a>
+    <div class="nlinks">
+      <a href="#services">Services</a>
+      <a href="#approach">How we work</a>
+      <a href="#software">Software</a>
+      <a href="#about">About</a>
+    </div>
+    <div class="ncta">
+      <a class="icon-link" href="https://www.linkedin.com/in/ukchike/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14zM8.34 9.5H5.67V18.5H8.34V9.5zM7 5.75a1.55 1.55 0 1 0 0 3.1 1.55 1.55 0 0 0 0-3.1zM18.34 18.5V13.6c0-2.55-1.36-3.74-3.18-3.74a2.74 2.74 0 0 0-2.48 1.36h-.04V9.5H10v9h2.67v-4.45c0-1.17.22-2.31 1.68-2.31 1.43 0 1.45 1.34 1.45 2.39V18.5h2.54z"/></svg>
+      </a>
+      <a class="icon-link" href="https://x.com/uk_chike" target="_blank" rel="noopener noreferrer" aria-label="X (Twitter)">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.53 3h3.07l-6.7 7.66L21.75 21h-6.17l-4.83-6.31L5.22 21H2.14l7.16-8.19L1.5 3h6.33l4.36 5.77L17.53 3zm-1.08 16.17h1.7L7.63 4.74H5.8l10.65 14.43z"/></svg>
+      </a>
+      <a class="icon-link" href="https://wa.me/2348026686328" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 1.67c2.2 0 4.27.86 5.83 2.42a8.2 8.2 0 0 1 2.42 5.82c0 4.54-3.7 8.24-8.25 8.24a8.23 8.23 0 0 1-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.25 8.24-8.25zm-3.06 4.4c-.14 0-.38.05-.58.27-.2.22-.76.75-.76 1.82 0 1.07.78 2.11.89 2.25.11.14 1.54 2.35 3.73 3.3.52.22.93.36 1.25.46.52.17 1 .14 1.37.09.42-.06 1.28-.52 1.46-1.03.18-.5.18-.94.13-1.03-.05-.09-.2-.14-.42-.25-.22-.11-1.28-.63-1.48-.7-.2-.07-.34-.11-.49.11-.14.22-.56.7-.69.85-.13.14-.25.16-.47.05-.22-.11-.92-.34-1.76-1.08-.65-.58-1.09-1.3-1.22-1.52-.13-.22-.01-.34.1-.45.1-.1.22-.25.33-.38.11-.13.14-.22.22-.36.07-.14.04-.27-.02-.38-.05-.11-.49-1.18-.67-1.61-.18-.43-.36-.37-.49-.38-.13-.01-.27-.01-.42-.01z"/></svg>
+      </a>
+      <a href="#contact" class="btn btn-gold">Book a consultation</a>
+      <button class="tgl" id="tgl" aria-label="Open menu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </nav>
+  <div class="mobile" id="mob">
+    <div class="wrap">
+      <a href="#services">Services</a>
+      <a href="#approach">How we work</a>
+      <a href="#software">Software</a>
+      <a href="#about">About</a>
+      <a href="https://www.linkedin.com/in/ukchike/" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a>
+      <a href="https://x.com/uk_chike" target="_blank" rel="noopener noreferrer">X · @uk_chike ↗</a>
+      <a href="https://wa.me/2348026686328" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a>
+      <a href="#contact" class="btn btn-gold">Book a consultation</a>
+    </div>
+  </div>
+</header>
+
+<!-- ── HERO ── -->
+<section class="hero">
+  <div class="hero-bg" aria-hidden="true"></div>
+  <div class="wrap hgrid">
+    <div>
+      <span class="eyebrow">Finance · Tax · Reporting · Lagos, Nigeria</span>
+      <h1>The finance function your business needs —<br><span class="accent">from first ledger to board-ready report.</span></h1>
+      <p class="lead">Prolion Integrated Services keeps Nigerian businesses on top of their numbers: bookkeeping, tax returns, management accounts, financial modelling and analytics — handled by people who do this for a living.</p>
+      <div class="hact">
+        <a href="#contact" class="btn btn-gold">Book a consultation <span class="arr">→</span></a>
+        <a href="#services" class="btn btn-ghost-dk">Explore our services</a>
+      </div>
+      <div class="hmeta">
+        <div class="hm-item"><b>10+</b><span>Years in practice</span></div>
+        <div class="hm-item"><b>9</b><span>Core services</span></div>
+        <div class="hm-item"><b>IFRS</b><span>Standard reporting</span></div>
+        <div class="hm-item"><b>NTA'25</b><span>Compliant filings</span></div>
+      </div>
+    </div>
+    <div class="statement reveal" aria-hidden="true">
+      <div class="st-head">
+        <span class="tag">Management Accounts · FY 2025</span>
+        <span class="live-dot"><span class="d"></span>Live</span>
+      </div>
+      <div class="st-row"><span class="lbl">Revenue</span><span class="val">₦ 84,250,000</span></div>
+      <div class="st-row"><span class="lbl">Cost of sales</span><span class="val">(₦ 41,180,000)</span></div>
+      <div class="st-row"><span class="lbl">Operating expenses</span><span class="val">(₦ 19,640,000)</span></div>
+      <div class="st-row"><span class="lbl">Tax provision</span><span class="val">(₦ 5,847,000)</span></div>
+      <div class="st-divider"></div>
+      <div class="st-total"><span class="lbl">Profit after tax</span><span class="val">₦ 17,583,000</span></div>
+      <div class="st-badge">Balanced &amp; reconciled by Prolion</div>
+      <div class="st-foot"><span class="ok">✓</span> Prepared to IFRS standard · Audit-ready</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── TRUST STRIP ── -->
+<div class="trust">
+  <div class="wrap">
+    <span class="label">Built on real practice</span>
+    <ul>
+      <li>CAC-registered</li>
+      <li>ICAN-aligned</li>
+      <li>NRS filings</li>
+      <li>IFRS reporting</li>
+      <li>FMVA® · BIDA®</li>
+      <li>Multi-entity</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ── STATS ── -->
+<section class="stats" aria-label="Practice highlights">
+  <div class="wrap">
+    <div class="stats-grid">
+      <div class="stat-cell reveal">
+        <span class="stat-num" data-count="10">10+</span>
+        <span class="stat-label">Years in practice</span>
+        <p class="stat-desc">From first ledger entry to full consolidation.</p>
+      </div>
+      <div class="stat-cell reveal">
+        <span class="stat-num">9</span>
+        <span class="stat-label">Core service lines</span>
+        <p class="stat-desc">One partner across the full finance lifecycle.</p>
+      </div>
+      <div class="stat-cell reveal">
+        <span class="stat-num">6+</span>
+        <span class="stat-label">Industries served</span>
+        <p class="stat-desc">From construction and energy to informal sector.</p>
+      </div>
+      <div class="stat-cell reveal">
+        <span class="stat-num">2</span>
+        <span class="stat-label">Products built</span>
+        <p class="stat-desc">CredoTax &amp; NEXUS — made for Nigeria's market.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SERVICES ── -->
+<section class="section" id="services" style="background:var(--grey)">
+  <div class="wrap">
+    <div class="sh">
+      <span class="eyebrow">What we do</span>
+      <h2>Everything your numbers need, in one relationship.</h2>
+      <p class="lead">No more juggling a bookkeeper here, a tax person there and a spreadsheet you don't trust. One partner across the whole finance lifecycle — from keeping the books clean to modelling your next funding round.</p>
+    </div>
+    <div class="svc-grid">
+      <div class="svc reveal">
+        <div class="svc-top">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M8 4v16M4 9h4M4 14h4"/></svg></div>
+          <span class="num">01</span>
+        </div>
+        <h3>Bookkeeping</h3>
+        <p>Clean, current records kept month to month, so you always know where the money is — and audit season holds no surprises.</p>
+      </div>
+      <div class="svc reveal">
+        <div class="svc-top">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg></div>
+          <span class="num">02</span>
+        </div>
+        <h3>Tax returns &amp; compliance</h3>
+        <p>CIT, VAT, WHT and PAYE prepared, computed and filed correctly with the NRS — deadlines met, penalties avoided.</p>
+      </div>
+      <div class="svc reveal">
+        <div class="svc-top">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 14l4-4 3 3 5-6"/></svg></div>
+          <span class="num">03</span>
+        </div>
+        <h3>Management accounts &amp; reporting</h3>
+        <p>Periodic P&amp;L, balance sheet and cash flow that tell you how the business is really performing, month after month.</p>
+      </div>
+      <div class="svc reveal">
+        <div class="svc-top">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg></div>
+          <span class="num">04</span>
+        </div>
+        <h3>Financial statements</h3>
+        <p>IFRS-aligned year-end accounts and notes, fit to put in front of a bank, an investor or a regulator with confidence.</p>
+      </div>
+      <div class="svc reveal">
+        <div class="svc-top">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4M7 8l3 3 4-5 3 3"/></svg></div>
+          <span class="num">05</span>
+        </div>
+        <h3>Software implementation</h3>
+        <p>Set-up, migration and training on QuickBooks, Sage, Zoho or Odoo — so your books run on a real system, not a spreadsheet.</p>
+      </div>
+      <div class="svc reveal">
+        <div class="svc-top">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 15l3-4 3 3 5-7"/></svg></div>
+          <span class="num">06</span>
+        </div>
+        <h3>Financial modelling</h3>
+        <p>Forecasts, budgets, valuations and scenario models that stand up to scrutiny — for decisions, funding rounds and grant bids.</p>
+      </div>
+      <div class="svc reveal">
+        <div class="svc-top">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21H4a1 1 0 0 1-1-1V3M7 14l3-3 3 2 5-6"/><rect x="16" y="3" width="5" height="4" rx="1"/></svg></div>
+          <span class="num">07</span>
+        </div>
+        <h3>Data &amp; business analytics</h3>
+        <p>Dashboards and analysis that turn raw transactions into the few numbers that actually drive your decisions.</p>
+      </div>
+      <div class="svc reveal">
+        <div class="svc-top">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6l-8-4Z"/><path d="m9 12 2 2 4-4"/></svg></div>
+          <span class="num">08</span>
+        </div>
+        <h3>Audit &amp; tax authority support</h3>
+        <p>Pre-audit workbooks, objection letters and reconciliations built to withstand an NRS review when it comes.</p>
+      </div>
+      <div class="svc reveal">
+        <div class="svc-top">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg></div>
+          <span class="num">09</span>
+        </div>
+        <h3>Advisory retainers</h3>
+        <p>Your own finance team on call, every month — the full function, without the cost of hiring one.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SECTORS ── -->
+<div class="sectors">
+  <div class="wrap">
+    <span class="lbl">We work with</span>
+    <span class="s">SMEs</span><span class="dot"></span>
+    <span class="s">Construction</span><span class="dot"></span>
+    <span class="s">Manufacturing</span><span class="dot"></span>
+    <span class="s">Energy</span><span class="dot"></span>
+    <span class="s">Services</span><span class="dot"></span>
+    <span class="s">Informal sector</span>
+  </div>
+</div>
+
+<!-- ── APPROACH ── -->
+<section class="section appr" id="approach">
+  <div class="wrap">
+    <div class="sh">
+      <span class="eyebrow">How we work</span>
+      <h2>Calm, clear, and on your side.</h2>
+      <p class="lead">Four stages, one steady hand. We learn your situation, fix the foundations, keep everything on time, and stay close as you grow.</p>
+    </div>
+    <div class="steps">
+      <div class="stp reveal">
+        <div class="n">1</div>
+        <h3>We listen &amp; review</h3>
+        <p>We learn your business and look at where the numbers, filings and systems really stand — no judgement.</p>
+        <span class="stp-arrow" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+        </span>
+      </div>
+      <div class="stp reveal">
+        <div class="n">2</div>
+        <h3>We tidy &amp; build</h3>
+        <p>Clean books, proper IFRS-aligned statements and the right software — a foundation you can trust.</p>
+        <span class="stp-arrow" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+        </span>
+      </div>
+      <div class="stp reveal">
+        <div class="n">3</div>
+        <h3>We report &amp; file</h3>
+        <p>Management accounts, returns and reporting delivered accurately and on time, every period.</p>
+        <span class="stp-arrow" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+        </span>
+      </div>
+      <div class="stp reveal">
+        <div class="n">4</div>
+        <h3>We stay close</h3>
+        <p>Modelling, analytics and ongoing advice keep you ahead as the business grows.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SOFTWARE ── -->
+<section class="section soft" id="software">
+  <div class="wrap soft-grid">
+    <div class="reveal-left">
+      <span class="eyebrow">Also built by Prolion</span>
+      <h2>We build the software, too.</h2>
+      <p class="l">When we couldn't find tools fit for the Nigerian market, we built our own. They're part of the practice — not the whole story.</p>
+    </div>
+    <div class="apps">
+      <div class="app credo reveal">
+        <div class="ah"><span class="g">Cx</span><b>CredoTax</b></div>
+        <p>NTA 2025 tax-compliance platform — calculate liabilities, track deadlines and avoid penalties.</p>
+        <a class="l" href="https://credotax-7c7n.vercel.app/" target="_blank" rel="noopener noreferrer">Visit CredoTax <span class="arr">↗</span></a>
+      </div>
+      <div class="app nexus reveal">
+        <div class="ah"><span class="g">Nx</span><b>NEXUS</b></div>
+        <p>AI that turns bank statements into financial statements — built for the informal sector.</p>
+        <a class="l" href="https://nexus-app-ivory-eta.vercel.app/" target="_blank" rel="noopener noreferrer">Visit NEXUS <span class="arr">↗</span></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── ABOUT ── -->
+<section class="section about" id="about">
+  <div class="wrap about-grid">
+    <div class="about-card reveal-scale">
+      <p class="qt">"Good businesses shouldn't lose sleep over their books or the taxman. My job is to be the <span class="u">steady, reliable hand</span> on your numbers — all year round."</p>
+      <div class="by">
+        <span class="av">K</span>
+        <div><b>Kingsley Uzoka</b><span>Founder · Tax &amp; Finance Practitioner</span></div>
+      </div>
+      <div class="creds"><span>FMVA®</span><span>BIDA®</span><span>10+ yrs practice</span></div>
+      <a class="li" href="https://www.linkedin.com/in/ukchike/" target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14zM8.34 9.5H5.67V18.5H8.34V9.5zM7 5.75a1.55 1.55 0 1 0 0 3.1 1.55 1.55 0 0 0 0-3.1zM18.34 18.5V13.6c0-2.55-1.36-3.74-3.18-3.74a2.74 2.74 0 0 0-2.48 1.36h-.04V9.5H10v9h2.67v-4.45c0-1.17.22-2.31 1.68-2.31 1.43 0 1.45 1.34 1.45 2.39V18.5h2.54z"/></svg>
+        Connect on LinkedIn
+      </a>
+    </div>
+    <div>
+      <span class="eyebrow">Why Prolion</span>
+      <h2 style="margin:.9rem 0 1.5rem">Experience you can lean on.</h2>
+      <ul class="about-list">
+        <li class="reveal">
+          <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+          <div><b>10+ years across the lifecycle</b><p>From first ledger to full consolidation, single filings to multi-entity groups, across industries from construction to energy.</p></div>
+        </li>
+        <li class="reveal">
+          <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 15l3-4 3 3 5-7"/></svg></span>
+          <div><b>Certified in modelling &amp; analytics</b><p>FMVA® (financial modelling &amp; valuation) and BIDA® (business intelligence &amp; data analytics) — the modern skillset behind your numbers.</p></div>
+        </li>
+        <li class="reveal">
+          <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+          <div><b>Built for the Nigerian reality</b><p>NTA 2025, the NRS, SME cash flow and the informal sector — designed around how business actually works here.</p></div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ── -->
+<section class="section cta" id="contact">
+  <div class="wrap">
+    <span class="eyebrow" style="justify-content:center">Let's talk</span>
+    <h2>Ready to hand the numbers to someone you trust?</h2>
+    <p class="lead">Book a friendly, no-pressure consultation. We'll review where you stand and tell you plainly what needs doing — and what it costs.</p>
+    <div class="ctaact">
+      <a href="mailto:hello@prolion.ng" class="btn btn-gold">Book a consultation <span class="arr">→</span></a>
+      <a href="#services" class="btn btn-ghost-dk">See all services</a>
+    </div>
+    <div class="ctach">
+      <a href="mailto:hello@prolion.ng">✉ hello@prolion.ng</a>
+      <a href="https://wa.me/2348026686328" target="_blank" rel="noopener noreferrer">✆ WhatsApp +234 802 668 6328</a>
+      <a href="https://www.linkedin.com/in/ukchike/" target="_blank" rel="noopener noreferrer">in LinkedIn ↗</a>
+      <a href="https://x.com/uk_chike" target="_blank" rel="noopener noreferrer">𝕏 @uk_chike ↗</a>
+      <span>⌖ Lagos, Nigeria</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer class="ft">
+  <div class="wrap">
+    <div class="ftgrid">
+      <div>
+        <a class="brand" href="#top">
+          <svg class="mk" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+            <rect x="1" y="1" width="38" height="38" rx="11" fill="#163228"/>
+            <rect x="1.5" y="1.5" width="37" height="37" rx="10.5" stroke="#B58E45" stroke-opacity="0.4"/>
+            <path d="M13 28V12h7.2c3.4 0 5.6 2 5.6 5.1 0 3.2-2.2 5.2-5.7 5.2H17.4V28H13Z" fill="#B58E45"/>
+            <path d="M17.4 18.7h2.4c1.2 0 1.9-.6 1.9-1.6 0-1-.7-1.6-1.9-1.6h-2.4v3.2Z" fill="#163228"/>
+          </svg>
+          <span>Prolion<small>Integrated Services</small></span>
+        </a>
+        <p class="ftabout">Bookkeeping, tax, reporting, modelling and analytics for Nigerian businesses — plus the software to make it simpler.</p>
+        <div class="ftsoc">
+          <a href="https://www.linkedin.com/in/ukchike/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14zM8.34 9.5H5.67V18.5H8.34V9.5zM7 5.75a1.55 1.55 0 1 0 0 3.1 1.55 1.55 0 0 0 0-3.1zM18.34 18.5V13.6c0-2.55-1.36-3.74-3.18-3.74a2.74 2.74 0 0 0-2.48 1.36h-.04V9.5H10v9h2.67v-4.45c0-1.17.22-2.31 1.68-2.31 1.43 0 1.45 1.34 1.45 2.39V18.5h2.54z"/></svg></a>
+          <a href="https://x.com/uk_chike" target="_blank" rel="noopener noreferrer" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.53 3h3.07l-6.7 7.66L21.75 21h-6.17l-4.83-6.31L5.22 21H2.14l7.16-8.19L1.5 3h6.33l4.36 5.77L17.53 3zm-1.08 16.17h1.7L7.63 4.74H5.8l10.65 14.43z"/></svg></a>
+          <a href="https://wa.me/2348026686328" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 1.67c2.2 0 4.27.86 5.83 2.42a8.2 8.2 0 0 1 2.42 5.82c0 4.54-3.7 8.24-8.25 8.24a8.23 8.23 0 0 1-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.25 8.24-8.25zm-3.06 4.4c-.14 0-.38.05-.58.27-.2.22-.76.75-.76 1.82 0 1.07.78 2.11.89 2.25.11.14 1.54 2.35 3.73 3.3.52.22.93.36 1.25.46.52.17 1 .14 1.37.09.42-.06 1.28-.52 1.46-1.03.18-.5.18-.94.13-1.03-.05-.09-.2-.14-.42-.25-.22-.11-1.28-.63-1.48-.7-.2-.07-.34-.11-.49.11-.14.22-.56.7-.69.85-.13.14-.25.16-.47.05-.22-.11-.92-.34-1.76-1.08-.65-.58-1.09-1.3-1.22-1.52-.13-.22-.01-.34.1-.45.1-.1.22-.25.33-.38.11-.13.14-.22.22-.36.07-.14.04-.27-.02-.38-.05-.11-.49-1.18-.67-1.61-.18-.43-.36-.37-.49-.38-.13-.01-.27-.01-.42-.01z"/></svg></a>
+          <a href="mailto:hello@prolion.ng" aria-label="Email"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></a>
+        </div>
+      </div>
+      <div class="ftcol">
+        <h4>Services</h4>
+        <ul>
+          <li><a href="#services">Bookkeeping</a></li>
+          <li><a href="#services">Tax returns</a></li>
+          <li><a href="#services">Management accounts</a></li>
+          <li><a href="#services">Financial modelling</a></li>
+          <li><a href="#services">Data &amp; analytics</a></li>
+        </ul>
+      </div>
+      <div class="ftcol">
+        <h4>Software</h4>
+        <ul>
+          <li><a href="https://credotax-7c7n.vercel.app/" target="_blank" rel="noopener noreferrer">CredoTax ↗</a></li>
+          <li><a href="https://nexus-app-ivory-eta.vercel.app/" target="_blank" rel="noopener noreferrer">NEXUS ↗</a></li>
+        </ul>
+      </div>
+      <div class="ftcol">
+        <h4>Company</h4>
+        <ul>
+          <li><a href="#about">About</a></li>
+          <li><a href="#approach">How we work</a></li>
+          <li><a href="https://www.linkedin.com/in/ukchike/" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="ftbot">
+      <span>© <span id="yr">2026</span> Prolion Integrated Services · CAC-registered</span>
+      <span>Built in Lagos · Numbers, handled.</span>
+    </div>
+  </div>
+</footer>
+
+<!-- Floating WhatsApp -->
+<a class="wa-fab" id="waFab" href="https://wa.me/2348026686328" target="_blank" rel="noopener noreferrer" aria-label="Chat on WhatsApp">
+  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 1.67c2.2 0 4.27.86 5.83 2.42a8.2 8.2 0 0 1 2.42 5.82c0 4.54-3.7 8.24-8.25 8.24a8.23 8.23 0 0 1-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.25 8.24-8.25zm-3.06 4.4c-.14 0-.38.05-.58.27-.2.22-.76.75-.76 1.82 0 1.07.78 2.11.89 2.25.11.14 1.54 2.35 3.73 3.3.52.22.93.36 1.25.46.52.17 1 .14 1.37.09.42-.06 1.28-.52 1.46-1.03.18-.5.18-.94.13-1.03-.05-.09-.2-.14-.42-.25-.22-.11-1.28-.63-1.48-.7-.2-.07-.34-.11-.49.11-.14.22-.56.7-.69.85-.13.14-.25.16-.47.05-.22-.11-.92-.34-1.76-1.08-.65-.58-1.09-1.3-1.22-1.52-.13-.22-.01-.34.1-.45.1-.1.22-.25.33-.38.11-.13.14-.22.22-.36.07-.14.04-.27-.02-.38-.05-.11-.49-1.18-.67-1.61-.18-.43-.36-.37-.49-.38-.13-.01-.27-.01-.42-.01z"/></svg>
+</a>
+
+<script>
+(function(){"use strict";
+  /* scroll progress */
+  var prog=document.getElementById("progress");
+  function updateProg(){var s=scrollY,h=document.documentElement.scrollHeight-innerHeight;prog.style.width=(h>0?Math.min(s/h*100,100):0)+"%"}
+  addEventListener("scroll",updateProg,{passive:true});updateProg();
+
+  /* sticky header */
+  var hdr=document.querySelector(".hdr");
+  function onScroll(){hdr.classList.toggle("scrolled",scrollY>10)}
+  addEventListener("scroll",onScroll,{passive:true});onScroll();
+
+  /* WhatsApp FAB */
+  var fab=document.getElementById("waFab");
+  function onScrollFab(){fab.classList.toggle("show",scrollY>300)}
+  addEventListener("scroll",onScrollFab,{passive:true});onScrollFab();
+
+  /* mobile nav */
+  var tgl=document.getElementById("tgl"),nav=document.getElementById("nav"),mob=document.getElementById("mob");
+  tgl.addEventListener("click",function(){var o=nav.classList.toggle("open");tgl.setAttribute("aria-expanded",o)});
+  mob.querySelectorAll("a").forEach(function(a){a.addEventListener("click",function(){nav.classList.remove("open");tgl.setAttribute("aria-expanded","false")})});
+
+  /* intersection observer for reveal */
+  var rm=matchMedia("(prefers-reduced-motion:reduce)").matches;
+  if(!rm&&"IntersectionObserver" in window){
+    var io=new IntersectionObserver(function(es){
+      es.forEach(function(e){if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target)}})
+    },{threshold:.1,rootMargin:"0px 0px -50px 0px"});
+    document.querySelectorAll(".reveal,.reveal-left,.reveal-scale").forEach(function(el,i){
+      el.style.transitionDelay=(i%4*.08)+"s";
+      io.observe(el)
+    });
+  }else{
+    document.querySelectorAll(".reveal,.reveal-left,.reveal-scale").forEach(function(e){e.classList.add("in")})
+  }
+
+  /* footer year */
+  document.getElementById("yr").textContent=new Date().getFullYear();
+})();
+</script>
+</body>
+</html>
