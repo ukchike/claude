@@ -36,7 +36,7 @@ jobs:
 
       - name: Rename APK
         run: |
-          APK=$(find financeflow-android/app/build/outputs/apk/release -name "*.apk" | head -1)
+          APK=$(find financeflow-android/app/build/outputs/apk/release -maxdepth 1 -name "app-release*.apk" | head -1)
           echo "Found APK: $APK"
           mv "$APK" financeflow-android/app/build/outputs/apk/release/FinanceFlow.apk
 
