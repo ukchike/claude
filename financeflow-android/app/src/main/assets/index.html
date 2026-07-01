@@ -17,7 +17,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .app-name{font-size:13px;font-weight:700;line-height:1}
 .tx-count{font-size:9px;color:var(--muted)}
 .avatar-btn{width:32px;height:32px;border-radius:50%;border:2px solid var(--accent);background:rgba(59,130,246,.15);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.main-area{flex:1;overflow:auto;padding:12px 14px 76px}
+.main-area{flex:1;overflow:auto;padding:12px 14px 92px}
 .bnav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#111627;border-top:1px solid var(--border);padding:3px 0;padding-bottom:max(3px,env(safe-area-inset-bottom));z-index:50}
 .bnav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:5px 0;cursor:pointer;border:none;background:none;font-family:inherit;color:var(--muted);font-size:9px;font-weight:500}
 .bnav-btn.active{color:var(--accent)}.bnav-btn .ni{font-size:18px;line-height:1}
@@ -141,6 +141,16 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
 .toggle-slider:before{position:absolute;content:"";height:18px;width:18px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.2s}
 .toggle input:checked + .toggle-slider{background:var(--accent)}
 .toggle input:checked + .toggle-slider:before{transform:translateX(20px)}
+/* Floating action button */
+.fab{position:fixed;right:16px;bottom:74px;width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;font-size:26px;font-weight:600;border:none;box-shadow:0 4px 16px rgba(59,130,246,.45);z-index:55;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1}
+.fab:active{transform:scale(.93)}
+/* Account color swatches (fixes non-rendering <option style=background> "white dot" bug) */
+.swatch-row{display:flex;flex-wrap:wrap;gap:8px}
+.color-swatch{width:30px;height:30px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;flex-shrink:0}
+.color-swatch.sel{border-color:#fff;box-shadow:0 0 0 2px var(--accent)}
+.perm-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
+.perm-row:last-child{border:none}
+.perm-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 @media(max-width:400px){.grid2{grid-template-columns:1fr 1fr}.stat-row{gap:6px}}
 </style>
 </head>
@@ -160,10 +170,10 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
   </div>
   <div style="display:flex;gap:6px">
     <button class="btn btn-g btn-sm" onclick="showModal('upload')">&#8679; Upload</button>
-    <button class="btn btn-p btn-sm" onclick="showModal('addtx')">+ Add</button>
   </div>
 </header>
 <main class="main-area" id="main"></main>
+<button class="fab" id="fabAdd" onclick="showModal('addtx')" title="Add Transaction">+</button>
 <nav class="bnav" id="bnav"></nav>
 <div id="modal-container"></div>
 <script>
@@ -173,11 +183,13 @@ const DEF_EC={"Food & Dining":["Groceries","Restaurants","Fast Food","Beverages"
 const DEF_IC={"Salary":["Primary Job","Part-time"],"Business":["Sales","Services","Products"],"Freelance":["Consulting","Contract Work","Design","Writing"],"Investment":["Dividends","Interest","Returns"],"Gift":["Cash Gift","Prize"],"Other":["Miscellaneous"]};
 const CAT_COLORS={"Food & Dining":"#ef4444","Transportation":"#f97316","Housing":"#eab308","Communication":"#ec4899","Health":"#10b981","Education":"#3b82f6","Entertainment":"#a855f7","Shopping":"#6366f1","Finance":"#64748b","Gifts & Donations":"#14b8a6","Savings":"#06b6d4","Other":"#9ca3af","Salary":"#22c55e","Business":"#16a34a","Freelance":"#84cc16","Investment":"#0ea5e9","Gift":"#f59e0b"};
 const MO=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const ACC_COLORS=["#22c55e","#3b82f6","#f97316","#8b5cf6","#ec4899","#06b6d4","#eab308","#10b981","#6366f1","#ef4444"];
 
 // ── STATE ──
 let txns=[],budgets=[],accounts=[],userEC={},userIC={},profile={name:""};
 let recurring=[];           // Feature 2: recurring transaction templates
 let biometricEnabled=false; // Feature 4: biometric lock setting
+let newAccColor=ACC_COLORS[0];
 let V="dashboard",search="",fCat="all",fType="all",fAcc="all",showTf=false,pendingTx=[],_sp={},exCats={};
 let statsType="expense",pMode="month",pDate=new Date(),ppOpen=false;
 let cmpMode=false,pModeB="month",pDateB=new Date(new Date().getFullYear(),new Date().getMonth()-1,1),ppBOpen=false;
@@ -334,19 +346,20 @@ function rBud(f){
 
 // ── ACCOUNTS ──
 function rAcc(){
-  const accColors=["#22c55e","#3b82f6","#f97316","#8b5cf6","#ec4899","#06b6d4","#eab308","#10b981","#6366f1","#ef4444"];
   const tb=accounts.reduce((s,a)=>{const b=txns.filter(t=>t.accountId===a.id).reduce((s2,t)=>s2+(t.type==="income"?t.amount:-t.amount),0);return s+b;},0);
   $("main").innerHTML=`<div class="fz16 fw7 mb4">Accounts</div><div class="fz10 muted mb12">Total balance: <span class="fw7 accent fz14">${fmt(tb)}</span></div>
   <div class="grid2 mb12">${accounts.map(a=>{const bal=txns.filter(t=>t.accountId===a.id).reduce((s,t)=>s+(t.type==="income"?t.amount:-t.amount),0);const cnt=txns.filter(t=>t.accountId===a.id).length;const ic=a.type==="cash"?"&#128181;":"&#127981;";return`<div class="acc-card"><div class="flex g8 mb8"><div style="width:34px;height:34px;border-radius:8px;background:${a.color}20;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:16px">${ic}</div><div style="flex:1;min-width:0"><div class="fw7 fz12 ellip">${esc(a.name)}</div><div class="fz9 muted">${cnt} txns</div></div><button onclick="deleteAccount('${a.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">&#10005;</button></div><div class="fw8 fz16">${fmt(bal)}</div></div>`;}).join("")}</div>
   <div class="card"><div class="fz12 fw7 mb10">Add Account</div>
-    <div style="display:grid;gap:8px">
+    <div style="display:grid;gap:10px">
       <input class="inp" id="newAccName" placeholder="Account name (e.g. GTBank, Opay)">
-      <div class="flex g8"><select class="inp" id="newAccType"><option value="bank">&#127981; Bank Account</option><option value="cash">&#128181; Cash</option><option value="mobile">&#128242; Mobile Money</option><option value="savings">&#127968; Savings</option></select><select class="inp" id="newAccColor" style="width:90px">${accColors.map(c=>`<option value="${c}" style="background:${c}">&#11044;</option>`).join("")}</select></div>
+      <select class="inp" id="newAccType"><option value="bank">&#127981; Bank Account</option><option value="cash">&#128181; Cash</option><option value="mobile">&#128242; Mobile Money</option><option value="savings">&#127968; Savings</option></select>
+      <div><span class="edit-label">Color</span><div class="swatch-row">${ACC_COLORS.map(c=>`<button type="button" class="color-swatch ${newAccColor===c?"sel":""}" style="background:${c}" onclick="selectAccColor('${c}')" title="${c}"></button>`).join("")}</div></div>
       <button class="btn btn-p w100" style="justify-content:center" onclick="addAccount()">+ Add Account</button>
     </div>
   </div>`;
 }
-function addAccount(){const n=$("newAccName")?.value.trim();if(!n)return alert("Enter account name");const t=$("newAccType")?.value||"bank";const c=$("newAccColor")?.value||"#3b82f6";accounts.push({id:uid(),name:n,type:t,color:c});save();render();}
+function selectAccColor(c){newAccColor=c;render();}
+function addAccount(){const n=$("newAccName")?.value.trim();if(!n)return alert("Enter account name");const t=$("newAccType")?.value||"bank";accounts.push({id:uid(),name:n,type:t,color:newAccColor});newAccColor=ACC_COLORS[0];save();render();}
 function deleteAccount(id){if(txns.filter(t=>t.accountId===id).length>0&&!confirm("This account has transactions. Delete anyway?"))return;accounts=accounts.filter(a=>a.id!==id);save();render();}
 
 // ── SETTINGS ──
@@ -365,14 +378,15 @@ function renderSettings(){
       <input class="inp mb8" id="pName" value="${esc(profile.name)}" placeholder="e.g. John Doe">
       <button class="btn btn-p w100 mb12" style="justify-content:center" onclick="saveProfile()">&#10003; Save Profile</button>
       <div class="divider"></div>
-      <span class="st-label">Data</span>
+      <span class="st-label">Backup &amp; Restore</span>
       <div class="flex-w" style="gap:8px;margin-top:4px">
-        <button class="btn btn-g btn-sm" onclick="exportData()">&#128228; JSON</button>
-        <button class="btn btn-g btn-sm" onclick="exportCSV()">&#128196; CSV</button>
-        <button class="btn btn-g btn-sm" onclick="$('impFile2').click()">&#128229; Import</button>
+        <button class="btn btn-g btn-sm" onclick="exportData()">&#128228; Backup (JSON)</button>
+        <button class="btn btn-g btn-sm" onclick="exportCSV()">&#128196; Export CSV</button>
+        <button class="btn btn-g btn-sm" onclick="$('impFile2').click()">&#128229; Restore</button>
         <input type="file" id="impFile2" accept=".json" style="display:none" onchange="importData(this.files[0])">
         <button class="btn btn-sm btn-rd" onclick="resetAll()">&#128465; Reset All</button>
       </div>
+      <div class="fz9 muted mt6">Tip: in the save dialog, choose Google Drive (or any cloud app installed on your phone) to back up off-device — or pick device storage for a local copy.</div>
     </div>`;
   }
   if(settingsTab==="budgets"){
@@ -400,7 +414,13 @@ function renderSettings(){
   }
   if(settingsTab==="security"){
     const hasBio=window.Android&&window.Android.hasBiometric();
+    const hasNotif=window.Android&&window.Android.hasNotificationPermission&&window.Android.hasNotificationPermission();
     body=`<div class="st-section">
+      <span class="st-label">Permissions</span>
+      <div style="background:var(--bg);border-radius:10px;padding:4px 12px;border:1px solid var(--border);margin-bottom:12px">
+        <div class="perm-row"><div class="flex g6"><div class="perm-dot" style="background:${hasNotif?"var(--green)":"var(--red)"}"></div><span class="fz11 fw6">Notifications (budget alerts)</span></div>${window.Android?(hasNotif?`<span class="fz10 green fw6">Granted</span>`:`<button class="btn btn-sm btn-p" onclick="requestNotifPerm()">Enable</button>`):`<span class="fz10 muted">N/A</span>`}</div>
+        <div class="perm-row"><div class="flex g6"><div class="perm-dot" style="background:${hasBio?"var(--green)":"var(--warn)"}"></div><span class="fz11 fw6">Biometric / device lock</span></div><span class="fz10 ${hasBio?"green":"muted"}">${hasBio?"Available":"Not set up"}</span></div>
+      </div>
       <span class="st-label">Biometric Lock</span>
       <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border)">
         <div class="toggle-wrap"><div><div class="fz12 fw6">&#128274; Require biometrics on open</div><div class="fz10 muted mt4">${hasBio?"Use fingerprint or PIN to unlock":"No biometric/PIN set up on this device"}</div></div><label class="toggle"><input type="checkbox" ${biometricEnabled?"checked":""} onchange="toggleBiometric(this.checked)" ${hasBio?"":"disabled"}><span class="toggle-slider"></span></label></div>
@@ -422,7 +442,7 @@ function renderSettings(){
 
 // ── SETTINGS ACTIONS ──
 function saveProfile(){const n=$("pName")?.value.trim()||"";profile.name=n;save();render();}
-function addBudget(){const cat=$("nbc")?.value,lim=parseFloat($("nbl")?.value);if(!cat||!lim)return alert("Select a category and enter a limit");if(budgets.find(b=>b.cat===cat))return alert("Budget for this category already exists");budgets.push({id:uid(),cat,limit:lim,subs:[]});save();render();}
+function addBudget(){const cat=$("nbc")?.value,lim=parseFloat($("nbl")?.value);if(!cat||!lim)return alert("Select a category and enter a limit");if(budgets.find(b=>b.cat===cat))return alert("Budget for this category already exists");const nb={id:uid(),cat,limit:lim,subs:[]};budgets.push(nb);expandedBudget=nb.id;save();render();showToast("🎯 Budget added — set subcategory limits below","green");}
 function saveBudget(id){const b=budgets.find(x=>x.id===id);if(!b)return;b.cat=$(`bCat_${id}`)?.value||b.cat;b.limit=parseFloat($(`bLim_${id}`)?.value)||b.limit;b.subs.forEach((s,i)=>{const v=parseFloat($(`bSub_${id}_${i}`)?.value);if(!isNaN(v))s.limit=v;});const nc=$(`nsc_${id}`)?.value,nl=parseFloat($(`nsl_${id}`)?.value);if(nc&&nl){if(!b.subs.find(s=>s.name===nc))b.subs.push({name:nc,limit:nl});}save();expandedBudget=null;render();}
 function deleteBudget(id){if(!confirm("Delete this budget?"))return;budgets=budgets.filter(b=>b.id!==id);save();expandedBudget=null;render();}
 function rmBudSub(id,si){const b=budgets.find(x=>x.id===id);if(b){b.subs.splice(si,1);save();render();}}
@@ -432,6 +452,7 @@ function rmSub(cat,sub){const ec=getEC(),ic=getIC();if(ec[cat]!==undefined){if(!
 
 // ── FEATURE 4: BIOMETRIC ──
 function toggleBiometric(on){biometricEnabled=on;save();render();}
+function requestNotifPerm(){if(window.Android&&window.Android.requestNotificationPermission){window.Android.requestNotificationPermission();setTimeout(render,600);}}
 function triggerAuth(){
   if(!window.Android){hideLock();return;}
   $("lockMsg")&&($("lockMsg").textContent="Authenticating...");
@@ -500,19 +521,37 @@ function addRecurring(r){recurring.push(r);save();}
 function toggleRecurring(id){const r=recurring.find(x=>x.id===id);if(r){r.active=!r.active;save();render();}}
 function deleteRecurring(id){if(!confirm("Delete this recurring transaction?"))return;recurring=recurring.filter(r=>r.id!==id);save();render();}
 
-// ── FEATURE 3: CSV EXPORT ──
+// ── FEATURE 3: BACKUP / EXPORT ──
+// Routes through the native "Save As" bridge (Storage Access Framework) when running
+// in the app, so the user can pick device storage, Downloads, or Google Drive.
+// Falls back to a browser download when opened outside the app (e.g. for testing).
+function saveOrDownload(filename,content,mime){
+  if(window.Android&&window.Android.saveFile){
+    window.Android.saveFile(filename,content,mime,"onSaveResult");
+  }else{
+    const blob=new Blob([content],{type:mime});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();
+    showToast("💾 Downloaded "+filename,"green");
+  }
+}
+window.onSaveResult=function(success){
+  if(success)showToast("✅ Backup saved","green");
+  else showToast("⚠️ Save cancelled","warn");
+};
 function exportCSV(){
   const h=["Date","Description","Amount","Type","Category","Subcategory","Account"];
   const rows=txns.sort((a,b)=>b.date.localeCompare(a.date)).map(t=>{const acc=accounts.find(a=>a.id===t.accountId);return[t.date,t.description||"",t.amount,t.type,t.category,t.subcategory||"",acc?acc.name:""].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",");});
   const csv=[h.join(","),...rows].join("\n");
-  const blob=new Blob([csv],{type:"text/csv"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="financeflow_"+new Date().toISOString().split("T")[0]+".csv";a.click();
+  saveOrDownload("financeflow_"+new Date().toISOString().split("T")[0]+".csv",csv,"text/csv");
+}
+function exportData(){
+  const content=JSON.stringify({txns,budgets,accounts,userEC,userIC,profile,recurring});
+  saveOrDownload("financeflow_"+new Date().toISOString().split("T")[0]+".json",content,"application/json");
 }
 
 // ── DATA ACTIONS ──
 function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio"].forEach(k=>localStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];userEC={};userIC={};profile={name:""};recurring=[];biometricEnabled=false;save();closeSettings();}}
-function exportData(){const blob=new Blob([JSON.stringify({txns,budgets,accounts,userEC,userIC,profile,recurring})],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="financeflow_"+new Date().toISOString().split("T")[0]+".json";a.click();}
-function importData(file){if(!file)return;file.text().then(t=>{const d=JSON.parse(t);txns=d.txns||[];budgets=d.budgets||[];accounts=d.accounts||[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];userEC=d.userEC||{};userIC=d.userIC||{};profile=d.profile||{};recurring=d.recurring||[];save();render();alert("Imported successfully!");}).catch(e=>alert("Error: "+e.message));}
+function importData(file){if(!file)return;file.text().then(t=>{const d=JSON.parse(t);txns=d.txns||[];budgets=d.budgets||[];accounts=d.accounts||[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];userEC=d.userEC||{};userIC=d.userIC||{};profile=d.profile||{};recurring=d.recurring||[];save();render();showToast("✅ Imported successfully","green");}).catch(e=>showToast("⚠️ Import failed: "+e.message,"red"));}
 function deleteTx(id){if(confirm("Delete this transaction?")){txns=txns.filter(t=>t.id!==id);save();render();}}
 
 // ── MODALS ──
@@ -567,7 +606,7 @@ function addTx(){
   if($("txRec")?.checked){
     const freq=$("txFreq")?.value||"monthly";
     addRecurring({id:uid(),type:newTx.type,amount:newTx.amount,category:newTx.category,subcategory:newTx.subcategory,accountId:newTx.accountId,description:newTx.description,frequency:freq,nextDue:advanceDate(newTx.date,freq),active:true});
-    showToast("&#128257; Recurring "+freq+" transaction added","green");
+    showToast("🔁 Recurring "+freq+" transaction added","green");
   }
   save();
   // Feature 6: budget alerts

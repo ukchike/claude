@@ -1,16 +1,24 @@
 package com.financeflow.app;
 
+import android.app.AlertDialog;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.Window;
 import android.webkit.JavascriptInterface;
+import android.webkit.JsResult;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.webkit.WebChromeClient;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.biometric.BiometricManager;
@@ -20,11 +28,24 @@ import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+
 public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
     private static final String CHANNEL_ID = "financeflow_alerts";
     private int notifId = 1;
+
+    // Web <input type=file> support (CSV/JSON upload, Google Drive included via document providers)
+    private ValueCallback<Uri[]> filePathCallback;
+    private ActivityResultLauncher<Intent> fileChooserLauncher;
+
+    // Native "Save As" (SAF) support for backups — lets the user pick Drive, Downloads, etc.
+    private ActivityResultLauncher<Intent> createDocumentLauncher;
+    private String pendingSaveContent;
+    private String pendingSaveCallback;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -33,7 +54,8 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         createNotificationChannel();
-        requestNotificationPermission();
+        requestNotificationPermissionInternal();
+        registerLaunchers();
 
         webView = findViewById(R.id.webview);
 
@@ -50,8 +72,92 @@ public class MainActivity extends AppCompatActivity {
 
         webView.addJavascriptInterface(new AndroidBridge(), "Android");
         webView.setWebViewClient(new WebViewClient());
-        webView.setWebChromeClient(new WebChromeClient());
+        webView.setWebChromeClient(new WebChromeClient() {
+            // The base WebChromeClient silently swallows JS alert()/confirm() dialogs —
+            // without these overrides, every validation alert and delete confirmation in
+            // the app does nothing when tapped.
+            @Override
+            public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
+                new AlertDialog.Builder(MainActivity.this)
+                    .setMessage(message)
+                    .setPositiveButton(android.R.string.ok, (d, w) -> result.confirm())
+                    .setOnCancelListener(d -> result.confirm())
+                    .setCancelable(false)
+                    .show();
+                return true;
+            }
+
+            @Override
+            public boolean onJsConfirm(WebView view, String url, String message, JsResult result) {
+                new AlertDialog.Builder(MainActivity.this)
+                    .setMessage(message)
+                    .setPositiveButton(android.R.string.ok, (d, w) -> result.confirm())
+                    .setNegativeButton(android.R.string.cancel, (d, w) -> result.cancel())
+                    .setOnCancelListener(d -> result.cancel())
+                    .setCancelable(true)
+                    .show();
+                return true;
+            }
+
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback,
+                                              FileChooserParams params) {
+                filePathCallback = callback;
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("*/*");
+                String[] acceptTypes = params.getAcceptTypes();
+                if (acceptTypes != null && acceptTypes.length > 0 && !TextUtils.isEmpty(acceptTypes[0])) {
+                    intent.putExtra(Intent.EXTRA_MIME_TYPES, acceptTypes);
+                }
+                try {
+                    fileChooserLauncher.launch(Intent.createChooser(intent, "Select File"));
+                } catch (Exception e) {
+                    filePathCallback = null;
+                    return false;
+                }
+                return true;
+            }
+        });
         webView.loadUrl("file:///android_asset/index.html");
+    }
+
+    private void registerLaunchers() {
+        fileChooserLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (filePathCallback == null) return;
+                Uri[] results = null;
+                if (result.getResultCode() == RESULT_OK && result.getData() != null
+                        && result.getData().getData() != null) {
+                    results = new Uri[]{result.getData().getData()};
+                }
+                filePathCallback.onReceiveValue(results);
+                filePathCallback = null;
+            });
+
+        createDocumentLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(), result -> {
+                boolean success = false;
+                if (result.getResultCode() == RESULT_OK && result.getData() != null
+                        && result.getData().getData() != null && pendingSaveContent != null) {
+                    Uri uri = result.getData().getData();
+                    try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+                        if (os != null) {
+                            os.write(pendingSaveContent.getBytes(StandardCharsets.UTF_8));
+                            success = true;
+                        }
+                    } catch (IOException e) {
+                        success = false;
+                    }
+                }
+                pendingSaveContent = null;
+                final boolean ok = success;
+                final String cb = pendingSaveCallback;
+                pendingSaveCallback = null;
+                if (cb != null) {
+                    webView.evaluateJavascript("window['" + cb + "'](" + ok + ")", null);
+                }
+            });
     }
 
     private void createNotificationChannel() {
@@ -64,7 +170,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void requestNotificationPermission() {
+    private void requestNotificationPermissionInternal() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
@@ -151,6 +257,40 @@ public class MainActivity extends AppCompatActivity {
                     .setAutoCancel(true);
             NotificationManagerCompat.from(MainActivity.this)
                 .notify(notifId++, builder.build());
+        }
+
+        @JavascriptInterface
+        public boolean hasNotificationPermission() {
+            return NotificationManagerCompat.from(MainActivity.this).areNotificationsEnabled();
+        }
+
+        @JavascriptInterface
+        public void requestNotificationPermission() {
+            runOnUiThread(MainActivity.this::requestNotificationPermissionInternal);
+        }
+
+        // Opens the system "Save As" dialog (Storage Access Framework) so the user can
+        // pick any destination the device exposes — device storage, Downloads, or a
+        // cloud provider such as Google Drive if that app is installed. No storage
+        // permission is required since writes go through the returned content Uri.
+        @JavascriptInterface
+        public void saveFile(final String filename, final String content,
+                              final String mimeType, final String callbackFn) {
+            pendingSaveContent = content;
+            pendingSaveCallback = callbackFn;
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType(!TextUtils.isEmpty(mimeType) ? mimeType : "application/octet-stream");
+            intent.putExtra(Intent.EXTRA_TITLE, filename);
+            runOnUiThread(() -> {
+                try {
+                    createDocumentLauncher.launch(intent);
+                } catch (Exception e) {
+                    pendingSaveContent = null;
+                    pendingSaveCallback = null;
+                    webView.evaluateJavascript("window['" + callbackFn + "'](false)", null);
+                }
+            });
         }
     }
 
