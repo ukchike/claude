@@ -21,17 +21,18 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .bnav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#111627;border-top:1px solid var(--border);padding:3px 0;padding-bottom:max(3px,env(safe-area-inset-bottom));z-index:50}
 .bnav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:5px 0;cursor:pointer;border:none;background:none;font-family:inherit;color:var(--muted);font-size:9px;font-weight:500}
 .bnav-btn.active{color:var(--accent)}.bnav-btn .ni{font-size:18px;line-height:1}
-.card{background:var(--card);border-radius:12px;padding:14px;border:1px solid var(--border);margin-bottom:12px}
+.card{background:var(--card);border-radius:16px;padding:16px;border:1px solid var(--border);margin-bottom:12px;box-shadow:0 2px 10px rgba(0,0,0,.18)}
 .stat-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
-.stat{background:var(--card);border-radius:10px;padding:11px;border:1px solid var(--border)}
-.stat-label{font-size:9px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px}
+.stat{background:var(--card);border-radius:14px;padding:12px;border:1px solid var(--border);box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.stat-label{font-size:9px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px}
 .stat-val{font-size:14px;font-weight:700}
-.btn{padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:inherit;display:inline-flex;align-items:center;gap:5px;transition:all .15s}
-.btn-p{background:var(--accent);color:#fff}.btn-sm{padding:4px 8px;font-size:10px}
+.btn{padding:8px 15px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:inherit;display:inline-flex;align-items:center;gap:5px;transition:all .15s}
+.btn-p{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(59,130,246,.35)}.btn-sm{padding:5px 9px;font-size:10px}
 .btn-g{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-g:hover,.btn-g:active{background:var(--border)}
 .btn-rd{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.2)}
-.inp{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 11px;border-radius:8px;font-size:13px;font-family:inherit;outline:none;width:100%;transition:border-color .15s}
-.inp:focus{border-color:var(--accent)}
+.btn:active{transform:scale(.97)}
+.inp{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:10px;font-size:14px;font-family:inherit;outline:none;width:100%;transition:border-color .15s}
+.inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
 select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237b8bb5' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
 .pp-row{display:flex;align-items:center;gap:8px;margin-bottom:12px}
 .pp-nav{width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -70,24 +71,26 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
 .tab-btn.active{background:var(--accent);color:#fff}
 .date-hdr{padding:7px 12px 3px;font-size:10px;font-weight:600;color:var(--muted);background:var(--bg);position:sticky;top:0;z-index:2}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .2s}
-.modal{background:var(--card);border-radius:16px 16px 0 0;padding:18px;max-width:500px;width:100%;border:1px solid var(--border);border-bottom:none;max-height:88vh;overflow-y:auto;animation:slideUp .22s ease}
-.modal-handle{width:36px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 14px}
+.modal{background:var(--card);border-radius:20px 20px 0 0;padding:22px 20px;max-width:520px;width:100%;border:1px solid var(--border);border-bottom:none;max-height:95vh;overflow-y:auto;animation:slideUp .22s ease;box-shadow:0 -8px 32px rgba(0,0,0,.5)}
+.modal.modal-lg{min-height:78vh}
+.modal-handle{width:36px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 16px}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
 .drop-zone{border:2px dashed var(--border);border-radius:12px;padding:26px 14px;text-align:center;cursor:pointer}
 .drop-zone.over{border-color:var(--accent);background:rgba(59,130,246,.04)}
-.settings-panel{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;display:flex;justify-content:flex-end;animation:fadeIn .2s}
-.settings-drawer{width:min(340px,100vw);height:100%;background:var(--card);border-left:1px solid var(--border);display:flex;flex-direction:column;animation:slideRight .22s ease}
-@keyframes slideRight{from{transform:translateX(100%)}to{transform:translateX(0)}}
-.settings-hdr{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.settings-body{flex:1;overflow:auto;padding:0}
-.settings-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto}
+/* Settings is a full page (not a side drawer), consistent with Money Manager / Mint style navigation */
+.settings-panel{position:fixed;inset:0;background:var(--bg);z-index:200;display:flex;justify-content:stretch;animation:fadeIn .18s}
+.settings-drawer{width:100%;height:100%;background:var(--bg);display:flex;flex-direction:column;animation:slideUp .22s ease}
+.settings-hdr{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;background:#111627}
+.settings-back{width:34px;height:34px;border-radius:10px;border:none;background:var(--border);color:var(--text);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.settings-body{flex:1;overflow:auto;padding:0 0 24px}
+.settings-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;background:#111627}
 .st-tab{flex:1;padding:10px 6px;text-align:center;font-size:10px;font-weight:600;cursor:pointer;border:none;font-family:inherit;background:transparent;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap}
 .st-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 .st-section{padding:14px}
 .st-label{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;display:block}
 .profile-avatar{width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:#fff;margin:0 auto 12px}
-.bud-item{background:var(--bg);border-radius:8px;padding:10px 12px;margin-bottom:8px;border:1px solid var(--border)}
+.bud-item{background:var(--bg);border-radius:12px;padding:12px 14px;margin-bottom:8px;border:1px solid var(--border)}
 .bud-sub-item{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--border)}
 .bud-sub-item:last-child{border:none}
 .cat-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer}
@@ -108,14 +111,14 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
 .msg{padding:10px 12px;border-radius:8px;font-size:11px;font-weight:600;display:flex;align-items:flex-start;gap:6px;margin-top:8px}
 .msg-ok{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);color:var(--green)}
 .msg-err{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:var(--red)}
-.acc-card{background:var(--card);border-radius:12px;padding:12px;border:1px solid var(--border)}
+.acc-card{background:var(--card);border-radius:16px;padding:14px;border:1px solid var(--border);box-shadow:0 2px 10px rgba(0,0,0,.18)}
 .pie-wrap{width:160px;height:160px;border-radius:50%;margin:0 auto 14px;position:relative}
 .pie-hole{position:absolute;width:80px;height:80px;border-radius:50%;background:var(--card);top:50%;left:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;justify-content:center}
 .edit-label{font-size:10px;color:var(--muted);font-weight:600;margin-bottom:3px;display:block}
 .divider{height:1px;background:var(--border);margin:12px 0}
 .flex{display:flex;align-items:center}.g4{gap:4px}.g6{gap:6px}.g8{gap:8px}
 .flex-b{display:flex;justify-content:space-between;align-items:center}.flex-w{display:flex;flex-wrap:wrap}
-.mt4{margin-top:4px}.mt6{margin-top:6px}.mt8{margin-top:8px}.mt10{margin-top:10px}.mb4{margin-bottom:4px}.mb6{margin-bottom:6px}.mb8{margin-bottom:8px}.mb10{margin-bottom:10px}.mb12{margin-bottom:12px}.mb16{margin-bottom:16px}
+.mt4{margin-top:4px}.mt6{margin-top:6px}.mt8{margin-top:8px}.mt10{margin-top:10px}.mt16{margin-top:16px}.mb4{margin-bottom:4px}.mb6{margin-bottom:6px}.mb8{margin-bottom:8px}.mb10{margin-bottom:10px}.mb12{margin-bottom:12px}.mb14{margin-bottom:14px}.mb16{margin-bottom:16px}
 .fz9{font-size:9px}.fz10{font-size:10px}.fz11{font-size:11px}.fz12{font-size:12px}.fz13{font-size:13px}.fz14{font-size:14px}.fz16{font-size:16px}
 .fw6{font-weight:600}.fw7{font-weight:700}.fw8{font-weight:800}
 .muted{color:var(--muted)}.green{color:var(--green)}.red{color:var(--red)}.accent{color:var(--accent)}
@@ -194,6 +197,7 @@ let V="dashboard",search="",fCat="all",fType="all",fAcc="all",showTf=false,pendi
 let statsType="expense",pMode="month",pDate=new Date(),ppOpen=false;
 let cmpMode=false,pModeB="month",pDateB=new Date(new Date().getFullYear(),new Date().getMonth()-1,1),ppBOpen=false;
 let settingsOpen=false,settingsTab="profile",settingsSubTab="expense";
+let nbMode="cat",nbCat=null; // New Budget form: whole-category vs subcategory-only
 let expandedBudget=null,expandedCatSet=null;
 
 function getEC(){const r={};Object.keys(DEF_EC).forEach(k=>{r[k]=[...(userEC[k]||DEF_EC[k])];});Object.keys(userEC).forEach(k=>{if(!DEF_EC[k])r[k]=[...(userEC[k]||[])];});return r;}
@@ -338,9 +342,9 @@ function rBud(f){
   const hdr=`<div class="flex-b mb10"><span class="fz16 fw7">Budgets</span><div class="flex g6"><button class="btn btn-g btn-sm" onclick="openSettings('budgets')">&#9881; Manage</button><button class="cmp-toggle ${cmpMode?"on":""}" onclick="toggleCmp()">${cmpMode?"&#10005; Close":"&#9145; Compare"}</button></div></div>`;
   const lA=getLabelFor(pMode,pDate),lB=getLabelFor(pModeB,pDateB);
   if(cmpMode){
-    $("main").innerHTML=hdr+cmpPickerHdr()+budgets.map(b=>{const spA=getSpent(pMode,pDate,b.cat),spB=getSpent(pModeB,pDateB,b.cat);const pA=b.limit>0?Math.min((spA/b.limit)*100,100):0,pB=b.limit>0?Math.min((spB/b.limit)*100,100):0;const cA=spA>b.limit?"var(--red)":pA>80?"var(--warn)":"var(--accent)";const cB=spB>b.limit?"var(--red)":pB>80?"var(--warn)":"var(--green)";const isE=exCats["b_"+b.id];const hs=b.subs&&b.subs.length>0;return`<div class="card" style="padding:12px;margin-bottom:10px"><div class="flex-b mb6" style="cursor:pointer" onclick="toggleCat('b_${b.id}')"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw7 fz12">${esc(b.cat)}</span>${hs?`<span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span>`:""}</div><span class="fz10 muted">Limit: ${fmtK(b.limit)}</span></div><table class="cmp-tbl mb8"><thead><tr><th>Period</th><th>Spent</th><th>%</th><th>&#916;</th></tr></thead><tbody><tr><td style="color:var(--accent);font-size:10px">${lA}</td><td class="fw7" style="color:${cA}">${fmtK(spA)}</td><td class="fz10 muted">${pA.toFixed(0)}%</td><td>${chgBadge(spA,spB,true)}</td></tr><tr><td class="muted fz10">${lB}</td><td class="fw7" style="color:${cB}">${fmtK(spB)}</td><td class="fz10 muted">${pB.toFixed(0)}%</td><td></td></tr></tbody></table><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:3px"><div style="height:100%;width:${pA}%;background:${cA};border-radius:4px"></div></div><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden"><div style="height:100%;width:${pB}%;background:${cB};border-radius:4px"></div></div><div class="flex-b fz9 mt4"><span style="color:var(--accent)">&#9632; ${lA}</span><span class="muted">&#9632; ${lB}</span></div>${isE&&hs?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">${b.subs.map(s=>{const ssA=getSpent(pMode,pDate,b.cat,s.name),ssB=getSpent(pModeB,pDateB,b.cat,s.name);const spA2=s.limit>0?Math.min((ssA/s.limit)*100,100):0,spB2=s.limit>0?Math.min((ssB/s.limit)*100,100):0;return`<div class="mb8"><div class="flex-b fz10 mb3"><span class="muted">${esc(s.name)}</span>${chgBadge(ssA,ssB,true)}</div><div class="flex-b fz9 mb2"><span style="color:var(--accent)">${fmtK(ssA)}</span><span class="muted">${fmtK(ssB)}</span></div><div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:2px"><div style="height:100%;width:${spA2}%;background:var(--accent);border-radius:3px"></div></div><div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${spB2}%;background:var(--green);border-radius:3px"></div></div></div>`;}).join("")}</div>`:""}`;}).join("")||`<div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#127919;</div><div class="fz13 fw6 mb4">No budgets yet</div><button class="btn btn-p btn-sm" onclick="openSettings('budgets')">+ Create Budget</button></div>`;
+    $("main").innerHTML=hdr+cmpPickerHdr()+budgets.map(b=>{const spA=getSpent(pMode,pDate,b.cat),spB=getSpent(pModeB,pDateB,b.cat);const pA=b.limit>0?Math.min((spA/b.limit)*100,100):0,pB=b.limit>0?Math.min((spB/b.limit)*100,100):0;const cA=spA>b.limit?"var(--red)":pA>80?"var(--warn)":"var(--accent)";const cB=spB>b.limit?"var(--red)":pB>80?"var(--warn)":"var(--green)";const isE=exCats["b_"+b.id];const hs=b.subs&&b.subs.length>0;return`<div class="card" style="padding:12px;margin-bottom:10px"><div class="flex-b mb6" style="cursor:pointer" onclick="toggleCat('b_${b.id}')"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw7 fz12">${esc(b.cat)}</span>${hs?`<span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span>`:""}</div><span class="fz10 muted">${b.limit>0?"Limit: "+fmtK(b.limit):"Per-sub limits"}</span></div><table class="cmp-tbl mb8"><thead><tr><th>Period</th><th>Spent</th><th>%</th><th>&#916;</th></tr></thead><tbody><tr><td style="color:var(--accent);font-size:10px">${lA}</td><td class="fw7" style="color:${cA}">${fmtK(spA)}</td><td class="fz10 muted">${pA.toFixed(0)}%</td><td>${chgBadge(spA,spB,true)}</td></tr><tr><td class="muted fz10">${lB}</td><td class="fw7" style="color:${cB}">${fmtK(spB)}</td><td class="fz10 muted">${pB.toFixed(0)}%</td><td></td></tr></tbody></table><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:3px"><div style="height:100%;width:${pA}%;background:${cA};border-radius:4px"></div></div><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden"><div style="height:100%;width:${pB}%;background:${cB};border-radius:4px"></div></div><div class="flex-b fz9 mt4"><span style="color:var(--accent)">&#9632; ${lA}</span><span class="muted">&#9632; ${lB}</span></div>${isE&&hs?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">${b.subs.map(s=>{const ssA=getSpent(pMode,pDate,b.cat,s.name),ssB=getSpent(pModeB,pDateB,b.cat,s.name);const spA2=s.limit>0?Math.min((ssA/s.limit)*100,100):0,spB2=s.limit>0?Math.min((ssB/s.limit)*100,100):0;return`<div class="mb8"><div class="flex-b fz10 mb3"><span class="muted">${esc(s.name)}</span>${chgBadge(ssA,ssB,true)}</div><div class="flex-b fz9 mb2"><span style="color:var(--accent)">${fmtK(ssA)}</span><span class="muted">${fmtK(ssB)}</span></div><div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:2px"><div style="height:100%;width:${spA2}%;background:var(--accent);border-radius:3px"></div></div><div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${spB2}%;background:var(--green);border-radius:3px"></div></div></div>`;}).join("")}</div>`:""}`;}).join("")||`<div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#127919;</div><div class="fz13 fw6 mb4">No budgets yet</div><button class="btn btn-p btn-sm" onclick="openSettings('budgets')">+ Create Budget</button></div>`;
   }else{
-    $("main").innerHTML=ppHTML()+hdr+(budgets.length?budgets.map(b=>{const spent=f.filter(t=>t.type==="expense"&&t.category===b.cat).reduce((s,t)=>s+t.amount,0);const pct=b.limit>0?Math.min((spent/b.limit)*100,100):0;const over=b.limit>0&&spent>b.limit;const c=over?"var(--red)":pct>80?"var(--warn)":"var(--green)";const isE=exCats["b_"+b.id];const hs=b.subs&&b.subs.length>0;return`<div class="card" style="border-color:${over?"rgba(239,68,68,.25)":"var(--border)"}"><div class="flex-b" style="cursor:pointer" onclick="toggleCat('b_${b.id}')"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw7 fz13">${esc(b.cat)} ${hs?isE?"&#9650;":"&#9660;":""}</span></div><div class="flex g8"><span class="fz12 fw7">${fmt(b.limit)}</span></div></div><div class="flex-b fz10 muted mt4 mb4"><span style="color:${c}">${fmt(spent)} spent</span><span>${pct.toFixed(0)}% · ${over?"Over "+fmtK(spent-b.limit):fmtK(b.limit-spent)+" left"}</span></div><div class="bar-track" style="height:8px"><div class="bar-fill" style="width:${pct}%;background:${c};height:100%"></div></div>${isE&&hs?`<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">${b.subs.map(s=>{const ss=f.filter(t=>t.type==="expense"&&t.category===b.cat&&t.subcategory===s.name).reduce((sm,t)=>sm+t.amount,0);const sp=s.limit>0?Math.min((ss/s.limit)*100,100):0;const so=s.limit>0&&ss>s.limit;const sc=so?"var(--red)":sp>80?"var(--warn)":"var(--green)";return`<div class="mb8"><div class="flex-b fz10"><span class="muted">${esc(s.name)}</span><span><span style="color:${sc}">${fmtK(ss)}</span> / ${fmtK(s.limit)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${sp}%;background:${sc}"></div></div></div>`;}).join("")}</div>`:""}`;}).join(""):`<div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#127919;</div><div class="fz13 fw6 mb4">No budgets yet</div><div class="fz11 muted mb12">Set spending limits to stay on track</div><button class="btn btn-p btn-sm" onclick="openSettings('budgets')">+ Create Budget</button></div>`);
+    $("main").innerHTML=ppHTML()+hdr+(budgets.length?budgets.map(b=>{const spent=f.filter(t=>t.type==="expense"&&t.category===b.cat).reduce((s,t)=>s+t.amount,0);const hasCatLimit=b.limit>0;const pct=hasCatLimit?Math.min((spent/b.limit)*100,100):0;const over=hasCatLimit&&spent>b.limit;const c=over?"var(--red)":pct>80?"var(--warn)":"var(--green)";const isE=exCats["b_"+b.id];const hs=b.subs&&b.subs.length>0;return`<div class="card" style="border-color:${over?"rgba(239,68,68,.25)":"var(--border)"}"><div class="flex-b" style="cursor:pointer" onclick="toggleCat('b_${b.id}')"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw7 fz13">${esc(b.cat)} ${hs?isE?"&#9650;":"&#9660;":""}</span></div><div class="flex g8"><span class="fz12 fw7">${hasCatLimit?fmt(b.limit):(hs?"Per-sub":"—")}</span></div></div>${hasCatLimit?`<div class="flex-b fz10 muted mt4 mb4"><span style="color:${c}">${fmt(spent)} spent</span><span>${pct.toFixed(0)}% · ${over?"Over "+fmtK(spent-b.limit):fmtK(b.limit-spent)+" left"}</span></div><div class="bar-track" style="height:8px"><div class="bar-fill" style="width:${pct}%;background:${c};height:100%"></div></div>`:`<div class="fz10 muted mt4 mb4">${fmt(spent)} spent · no whole-category limit — tracked per subcategory below</div>`}${isE&&hs?`<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">${b.subs.map(s=>{const ss=f.filter(t=>t.type==="expense"&&t.category===b.cat&&t.subcategory===s.name).reduce((sm,t)=>sm+t.amount,0);const sp=s.limit>0?Math.min((ss/s.limit)*100,100):0;const so=s.limit>0&&ss>s.limit;const sc=so?"var(--red)":sp>80?"var(--warn)":"var(--green)";return`<div class="mb8"><div class="flex-b fz10"><span class="muted">${esc(s.name)}</span><span><span style="color:${sc}">${fmtK(ss)}</span> / ${fmtK(s.limit)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${sp}%;background:${sc}"></div></div></div>`;}).join("")}</div>`:""}`;}).join(""):`<div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#127919;</div><div class="fz13 fw6 mb4">No budgets yet</div><div class="fz11 muted mb12">Set spending limits to stay on track</div><button class="btn btn-p btn-sm" onclick="openSettings('budgets')">+ Create Budget</button></div>`);
   }
 }
 
@@ -391,15 +395,17 @@ function renderSettings(){
   }
   if(settingsTab==="budgets"){
     const ec=getEC();
+    const catList=Object.keys(ec);
+    if(!nbCat||!catList.includes(nbCat))nbCat=catList[0];
     body=`<div class="st-section"><span class="st-label">Budgets</span>
-      ${budgets.map(b=>{const isE=expandedBudget===b.id;return`<div class="bud-item"><div class="flex-b" onclick="expandedBudget=expandedBudget==='${b.id}'?null:'${b.id}';render()" style="cursor:pointer"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw6 fz12">${esc(b.cat)}</span></div><div class="flex g6"><span class="fz11 fw7">${fmtK(b.limit)}</span><span class="fz11 muted">${isE?"&#9650;":"&#9660;"}</span></div></div>
-      ${isE?`<div class="mt8"><div class="flex g6 mb6"><span class="st-label" style="margin:0;flex:1">Category</span><select class="inp" style="width:155px;font-size:11px" id="bCat_${b.id}">${Object.keys(ec).map(c=>`<option value="${esc(c)}" ${c===b.cat?"selected":""}>${esc(c)}</option>`).join("")}</select></div><div class="flex g6 mb8"><span class="st-label" style="margin:0;flex:1">Limit (&#8358;)</span><input class="inp" style="width:120px;font-size:11px" type="number" id="bLim_${b.id}" value="${b.limit}"></div><span class="st-label">Subcategory Limits</span>${b.subs.map((s,si)=>`<div class="bud-sub-item"><span class="fz11 muted" style="flex:1">${esc(s.name)}</span><input class="inp" style="width:90px;font-size:11px;padding:4px 8px" type="number" id="bSub_${b.id}_${si}" value="${s.limit}"><button class="btn btn-sm btn-rd" style="padding:3px 6px" onclick="rmBudSub('${b.id}',${si})">&#10005;</button></div>`).join("")}<div class="flex g6 mt6"><select class="inp" style="flex:1;font-size:11px" id="nsc_${b.id}"><option value="">+ Sub limit</option>${(ec[b.cat]||[]).map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select><input class="inp" style="width:90px;font-size:11px;padding:4px 8px" type="number" id="nsl_${b.id}" placeholder="&#8358;"></div><div class="flex g6 mt8"><button class="btn btn-p btn-sm" style="flex:1;justify-content:center" onclick="saveBudget('${b.id}')">&#10003; Save</button><button class="btn btn-sm btn-rd" onclick="deleteBudget('${b.id}')">&#128465; Delete</button></div></div>`:""}
-      </div>`;}).join("")}
+      ${budgets.length?budgets.map(b=>{const isE=expandedBudget===b.id;return`<div class="bud-item"><div class="flex-b" onclick="expandedBudget=expandedBudget==='${b.id}'?null:'${b.id}';render()" style="cursor:pointer"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw6 fz12">${esc(b.cat)}</span>${b.subs.length?`<span class="rec-badge">${b.subs.length} sub</span>`:""}</div><div class="flex g6"><span class="fz11 fw7">${fmtK(b.limit)}</span><span class="fz11 muted">${isE?"&#9650;":"&#9660;"}</span></div></div>
+      ${isE?`<div class="mt8"><div class="flex g6 mb6"><span class="st-label" style="margin:0;flex:1">Category</span><select class="inp" style="width:155px;font-size:11px" id="bCat_${b.id}">${Object.keys(ec).map(c=>`<option value="${esc(c)}" ${c===b.cat?"selected":""}>${esc(c)}</option>`).join("")}</select></div><div class="flex g6 mb8"><span class="st-label" style="margin:0;flex:1">Limit (&#8358;)</span><input class="inp" style="width:120px;font-size:11px" type="number" id="bLim_${b.id}" value="${b.limit}"></div><span class="st-label">Subcategory Limits</span>${b.subs.length?b.subs.map((s,si)=>`<div class="bud-sub-item"><span class="fz11 muted" style="flex:1">${esc(s.name)}</span><input class="inp" style="width:90px;font-size:11px;padding:4px 8px" type="number" id="bSub_${b.id}_${si}" value="${s.limit}"><button class="btn btn-sm btn-rd" style="padding:3px 6px" onclick="rmBudSub('${b.id}',${si})">&#10005;</button></div>`).join(""):`<div class="fz10 muted mb6">None yet — add one below.</div>`}<div class="flex g6 mt6"><select class="inp" style="flex:1;font-size:11px" id="nsc_${b.id}"><option value="">+ Sub limit</option>${(ec[b.cat]||[]).map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select><input class="inp" style="width:90px;font-size:11px;padding:4px 8px" type="number" id="nsl_${b.id}" placeholder="&#8358;"></div><div class="flex g6 mt8"><button class="btn btn-p btn-sm" style="flex:1;justify-content:center" onclick="saveBudget('${b.id}')">&#10003; Save</button><button class="btn btn-sm btn-rd" onclick="deleteBudget('${b.id}')">&#128465; Delete</button></div></div>`:""}
+      </div>`;}).join(""):`<div class="fz11 muted tac" style="padding:12px">No budgets yet.</div>`}
       <div class="divider"></div>
       <span class="st-label">New Budget</span>
-      <select class="inp mb6" id="nbc">${Object.keys(ec).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select>
-      <input class="inp mb6" type="number" id="nbl" placeholder="Monthly limit (&#8358;)">
-      <button class="btn btn-p w100" style="justify-content:center" onclick="addBudget()">+ Add Budget</button>
+      <div class="tab-row mb8"><button class="tab-btn ${nbMode==="cat"?"active":""}" onclick="setNbMode('cat')">Whole Category</button><button class="tab-btn ${nbMode==="sub"?"active":""}" onclick="setNbMode('sub')">Subcategory</button></div>
+      <select class="inp mb6" id="nbc" onchange="setNbCat(this.value)">${catList.map(c=>`<option value="${esc(c)}" ${c===nbCat?"selected":""}>${esc(c)}</option>`).join("")}</select>
+      ${nbMode==="sub"?((ec[nbCat]||[]).length?`<select class="inp mb6" id="nbSubSel">${(ec[nbCat]||[]).map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select><input class="inp mb6" type="number" id="nbl" placeholder="Subcategory limit (&#8358;)"><button class="btn btn-p w100" style="justify-content:center" onclick="addBudget()">+ Add Budget</button><div class="fz9 muted mt6">Sets a limit for just this subcategory — it still rolls up under ${esc(nbCat)} in your budget report.</div>`:`<div class="fz10 muted" style="padding:8px 0">${esc(nbCat)} has no subcategories yet. Add one from the Categories tab first.</div>`):`<input class="inp mb6" type="number" id="nbl" placeholder="Monthly limit (&#8358;)"><button class="btn btn-p w100" style="justify-content:center" onclick="addBudget()">+ Add Budget</button>`}
     </div>`;
   }
   if(settingsTab==="categories"){
@@ -431,8 +437,8 @@ function renderSettings(){
       ${recurring.length?recurring.map(r=>`<div class="bud-item"><div class="flex-b"><div><div class="fz12 fw6">${esc(r.description||r.category)}</div><div class="fz10 muted mt4">${r.type==="income"?"+":"-"}${fmt(r.amount)} · ${r.frequency} · Next: ${r.nextDue}</div></div><div class="flex g6"><button class="btn btn-sm ${r.active?"btn-g":"btn-p"}" onclick="toggleRecurring('${r.id}')">${r.active?"Pause":"Resume"}</button><button class="btn btn-sm btn-rd" onclick="deleteRecurring('${r.id}')">&#128465;</button></div></div></div>`).join(""):`<div class="fz11 muted tac" style="padding:12px">No recurring transactions yet.<br>Add one via the + Add button.</div>`}
     </div>`;
   }
-  const html=`<div class="settings-panel" onclick="closeSettings()"><div class="settings-drawer" onclick="event.stopPropagation()">
-    <div class="settings-hdr"><div><div class="fz14 fw7">Settings</div><div class="fz10 muted">${esc(profile.name)||"Not set up yet"}</div></div><button class="btn" style="padding:4px;color:var(--muted)" onclick="closeSettings()">&#10005;</button></div>
+  const html=`<div class="settings-panel"><div class="settings-drawer">
+    <div class="settings-hdr"><button class="settings-back" onclick="closeSettings()" title="Back">&#8592;</button><div style="flex:1;min-width:0"><div class="fz14 fw7">Settings</div><div class="fz10 muted">${esc(profile.name)||"Not set up yet"}</div></div></div>
     <div class="settings-tabs"><button class="st-tab ${settingsTab==="profile"?"active":""}" onclick="setSTTab('profile')">&#128100; Profile</button><button class="st-tab ${settingsTab==="budgets"?"active":""}" onclick="setSTTab('budgets')">&#127919; Budgets</button><button class="st-tab ${settingsTab==="categories"?"active":""}" onclick="setSTTab('categories')">&#127991; Categories</button><button class="st-tab ${settingsTab==="security"?"active":""}" onclick="setSTTab('security')">&#128274; Security</button></div>
     <div class="settings-body">${body}</div>
   </div></div>`;
@@ -441,8 +447,39 @@ function renderSettings(){
 }
 
 // ── SETTINGS ACTIONS ──
-function saveProfile(){const n=$("pName")?.value.trim()||"";profile.name=n;save();render();}
-function addBudget(){const cat=$("nbc")?.value,lim=parseFloat($("nbl")?.value);if(!cat||!lim)return alert("Select a category and enter a limit");if(budgets.find(b=>b.cat===cat))return alert("Budget for this category already exists");const nb={id:uid(),cat,limit:lim,subs:[]};budgets.push(nb);expandedBudget=nb.id;save();render();showToast("🎯 Budget added — set subcategory limits below","green");}
+function saveProfile(){
+  const n=$("pName")?.value.trim()||"";
+  const wasOnboarding=needsOnboarding();
+  profile.name=n;
+  save();
+  if(wasOnboarding&&n){
+    V="dashboard";
+    closeSettings();
+    showToast("👋 Welcome, "+n.split(" ")[0]+"!","green");
+  }else{
+    showToast("✅ Profile saved","green");
+    render();
+  }
+}
+function setNbMode(m){nbMode=m;render();}
+function setNbCat(c){nbCat=c;render();}
+function addBudget(){
+  const cat=$("nbc")?.value||nbCat,lim=parseFloat($("nbl")?.value);
+  if(!cat||!lim)return alert("Select a category and enter a limit");
+  if(nbMode==="sub"){
+    const sub=$("nbSubSel")?.value;
+    if(!sub)return alert("Select a subcategory");
+    let b=budgets.find(x=>x.cat===cat);
+    if(!b){b={id:uid(),cat,limit:0,subs:[]};budgets.push(b);}
+    const existing=b.subs.find(s=>s.name===sub);
+    if(existing)existing.limit=lim;else b.subs.push({name:sub,limit:lim});
+    expandedBudget=b.id;save();render();
+    showToast("🎯 "+sub+" budget added under "+cat,"green");
+    return;
+  }
+  if(budgets.find(b=>b.cat===cat))return alert("Budget for this category already exists");
+  const nb={id:uid(),cat,limit:lim,subs:[]};budgets.push(nb);expandedBudget=nb.id;save();render();showToast("🎯 Budget added — set subcategory limits below","green");
+}
 function saveBudget(id){const b=budgets.find(x=>x.id===id);if(!b)return;b.cat=$(`bCat_${id}`)?.value||b.cat;b.limit=parseFloat($(`bLim_${id}`)?.value)||b.limit;b.subs.forEach((s,i)=>{const v=parseFloat($(`bSub_${id}_${i}`)?.value);if(!isNaN(v))s.limit=v;});const nc=$(`nsc_${id}`)?.value,nl=parseFloat($(`nsl_${id}`)?.value);if(nc&&nl){if(!b.subs.find(s=>s.name===nc))b.subs.push({name:nc,limit:nl});}save();expandedBudget=null;render();}
 function deleteBudget(id){if(!confirm("Delete this budget?"))return;budgets=budgets.filter(b=>b.id!==id);save();expandedBudget=null;render();}
 function rmBudSub(id,si){const b=budgets.find(x=>x.id===id);if(b){b.subs.splice(si,1);save();render();}}
@@ -560,32 +597,32 @@ function showModal(type,id){
   const EC=getEC(),IC=getIC();
 
   if(type==="edit"){const t=txns.find(x=>x.id===id);if(!t)return;const cats=t.type==="income"?Object.keys(IC):Object.keys(EC);const subs=(t.type==="income"?IC:EC)[t.category]||[];
-    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb12"><span class="fz14 fw7">Edit Transaction</span><div class="flex g6"><button class="btn btn-sm btn-rd" onclick="deleteTx('${t.id}');showModal('close')">&#128465;</button><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div></div>
-    <div style="display:grid;gap:8px"><div><span class="edit-label">Type</span><div class="flex g4"><button class="btn w100 btn-sm" id="eExp" style="border:1px solid ${t.type==="expense"?"var(--red)":"var(--border)"};background:${t.type==="expense"?"rgba(239,68,68,.1)":"transparent"};color:${t.type==="expense"?"var(--red)":"var(--muted)"}" onclick="eSetType('expense')">Expense</button><button class="btn w100 btn-sm" id="eInc" style="border:1px solid ${t.type==="income"?"var(--green)":"var(--border)"};background:${t.type==="income"?"rgba(34,197,94,.1)":"transparent"};color:${t.type==="income"?"var(--green)":"var(--muted)"}" onclick="eSetType('income')">Income</button></div></div>
+    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Edit Transaction</span><div class="flex g6"><button class="btn btn-sm btn-rd" onclick="deleteTx('${t.id}');showModal('close')">&#128465;</button><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div></div>
+    <div style="display:grid;gap:12px"><div><span class="edit-label">Type</span><div class="flex g4"><button class="btn w100" id="eExp" style="border:1px solid ${t.type==="expense"?"var(--red)":"var(--border)"};background:${t.type==="expense"?"rgba(239,68,68,.1)":"transparent"};color:${t.type==="expense"?"var(--red)":"var(--muted)"};padding:11px" onclick="eSetType('expense')">Expense</button><button class="btn w100" id="eInc" style="border:1px solid ${t.type==="income"?"var(--green)":"var(--border)"};background:${t.type==="income"?"rgba(34,197,94,.1)":"transparent"};color:${t.type==="income"?"var(--green)":"var(--muted)"};padding:11px" onclick="eSetType('income')">Income</button></div></div>
     <div><span class="edit-label">Date</span><input class="inp" type="date" id="eDate" value="${t.date}"></div>
     <div><span class="edit-label">Description</span><input class="inp" id="eDesc" value="${esc(t.description)}"></div>
     <div><span class="edit-label">Amount (&#8358;)</span><input class="inp" type="number" id="eAmt" value="${t.amount}" inputmode="numeric"></div>
     <div><span class="edit-label">Category</span><select class="inp" id="eCat" onchange="eUpdSub()">${cats.map(c=>`<option value="${esc(c)}" ${c===t.category?"selected":""}>${esc(c)}</option>`).join("")}</select></div>
     <div><span class="edit-label">Subcategory</span><select class="inp" id="eSub"><option value="">&#8212; None &#8212;</option>${subs.map(s=>`<option value="${esc(s)}" ${s===t.subcategory?"selected":""}>${esc(s)}</option>`).join("")}</select></div>
     <div><span class="edit-label">Account</span><select class="inp" id="eAcc">${accounts.map(a=>`<option value="${esc(a.id)}" ${a.id===t.accountId?"selected":""}>${esc(a.name)}</option>`).join("")}</select></div></div>
-    <button class="btn btn-p w100 mt8" style="justify-content:center;padding:11px" onclick="saveTx('${t.id}')">&#10003; Save</button></div></div>`;window._eType=t.type;}
+    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="saveTx('${t.id}')">&#10003; Save</button></div></div>`;window._eType=t.type;}
 
   if(type==="addtx"){
-    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb12"><span class="fz14 fw7">Add Transaction</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div>
-    <div class="flex g4 mb10"><button class="btn w100" id="typeExp" style="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red)" onclick="setTT('expense')">Expense</button><button class="btn w100" id="typeInc" style="border:1px solid var(--border);color:var(--muted)" onclick="setTT('income')">Income</button></div>
-    <div style="display:grid;gap:8px">
-      <input class="inp" type="date" id="txDate" value="${new Date().toISOString().split("T")[0]}">
-      <input class="inp" id="txDesc" placeholder="Description (optional)">
-      <input class="inp" type="number" id="txAmt" placeholder="Amount (&#8358;)" inputmode="numeric">
-      <select class="inp" id="txCat" onchange="updSub()">${Object.keys(EC).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select>
-      <select class="inp" id="txSub"><option value="">&#8212; Subcategory &#8212;</option>${(EC[Object.keys(EC)[0]]||[]).map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select>
-      <select class="inp" id="txAcc">${accounts.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("")}</select>
-      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px">
-        <div class="flex-b mb6"><span class="fz11 fw6">&#128257; Make Recurring</span><label class="toggle"><input type="checkbox" id="txRec" onchange="toggleRecUI(this.checked)"><span class="toggle-slider"></span></label></div>
-        <div id="recUI" style="display:none"><select class="inp" id="txFreq" style="margin-top:6px"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly" selected>Monthly</option><option value="yearly">Yearly</option></select></div>
+    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Add Transaction</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div>
+    <div class="flex g4 mb14"><button class="btn w100" id="typeExp" style="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red);padding:11px" onclick="setTT('expense')">Expense</button><button class="btn w100" id="typeInc" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="setTT('income')">Income</button></div>
+    <div style="display:grid;gap:12px">
+      <div><span class="edit-label">Date</span><input class="inp" type="date" id="txDate" value="${new Date().toISOString().split("T")[0]}"></div>
+      <div><span class="edit-label">Description</span><input class="inp" id="txDesc" placeholder="e.g. Grocery run"></div>
+      <div><span class="edit-label">Amount (&#8358;)</span><input class="inp" type="number" id="txAmt" placeholder="0.00" inputmode="numeric"></div>
+      <div><span class="edit-label">Category</span><select class="inp" id="txCat" onchange="updSub()">${Object.keys(EC).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select></div>
+      <div><span class="edit-label">Subcategory</span><select class="inp" id="txSub"><option value="">&#8212; Subcategory &#8212;</option>${(EC[Object.keys(EC)[0]]||[]).map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select></div>
+      <div><span class="edit-label">Account</span><select class="inp" id="txAcc">${accounts.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("")}</select></div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px">
+        <div class="flex-b mb6"><span class="fz12 fw6">&#128257; Make Recurring</span><label class="toggle"><input type="checkbox" id="txRec" onchange="toggleRecUI(this.checked)"><span class="toggle-slider"></span></label></div>
+        <div id="recUI" style="display:none"><select class="inp" id="txFreq" style="margin-top:8px"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly" selected>Monthly</option><option value="yearly">Yearly</option></select></div>
       </div>
     </div>
-    <button class="btn btn-p w100 mt8" style="justify-content:center;padding:11px" onclick="addTx()">+ Add</button></div></div>`;window._txT="expense";}
+    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="addTx()">+ Add Transaction</button></div></div>`;window._txT="expense";}
 
   if(type==="upload"){
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb12"><span class="fz14 fw7">Upload Statement</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div><div class="mb8"><span class="edit-label">Account</span><select class="inp" id="uploadAcc">${accounts.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("")}</select></div><div class="drop-zone" id="dz" onclick="$('fi').click()"><div style="font-size:28px;margin-bottom:6px">&#128196;</div><div class="fz12 fw6">Tap to select CSV file</div><div class="fz10 muted mt4">Bank statement in CSV format</div><input type="file" id="fi" accept=".csv,.tsv,.txt" style="display:none" onchange="handleFile(this.files[0])"></div><div id="uMsg"></div><div id="uPrev"></div><div id="uAct"></div></div></div>`;

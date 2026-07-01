@@ -10,14 +10,27 @@ android {
         applicationId "com.financeflow.app"
         minSdk 21
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1"
+    }
+
+    signingConfigs {
+        release {
+            // Fixed keystore checked into the repo so every CI build (fresh runner
+            // each time) signs with the same key. Without this, AGP falls back to
+            // an auto-generated debug.keystore that differs per machine/run, so
+            // installing a new build fails ("App not installed") over an existing one.
+            storeFile file('financeflow-release.keystore')
+            storePassword 'financeflow123'
+            keyAlias 'financeflow'
+            keyPassword 'financeflow123'
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
         }
     }
 
