@@ -1,18 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- FinanceFlow mark: a bold "F" monogram with a flowing wave underline,
+     symbolizing structured money (the letter) in motion (the flow). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#ffffff"
-        android:pathData="M54,25 L54,75" />
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="11"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M38,72 L38,26 L72,26" />
     <path
         android:fillColor="#00000000"
-        android:strokeColor="#ffffff"
-        android:strokeWidth="5"
-        android:pathData="M30,68 Q42,52 54,60 Q66,68 78,48" />
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="11"
+        android:strokeLineCap="round"
+        android:pathData="M38,48 L60,48" />
     <path
-        android:fillColor="#ffffff"
-        android:pathData="M46,25 L54,15 L62,25 Z" />
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeAlpha="0.6"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M26,84 Q54,68 82,84" />
 </vector>

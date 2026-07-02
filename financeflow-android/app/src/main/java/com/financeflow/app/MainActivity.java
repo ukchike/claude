@@ -3,11 +3,14 @@ package com.financeflow.app;
 import android.app.AlertDialog;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.text.TextUtils;
 import android.view.Window;
 import android.webkit.JavascriptInterface;
@@ -27,6 +30,9 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -291,6 +297,51 @@ public class MainActivity extends AppCompatActivity {
                     webView.evaluateJavascript("window['" + callbackFn + "'](false)", null);
                 }
             });
+        }
+
+        // ── Bank alert auto-detection (NotificationListenerService) ──
+
+        @JavascriptInterface
+        public boolean hasNotificationListenerAccess() {
+            return NotificationManagerCompat.getEnabledListenerPackages(MainActivity.this)
+                .contains(getPackageName());
+        }
+
+        @JavascriptInterface
+        public void openNotificationListenerSettings() {
+            runOnUiThread(() -> {
+                try {
+                    startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+                } catch (Exception ignored) {
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void setBankAlertsEnabled(boolean enabled) {
+            getSharedPreferences(BankAlertListenerService.PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(BankAlertListenerService.KEY_ENABLED, enabled).apply();
+        }
+
+        @JavascriptInterface
+        public String getPendingBankAlerts() {
+            return getSharedPreferences(BankAlertListenerService.PREFS, Context.MODE_PRIVATE)
+                .getString(BankAlertListenerService.KEY_PENDING, "[]");
+        }
+
+        @JavascriptInterface
+        public void clearBankAlert(String id) {
+            SharedPreferences prefs = getSharedPreferences(BankAlertListenerService.PREFS, Context.MODE_PRIVATE);
+            try {
+                JSONArray pending = new JSONArray(prefs.getString(BankAlertListenerService.KEY_PENDING, "[]"));
+                JSONArray kept = new JSONArray();
+                for (int i = 0; i < pending.length(); i++) {
+                    JSONObject entry = pending.getJSONObject(i);
+                    if (!entry.optString("id").equals(id)) kept.put(entry);
+                }
+                prefs.edit().putString(BankAlertListenerService.KEY_PENDING, kept.toString()).apply();
+            } catch (Exception ignored) {
+            }
         }
     }
 

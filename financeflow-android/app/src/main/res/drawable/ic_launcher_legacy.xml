@@ -3,19 +3,40 @@
     <item>
         <shape android:shape="rectangle">
             <gradient
-                android:startColor="#3b82f6"
-                android:endColor="#8b5cf6"
+                android:startColor="#2563EB"
+                android:centerColor="#4F6BF0"
+                android:endColor="#8B5CF6"
                 android:angle="135" />
+            <corners android:radius="20dp" />
         </shape>
     </item>
-    <item
-        android:left="20dp"
-        android:right="20dp"
-        android:top="20dp"
-        android:bottom="20dp">
-        <shape android:shape="rectangle">
-            <solid android:color="#ffffff" />
-            <size android:width="8dp" android:height="28dp" />
-        </shape>
+    <item>
+        <vector
+            android:width="108dp"
+            android:height="108dp"
+            android:viewportWidth="108"
+            android:viewportHeight="108">
+            <path
+                android:fillColor="#00000000"
+                android:strokeColor="#FFFFFF"
+                android:strokeWidth="11"
+                android:strokeLineCap="round"
+                android:strokeLineJoin="round"
+                android:pathData="M38,72 L38,26 L72,26" />
+            <path
+                android:fillColor="#00000000"
+                android:strokeColor="#FFFFFF"
+                android:strokeWidth="11"
+                android:strokeLineCap="round"
+                android:pathData="M38,48 L60,48" />
+            <path
+                android:fillColor="#00000000"
+                android:strokeColor="#FFFFFF"
+                android:strokeAlpha="0.6"
+                android:strokeWidth="6"
+                android:strokeLineCap="round"
+                android:strokeLineJoin="round"
+                android:pathData="M26,84 Q54,68 82,84" />
+        </vector>
     </item>
 </layer-list>
