@@ -95,6 +95,7 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
 .bud-sub-item:last-child{border:none}
 .cat-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer}
 .sub-pill{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:500;background:var(--border);color:var(--muted);margin:2px}
+.sub-pill.sel{background:rgba(59,130,246,.2);color:var(--accent)}
 .cmp-toggle{cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:6px;padding:4px 9px;font-size:10px;font-weight:600;font-family:inherit;white-space:nowrap}
 .cmp-toggle.on{background:rgba(59,130,246,.15);border-color:var(--accent);color:var(--accent)}
 .mini-pick{padding:8px;background:var(--bg);border-radius:8px;border:1px solid var(--border)}
@@ -198,6 +199,7 @@ let statsType="expense",pMode="month",pDate=new Date(),ppOpen=false;
 let cmpMode=false,pModeB="month",pDateB=new Date(new Date().getFullYear(),new Date().getMonth()-1,1),ppBOpen=false;
 let settingsOpen=false,settingsTab="profile",settingsSubTab="expense";
 let nbMode="cat",nbCat=null; // New Budget form: whole-category vs subcategory-only
+let editingSub=null; // "cat|||sub" currently open for rename/move in Categories tab
 let expandedBudget=null,expandedCatSet=null;
 
 function getEC(){const r={};Object.keys(DEF_EC).forEach(k=>{r[k]=[...(userEC[k]||DEF_EC[k])];});Object.keys(userEC).forEach(k=>{if(!DEF_EC[k])r[k]=[...(userEC[k]||[])];});return r;}
@@ -251,7 +253,24 @@ function toggleCat(n){exCats[n]=!exCats[n];render();}
 
 function getCatMap(mode,date,type){const range=getRangeFor(mode,date);const cat={},sub={};txns.filter(t=>{const d=new Date(t.date);return d>=range.start&&d<=range.end&&t.type===type;}).forEach(t=>{cat[t.category]=(cat[t.category]||0)+t.amount;if(t.subcategory){const k=t.category+"|||"+t.subcategory;sub[k]=(sub[k]||0)+t.amount;}});return{cat,sub};}
 function getSpent(mode,date,catName,subName){const range=getRangeFor(mode,date);return txns.filter(t=>{const d=new Date(t.date);return d>=range.start&&d<=range.end&&t.type==="expense"&&t.category===catName&&(!subName||t.subcategory===subName);}).reduce((s,t)=>s+t.amount,0);}
-function getF(){const range=getRangeFor(pMode,pDate);return txns.filter(t=>{const d=new Date(t.date);if(d<range.start||d>range.end)return false;if(fType!=="all"&&t.type!==fType)return false;if(fCat!=="all"&&t.category!==fCat)return false;if(fAcc!=="all"&&t.accountId!==fAcc)return false;if(search){const s=search.toLowerCase();if(!(t.description||"").toLowerCase().includes(s)&&!t.category.toLowerCase().includes(s)&&!(t.subcategory||"").toLowerCase().includes(s))return false;}return true;});}
+function getF(){const range=getRangeFor(pMode,pDate);return txns.filter(t=>{const d=new Date(t.date);if(d<range.start||d>range.end)return false;if(fType!=="all"&&t.type!==fType)return false;if(fCat!=="all"&&t.category!==fCat)return false;if(fAcc!=="all"){const touches=t.type==="transfer"?(t.fromAccountId===fAcc||t.toAccountId===fAcc):t.accountId===fAcc;if(!touches)return false;}if(search){const s=search.toLowerCase();if(!(t.description||"").toLowerCase().includes(s)&&!(t.category||"").toLowerCase().includes(s)&&!(t.subcategory||"").toLowerCase().includes(s))return false;}return true;});}
+
+// ── ACCOUNT BALANCE HELPERS (income/expense affect one account; transfers move between two) ──
+function getAccountBalance(accId){
+  return txns.reduce((s,t)=>{
+    if(t.type==="transfer"){
+      if(t.fromAccountId===accId)return s-t.amount;
+      if(t.toAccountId===accId)return s+t.amount;
+      return s;
+    }
+    if(t.accountId!==accId)return s;
+    return s+(t.type==="income"?t.amount:-t.amount);
+  },0);
+}
+function txnCountForAccount(accId){
+  return txns.filter(t=>t.type==="transfer"?(t.fromAccountId===accId||t.toAccountId===accId):t.accountId===accId).length;
+}
+function accName(id){const a=accounts.find(x=>x.id===id);return a?a.name:"";}
 
 // ── PERIOD PICKER ──
 function ppDropHTML(mode,label,open,toggleFn,setFn){const modes=[["week","Week"],["month","Month"],["quarter","Quarter"],["year","Year"]];return`<div class="pp-drop-wrap"><button class="pp-drop-btn" onclick="${toggleFn}(event)">${label} <span style="color:var(--muted);font-size:10px">${open?"&#9652;":"&#9662;"}</span></button>${open?`<div class="pp-menu" onclick="event.stopPropagation()">${modes.map(([m,l])=>`<div class="pp-menu-item ${mode===m?"active":""}" onclick="closePP();${setFn}('${m}')"><span style="font-size:14px">${mode===m?"&#9679;":"&#9675;"}</span>${l}</div>`).join("")}</div>`:""}</div>`;}
@@ -289,7 +308,7 @@ function buildInsights(f,inc,exp){
 function rDash(f,inc,exp){
   if(needsOnboarding()){$("main").innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;padding:20px"><div style="font-size:48px;margin-bottom:16px">&#128200;</div><div class="fz16 fw8 mb4">Welcome to FinanceFlow</div><div class="fz12 muted mb16">Your personal money manager.<br>Let's get you set up in seconds.</div><button class="btn btn-p" style="padding:12px 28px;font-size:14px" onclick="openSettings('profile')">&#128100; Set Up Your Account</button></div>`;return;}
   const net=inc-exp;const savRate=inc>0?((inc-exp)/inc*100):0;
-  const tb=accounts.reduce((s,a)=>{const b=txns.filter(t=>t.accountId===a.id).reduce((s2,t)=>s2+(t.type==="income"?t.amount:-t.amount),0);return s+b;},0);
+  const tb=accounts.reduce((s,a)=>s+getAccountBalance(a.id),0);
   const catMap={};f.filter(t=>t.type==="expense").forEach(t=>{catMap[t.category]=(catMap[t.category]||0)+t.amount;});const catArr=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);const tot=catArr.reduce((s,c)=>s+c[1],0);
   const trend=[];for(let i=5;i>=0;i--){let m=pDate.getMonth()-i,y=pDate.getFullYear();if(m<0){m+=12;y--;}const mt=txns.filter(t=>{const d=new Date(t.date);return d.getMonth()===m&&d.getFullYear()===y;});trend.push({month:MO[m],inc:mt.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0),exp:mt.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0)});}
   const tMax=Math.max(...trend.map(t=>Math.max(t.inc,t.exp)),1);
@@ -321,7 +340,10 @@ function rDash(f,inc,exp){
     <input type="file" id="impFile" accept=".json" style="display:none" onchange="importData(this.files[0])">
   </div>`;
 }
-function txRow(t){const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon ${t.type==="income"?"inc":"exp"}">${t.type==="income"?"&#8595;":"&#8593;"}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}</div><div class="fz9 muted">${esc(t.subcategory?t.category+" › "+t.subcategory:t.category)} · ${esc(acc?acc.name:"")}</div></div><div><div class="fz12 fw7 tar ${t.type==="income"?"green":"red"}">${t.type==="income"?"+":"-"}${fmt(t.amount)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;}
+function txRow(t){
+  if(t.type==="transfer")return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:rgba(59,130,246,.1);color:var(--accent)">&#8646;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Transfer")}</div><div class="fz9 muted">${esc(accName(t.fromAccountId))} &#8594; ${esc(accName(t.toAccountId))}</div></div><div><div class="fz12 fw7 tar accent">${fmt(t.amount)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
+  const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon ${t.type==="income"?"inc":"exp"}">${t.type==="income"?"&#8595;":"&#8593;"}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}</div><div class="fz9 muted">${esc(t.subcategory?t.category+" › "+t.subcategory:t.category)} · ${esc(acc?acc.name:"")}</div></div><div><div class="fz12 fw7 tar ${t.type==="income"?"green":"red"}">${t.type==="income"?"+":"-"}${fmt(t.amount)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
+}
 
 // ── STATS ──
 function rStats(inc,exp){
@@ -342,17 +364,17 @@ function rBud(f){
   const hdr=`<div class="flex-b mb10"><span class="fz16 fw7">Budgets</span><div class="flex g6"><button class="btn btn-g btn-sm" onclick="openSettings('budgets')">&#9881; Manage</button><button class="cmp-toggle ${cmpMode?"on":""}" onclick="toggleCmp()">${cmpMode?"&#10005; Close":"&#9145; Compare"}</button></div></div>`;
   const lA=getLabelFor(pMode,pDate),lB=getLabelFor(pModeB,pDateB);
   if(cmpMode){
-    $("main").innerHTML=hdr+cmpPickerHdr()+budgets.map(b=>{const spA=getSpent(pMode,pDate,b.cat),spB=getSpent(pModeB,pDateB,b.cat);const pA=b.limit>0?Math.min((spA/b.limit)*100,100):0,pB=b.limit>0?Math.min((spB/b.limit)*100,100):0;const cA=spA>b.limit?"var(--red)":pA>80?"var(--warn)":"var(--accent)";const cB=spB>b.limit?"var(--red)":pB>80?"var(--warn)":"var(--green)";const isE=exCats["b_"+b.id];const hs=b.subs&&b.subs.length>0;return`<div class="card" style="padding:12px;margin-bottom:10px"><div class="flex-b mb6" style="cursor:pointer" onclick="toggleCat('b_${b.id}')"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw7 fz12">${esc(b.cat)}</span>${hs?`<span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span>`:""}</div><span class="fz10 muted">${b.limit>0?"Limit: "+fmtK(b.limit):"Per-sub limits"}</span></div><table class="cmp-tbl mb8"><thead><tr><th>Period</th><th>Spent</th><th>%</th><th>&#916;</th></tr></thead><tbody><tr><td style="color:var(--accent);font-size:10px">${lA}</td><td class="fw7" style="color:${cA}">${fmtK(spA)}</td><td class="fz10 muted">${pA.toFixed(0)}%</td><td>${chgBadge(spA,spB,true)}</td></tr><tr><td class="muted fz10">${lB}</td><td class="fw7" style="color:${cB}">${fmtK(spB)}</td><td class="fz10 muted">${pB.toFixed(0)}%</td><td></td></tr></tbody></table><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:3px"><div style="height:100%;width:${pA}%;background:${cA};border-radius:4px"></div></div><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden"><div style="height:100%;width:${pB}%;background:${cB};border-radius:4px"></div></div><div class="flex-b fz9 mt4"><span style="color:var(--accent)">&#9632; ${lA}</span><span class="muted">&#9632; ${lB}</span></div>${isE&&hs?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">${b.subs.map(s=>{const ssA=getSpent(pMode,pDate,b.cat,s.name),ssB=getSpent(pModeB,pDateB,b.cat,s.name);const spA2=s.limit>0?Math.min((ssA/s.limit)*100,100):0,spB2=s.limit>0?Math.min((ssB/s.limit)*100,100):0;return`<div class="mb8"><div class="flex-b fz10 mb3"><span class="muted">${esc(s.name)}</span>${chgBadge(ssA,ssB,true)}</div><div class="flex-b fz9 mb2"><span style="color:var(--accent)">${fmtK(ssA)}</span><span class="muted">${fmtK(ssB)}</span></div><div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:2px"><div style="height:100%;width:${spA2}%;background:var(--accent);border-radius:3px"></div></div><div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${spB2}%;background:var(--green);border-radius:3px"></div></div></div>`;}).join("")}</div>`:""}`;}).join("")||`<div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#127919;</div><div class="fz13 fw6 mb4">No budgets yet</div><button class="btn btn-p btn-sm" onclick="openSettings('budgets')">+ Create Budget</button></div>`;
+    $("main").innerHTML=hdr+cmpPickerHdr()+budgets.map(b=>{const subTotal=(b.subs||[]).reduce((s,x)=>s+(x.limit||0),0);const hasCatLimit=b.limit>0;const effLimit=hasCatLimit?b.limit:subTotal;const spA=getSpent(pMode,pDate,b.cat),spB=getSpent(pModeB,pDateB,b.cat);const pA=effLimit>0?Math.min((spA/effLimit)*100,100):0,pB=effLimit>0?Math.min((spB/effLimit)*100,100):0;const cA=effLimit>0&&spA>effLimit?"var(--red)":pA>80?"var(--warn)":"var(--accent)";const cB=effLimit>0&&spB>effLimit?"var(--red)":pB>80?"var(--warn)":"var(--green)";const isE=exCats["b_"+b.id];const hs=b.subs&&b.subs.length>0;return`<div class="card" style="padding:12px;margin-bottom:10px"><div class="flex-b mb6" style="cursor:pointer" onclick="toggleCat('b_${b.id}')"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw7 fz12">${esc(b.cat)}</span>${hs?`<span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span>`:""}</div><span class="fz10 muted">${effLimit>0?"Limit: "+fmtK(effLimit)+(hasCatLimit?"":" (subs total)"):"No limit set"}</span></div><table class="cmp-tbl mb8"><thead><tr><th>Period</th><th>Spent</th><th>%</th><th>&#916;</th></tr></thead><tbody><tr><td style="color:var(--accent);font-size:10px">${lA}</td><td class="fw7" style="color:${cA}">${fmtK(spA)}</td><td class="fz10 muted">${pA.toFixed(0)}%</td><td>${chgBadge(spA,spB,true)}</td></tr><tr><td class="muted fz10">${lB}</td><td class="fw7" style="color:${cB}">${fmtK(spB)}</td><td class="fz10 muted">${pB.toFixed(0)}%</td><td></td></tr></tbody></table><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:3px"><div style="height:100%;width:${pA}%;background:${cA};border-radius:4px"></div></div><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden"><div style="height:100%;width:${pB}%;background:${cB};border-radius:4px"></div></div><div class="flex-b fz9 mt4"><span style="color:var(--accent)">&#9632; ${lA}</span><span class="muted">&#9632; ${lB}</span></div>${isE&&hs?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">${b.subs.map(s=>{const ssA=getSpent(pMode,pDate,b.cat,s.name),ssB=getSpent(pModeB,pDateB,b.cat,s.name);const spA2=s.limit>0?Math.min((ssA/s.limit)*100,100):0,spB2=s.limit>0?Math.min((ssB/s.limit)*100,100):0;return`<div class="mb8"><div class="flex-b fz10 mb3"><span class="muted">${esc(s.name)}</span>${chgBadge(ssA,ssB,true)}</div><div class="flex-b fz9 mb2"><span style="color:var(--accent)">${fmtK(ssA)}</span><span class="muted">${fmtK(ssB)}</span></div><div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:2px"><div style="height:100%;width:${spA2}%;background:var(--accent);border-radius:3px"></div></div><div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${spB2}%;background:var(--green);border-radius:3px"></div></div></div>`;}).join("")}</div>`:""}`;}).join("")||`<div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#127919;</div><div class="fz13 fw6 mb4">No budgets yet</div><button class="btn btn-p btn-sm" onclick="openSettings('budgets')">+ Create Budget</button></div>`;
   }else{
-    $("main").innerHTML=ppHTML()+hdr+(budgets.length?budgets.map(b=>{const spent=f.filter(t=>t.type==="expense"&&t.category===b.cat).reduce((s,t)=>s+t.amount,0);const hasCatLimit=b.limit>0;const pct=hasCatLimit?Math.min((spent/b.limit)*100,100):0;const over=hasCatLimit&&spent>b.limit;const c=over?"var(--red)":pct>80?"var(--warn)":"var(--green)";const isE=exCats["b_"+b.id];const hs=b.subs&&b.subs.length>0;return`<div class="card" style="border-color:${over?"rgba(239,68,68,.25)":"var(--border)"}"><div class="flex-b" style="cursor:pointer" onclick="toggleCat('b_${b.id}')"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw7 fz13">${esc(b.cat)} ${hs?isE?"&#9650;":"&#9660;":""}</span></div><div class="flex g8"><span class="fz12 fw7">${hasCatLimit?fmt(b.limit):(hs?"Per-sub":"—")}</span></div></div>${hasCatLimit?`<div class="flex-b fz10 muted mt4 mb4"><span style="color:${c}">${fmt(spent)} spent</span><span>${pct.toFixed(0)}% · ${over?"Over "+fmtK(spent-b.limit):fmtK(b.limit-spent)+" left"}</span></div><div class="bar-track" style="height:8px"><div class="bar-fill" style="width:${pct}%;background:${c};height:100%"></div></div>`:`<div class="fz10 muted mt4 mb4">${fmt(spent)} spent · no whole-category limit — tracked per subcategory below</div>`}${isE&&hs?`<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">${b.subs.map(s=>{const ss=f.filter(t=>t.type==="expense"&&t.category===b.cat&&t.subcategory===s.name).reduce((sm,t)=>sm+t.amount,0);const sp=s.limit>0?Math.min((ss/s.limit)*100,100):0;const so=s.limit>0&&ss>s.limit;const sc=so?"var(--red)":sp>80?"var(--warn)":"var(--green)";return`<div class="mb8"><div class="flex-b fz10"><span class="muted">${esc(s.name)}</span><span><span style="color:${sc}">${fmtK(ss)}</span> / ${fmtK(s.limit)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${sp}%;background:${sc}"></div></div></div>`;}).join("")}</div>`:""}`;}).join(""):`<div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#127919;</div><div class="fz13 fw6 mb4">No budgets yet</div><div class="fz11 muted mb12">Set spending limits to stay on track</div><button class="btn btn-p btn-sm" onclick="openSettings('budgets')">+ Create Budget</button></div>`);
+    $("main").innerHTML=ppHTML()+hdr+(budgets.length?budgets.map(b=>{const spent=f.filter(t=>t.type==="expense"&&t.category===b.cat).reduce((s,t)=>s+t.amount,0);const subTotal=(b.subs||[]).reduce((s,x)=>s+(x.limit||0),0);const hasCatLimit=b.limit>0;const isRollup=!hasCatLimit&&subTotal>0;const effLimit=hasCatLimit?b.limit:subTotal;const pct=effLimit>0?Math.min((spent/effLimit)*100,100):0;const over=effLimit>0&&spent>effLimit;const c=over?"var(--red)":pct>80?"var(--warn)":"var(--green)";const isE=exCats["b_"+b.id];const hs=b.subs&&b.subs.length>0;return`<div class="card" style="border-color:${over?"rgba(239,68,68,.25)":"var(--border)"}"><div class="flex-b" style="cursor:pointer" onclick="toggleCat('b_${b.id}')"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw7 fz13">${esc(b.cat)} ${hs?isE?"&#9650;":"&#9660;":""}</span></div><div class="flex g8"><span class="fz12 fw7">${effLimit>0?fmt(effLimit):"—"}</span></div></div>${effLimit>0?`<div class="flex-b fz10 muted mt4 mb4"><span style="color:${c}">${fmt(spent)} spent</span><span>${pct.toFixed(0)}% · ${over?"Over "+fmtK(spent-effLimit):fmtK(effLimit-spent)+" left"}</span></div><div class="bar-track" style="height:8px"><div class="bar-fill" style="width:${pct}%;background:${c};height:100%"></div></div>${isRollup?`<div class="fz9 muted mt4">Total of ${b.subs.length} subcategory limit${b.subs.length>1?"s":""} below</div>`:""}`:`<div class="fz10 muted mt4 mb4">${fmt(spent)} spent · no limit set</div>`}${isE&&hs?`<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">${b.subs.map(s=>{const ss=f.filter(t=>t.type==="expense"&&t.category===b.cat&&t.subcategory===s.name).reduce((sm,t)=>sm+t.amount,0);const sp=s.limit>0?Math.min((ss/s.limit)*100,100):0;const so=s.limit>0&&ss>s.limit;const sc=so?"var(--red)":sp>80?"var(--warn)":"var(--green)";return`<div class="mb8"><div class="flex-b fz10"><span class="muted">${esc(s.name)}</span><span><span style="color:${sc}">${fmtK(ss)}</span> / ${fmtK(s.limit)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${sp}%;background:${sc}"></div></div></div>`;}).join("")}</div>`:""}`;}).join(""):`<div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#127919;</div><div class="fz13 fw6 mb4">No budgets yet</div><div class="fz11 muted mb12">Set spending limits to stay on track</div><button class="btn btn-p btn-sm" onclick="openSettings('budgets')">+ Create Budget</button></div>`);
   }
 }
 
 // ── ACCOUNTS ──
 function rAcc(){
-  const tb=accounts.reduce((s,a)=>{const b=txns.filter(t=>t.accountId===a.id).reduce((s2,t)=>s2+(t.type==="income"?t.amount:-t.amount),0);return s+b;},0);
-  $("main").innerHTML=`<div class="fz16 fw7 mb4">Accounts</div><div class="fz10 muted mb12">Total balance: <span class="fw7 accent fz14">${fmt(tb)}</span></div>
-  <div class="grid2 mb12">${accounts.map(a=>{const bal=txns.filter(t=>t.accountId===a.id).reduce((s,t)=>s+(t.type==="income"?t.amount:-t.amount),0);const cnt=txns.filter(t=>t.accountId===a.id).length;const ic=a.type==="cash"?"&#128181;":"&#127981;";return`<div class="acc-card"><div class="flex g8 mb8"><div style="width:34px;height:34px;border-radius:8px;background:${a.color}20;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:16px">${ic}</div><div style="flex:1;min-width:0"><div class="fw7 fz12 ellip">${esc(a.name)}</div><div class="fz9 muted">${cnt} txns</div></div><button onclick="deleteAccount('${a.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">&#10005;</button></div><div class="fw8 fz16">${fmt(bal)}</div></div>`;}).join("")}</div>
+  const tb=accounts.reduce((s,a)=>s+getAccountBalance(a.id),0);
+  $("main").innerHTML=`<div class="flex-b mb4"><span class="fz16 fw7">Accounts</span>${accounts.length>1?`<button class="btn btn-g btn-sm" onclick="showModal('transfer')">&#8646; Transfer</button>`:""}</div><div class="fz10 muted mb12">Total balance: <span class="fw7 accent fz14">${fmt(tb)}</span></div>
+  <div class="grid2 mb12">${accounts.map(a=>{const bal=getAccountBalance(a.id);const cnt=txnCountForAccount(a.id);const ic=a.type==="cash"?"&#128181;":"&#127981;";return`<div class="acc-card"><div class="flex g8 mb8"><div style="width:34px;height:34px;border-radius:8px;background:${a.color}20;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:16px">${ic}</div><div style="flex:1;min-width:0"><div class="fw7 fz12 ellip">${esc(a.name)}</div><div class="fz9 muted">${cnt} txns</div></div><button onclick="deleteAccount('${a.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">&#10005;</button></div><div class="fw8 fz16">${fmt(bal)}</div></div>`;}).join("")}</div>
   <div class="card"><div class="fz12 fw7 mb10">Add Account</div>
     <div style="display:grid;gap:10px">
       <input class="inp" id="newAccName" placeholder="Account name (e.g. GTBank, Opay)">
@@ -364,11 +386,11 @@ function rAcc(){
 }
 function selectAccColor(c){newAccColor=c;render();}
 function addAccount(){const n=$("newAccName")?.value.trim();if(!n)return alert("Enter account name");const t=$("newAccType")?.value||"bank";accounts.push({id:uid(),name:n,type:t,color:newAccColor});newAccColor=ACC_COLORS[0];save();render();}
-function deleteAccount(id){if(txns.filter(t=>t.accountId===id).length>0&&!confirm("This account has transactions. Delete anyway?"))return;accounts=accounts.filter(a=>a.id!==id);save();render();}
+function deleteAccount(id){if(txnCountForAccount(id)>0&&!confirm("This account has transactions. Delete anyway?"))return;accounts=accounts.filter(a=>a.id!==id);save();render();}
 
 // ── SETTINGS ──
 function openSettings(tab){settingsOpen=true;settingsTab=tab||"profile";let sp=document.getElementById("settingsPanel");if(!sp){sp=document.createElement("div");sp.id="settingsPanel";document.body.appendChild(sp);}render();}
-function closeSettings(){settingsOpen=false;const sp=document.getElementById("settingsPanel");if(sp)sp.innerHTML="";render();}
+function closeSettings(){settingsOpen=false;editingSub=null;const sp=document.getElementById("settingsPanel");if(sp)sp.innerHTML="";render();}
 function setSTTab(t){settingsTab=t;render();}
 
 function renderSettings(){
@@ -398,7 +420,7 @@ function renderSettings(){
     const catList=Object.keys(ec);
     if(!nbCat||!catList.includes(nbCat))nbCat=catList[0];
     body=`<div class="st-section"><span class="st-label">Budgets</span>
-      ${budgets.length?budgets.map(b=>{const isE=expandedBudget===b.id;return`<div class="bud-item"><div class="flex-b" onclick="expandedBudget=expandedBudget==='${b.id}'?null:'${b.id}';render()" style="cursor:pointer"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw6 fz12">${esc(b.cat)}</span>${b.subs.length?`<span class="rec-badge">${b.subs.length} sub</span>`:""}</div><div class="flex g6"><span class="fz11 fw7">${fmtK(b.limit)}</span><span class="fz11 muted">${isE?"&#9650;":"&#9660;"}</span></div></div>
+      ${budgets.length?budgets.map(b=>{const isE=expandedBudget===b.id;const subTotal=(b.subs||[]).reduce((s,x)=>s+(x.limit||0),0);const effLimit=b.limit>0?b.limit:subTotal;return`<div class="bud-item"><div class="flex-b" onclick="expandedBudget=expandedBudget==='${b.id}'?null:'${b.id}';render()" style="cursor:pointer"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw6 fz12">${esc(b.cat)}</span>${b.subs.length?`<span class="rec-badge">${b.subs.length} sub</span>`:""}</div><div class="flex g6"><span class="fz11 fw7">${effLimit>0?fmtK(effLimit):"—"}</span><span class="fz11 muted">${isE?"&#9650;":"&#9660;"}</span></div></div>
       ${isE?`<div class="mt8"><div class="flex g6 mb6"><span class="st-label" style="margin:0;flex:1">Category</span><select class="inp" style="width:155px;font-size:11px" id="bCat_${b.id}">${Object.keys(ec).map(c=>`<option value="${esc(c)}" ${c===b.cat?"selected":""}>${esc(c)}</option>`).join("")}</select></div><div class="flex g6 mb8"><span class="st-label" style="margin:0;flex:1">Limit (&#8358;)</span><input class="inp" style="width:120px;font-size:11px" type="number" id="bLim_${b.id}" value="${b.limit}"></div><span class="st-label">Subcategory Limits</span>${b.subs.length?b.subs.map((s,si)=>`<div class="bud-sub-item"><span class="fz11 muted" style="flex:1">${esc(s.name)}</span><input class="inp" style="width:90px;font-size:11px;padding:4px 8px" type="number" id="bSub_${b.id}_${si}" value="${s.limit}"><button class="btn btn-sm btn-rd" style="padding:3px 6px" onclick="rmBudSub('${b.id}',${si})">&#10005;</button></div>`).join(""):`<div class="fz10 muted mb6">None yet — add one below.</div>`}<div class="flex g6 mt6"><select class="inp" style="flex:1;font-size:11px" id="nsc_${b.id}"><option value="">+ Sub limit</option>${(ec[b.cat]||[]).map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select><input class="inp" style="width:90px;font-size:11px;padding:4px 8px" type="number" id="nsl_${b.id}" placeholder="&#8358;"></div><div class="flex g6 mt8"><button class="btn btn-p btn-sm" style="flex:1;justify-content:center" onclick="saveBudget('${b.id}')">&#10003; Save</button><button class="btn btn-sm btn-rd" onclick="deleteBudget('${b.id}')">&#128465; Delete</button></div></div>`:""}
       </div>`;}).join(""):`<div class="fz11 muted tac" style="padding:12px">No budgets yet.</div>`}
       <div class="divider"></div>
@@ -410,8 +432,17 @@ function renderSettings(){
   }
   if(settingsTab==="categories"){
     const ecRef=getEC(),icRef=getIC();const catRef=settingsSubTab==="expense"?ecRef:icRef;
-    body=`<div class="st-section"><div class="tab-row mb10"><button class="tab-btn ${settingsSubTab==="expense"?"active":""}" onclick="settingsSubTab='expense';render()">Expense</button><button class="tab-btn ${settingsSubTab==="income"?"active":""}" onclick="settingsSubTab='income';render()">Income</button></div>
-      ${Object.entries(catRef).map(([cat,subs])=>{const isE=expandedCatSet===cat;const c=clr(cat);return`<div class="cat-item" onclick="expandedCatSet=expandedCatSet==='${esc(cat)}'?null:'${esc(cat)}';render()"><div class="cat-dot" style="background:${c}"></div><span class="fz12 fw6" style="flex:1;color:${c}">${esc(cat)}</span><span class="fz10 muted">${subs.length} subs</span><span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span></div>${isE?`<div style="padding:8px 0 10px 20px;background:var(--bg);border-radius:6px;margin-bottom:4px"><div class="flex-w mb6">${subs.map(s=>`<span class="sub-pill">${esc(s)} <button onclick="rmSub('${esc(cat)}','${esc(s)}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px">&#10005;</button></span>`).join("")}${!subs.length?`<span class="fz10 muted">No subcategories</span>`:""}</div><div class="flex g6"><input class="inp" id="nsi_${esc(cat)}" style="font-size:11px;padding:6px 10px" placeholder="New subcategory name"><button class="btn btn-p btn-sm" onclick="addSub('${esc(cat)}')">Add</button></div></div>`:""}`;}).join("")}
+    const catNames=Object.keys(catRef);
+    body=`<div class="st-section"><div class="tab-row mb10"><button class="tab-btn ${settingsSubTab==="expense"?"active":""}" onclick="settingsSubTab='expense';editingSub=null;render()">Expense</button><button class="tab-btn ${settingsSubTab==="income"?"active":""}" onclick="settingsSubTab='income';editingSub=null;render()">Income</button></div>
+      ${Object.entries(catRef).map(([cat,subs])=>{const isE=expandedCatSet===cat;const c=clr(cat);return`<div class="cat-item" onclick="expandedCatSet=expandedCatSet==='${esc(cat)}'?null:'${esc(cat)}';editingSub=null;render()"><div class="cat-dot" style="background:${c}"></div><span class="fz12 fw6" style="flex:1;color:${c}">${esc(cat)}</span><span class="fz10 muted">${subs.length} subs</span><span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span></div>${isE?`<div style="padding:8px 0 10px 20px;background:var(--bg);border-radius:6px;margin-bottom:4px"><div class="flex-w mb6">${subs.map(s=>{const key=cat+"|||"+s;const editing=editingSub===key;return`<span class="sub-pill ${editing?"sel":""}" style="cursor:pointer" onclick="event.stopPropagation();editingSub=editingSub==='${esc(key)}'?null:'${esc(key)}';render()">&#9998; ${esc(s)} <button onclick="event.stopPropagation();rmSub('${esc(cat)}','${esc(s)}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px">&#10005;</button></span>`;}).join("")}${!subs.length?`<span class="fz10 muted">No subcategories</span>`:""}</div>
+      ${editingSub&&editingSub.startsWith(cat+"|||")?(()=>{const oldSub=editingSub.split("|||")[1];return`<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px" onclick="event.stopPropagation()">
+        <span class="edit-label">Rename</span>
+        <input class="inp mb6" id="subRenameInput" value="${esc(oldSub)}" style="font-size:12px">
+        <span class="edit-label">Move to category</span>
+        <select class="inp mb8" id="subMoveTarget" style="font-size:12px">${catNames.map(cn=>`<option value="${esc(cn)}" ${cn===cat?"selected":""}>${cn===cat?"Keep in "+esc(cn):"Move to "+esc(cn)}</option>`).join("")}</select>
+        <div class="flex g6"><button class="btn btn-p btn-sm" style="flex:1;justify-content:center" onclick="applySubEdit('${esc(cat)}','${esc(oldSub)}')">&#10003; Save</button><button class="btn btn-g btn-sm" onclick="editingSub=null;render()">Cancel</button></div>
+      </div>`;})():""}
+      <div class="flex g6"><input class="inp" id="nsi_${esc(cat)}" style="font-size:11px;padding:6px 10px" placeholder="New subcategory name"><button class="btn btn-p btn-sm" onclick="addSub('${esc(cat)}')">Add</button></div></div>`:""}`;}).join("")}
       <div class="divider"></div>
       <span class="st-label">New Category</span>
       <input class="inp mb6" id="nCatN" placeholder="Category name">
@@ -486,6 +517,48 @@ function rmBudSub(id,si){const b=budgets.find(x=>x.id===id);if(b){b.subs.splice(
 function addCategory(){const n=$("nCatN")?.value.trim();if(!n)return alert("Enter a category name");if(settingsSubTab==="expense"){if(getEC()[n])return alert("Category already exists");userEC[n]=[];}else{if(getIC()[n])return alert("Category already exists");userIC[n]=[];}save();render();}
 function addSub(cat){const inp=$(`nsi_${cat}`);if(!inp)return;const s=inp.value.trim();if(!s)return alert("Enter a subcategory name");const ec=getEC(),ic=getIC();if(ec[cat]!==undefined){if(!userEC[cat])userEC[cat]=[...DEF_EC[cat]||[]];if(userEC[cat].includes(s))return alert("Already exists");userEC[cat].push(s);}else if(ic[cat]!==undefined){if(!userIC[cat])userIC[cat]=[...DEF_IC[cat]||[]];if(userIC[cat].includes(s))return alert("Already exists");userIC[cat].push(s);}save();render();}
 function rmSub(cat,sub){const ec=getEC(),ic=getIC();if(ec[cat]!==undefined){if(!userEC[cat])userEC[cat]=[...(DEF_EC[cat]||[])];userEC[cat]=userEC[cat].filter(s=>s!==sub);}else if(ic[cat]!==undefined){if(!userIC[cat])userIC[cat]=[...(DEF_IC[cat]||[])];userIC[cat]=userIC[cat].filter(s=>s!==sub);}save();render();}
+
+// Rename and/or move a subcategory, cascading the change to any transactions,
+// recurring templates, and (for expense categories) budget sub-limits that reference it.
+function applySubEdit(oldCat,oldSub){
+  const newName=$("subRenameInput")?.value.trim();
+  const newCat=$("subMoveTarget")?.value||oldCat;
+  if(!newName)return alert("Enter a subcategory name");
+  moveOrRenameSub(settingsSubTab,oldCat,oldSub,newCat,newName);
+}
+function moveOrRenameSub(type,oldCat,oldSub,newCat,newName){
+  if(oldCat===newCat&&oldSub===newName){editingSub=null;render();return;}
+  const isExpense=type==="expense";
+  const DEF=isExpense?DEF_EC:DEF_IC;
+  const USER=isExpense?userEC:userIC;
+  if(!USER[oldCat])USER[oldCat]=[...(DEF[oldCat]||[])];
+  if(!USER[newCat])USER[newCat]=[...(DEF[newCat]||[])];
+  USER[oldCat]=USER[oldCat].filter(s=>s!==oldSub);
+  if(!USER[newCat].includes(newName))USER[newCat].push(newName);
+  txns.forEach(t=>{if(t.category===oldCat&&t.subcategory===oldSub){t.category=newCat;t.subcategory=newName;}});
+  recurring.forEach(r=>{if(r.category===oldCat&&r.subcategory===oldSub){r.category=newCat;r.subcategory=newName;}});
+  if(isExpense){
+    const ob=budgets.find(b=>b.cat===oldCat);
+    if(ob){
+      const si=ob.subs.findIndex(s=>s.name===oldSub);
+      if(si>=0){
+        const subBudget=ob.subs[si];
+        ob.subs.splice(si,1);
+        if(newCat===oldCat){
+          ob.subs.push({name:newName,limit:subBudget.limit});
+        }else{
+          let nb=budgets.find(b=>b.cat===newCat);
+          if(!nb){nb={id:uid(),cat:newCat,limit:0,subs:[]};budgets.push(nb);}
+          const existing=nb.subs.find(s=>s.name===newName);
+          if(existing)existing.limit=subBudget.limit;else nb.subs.push({name:newName,limit:subBudget.limit});
+        }
+      }
+    }
+  }
+  editingSub=null;
+  save();render();
+  showToast("✏️ "+oldSub+(newCat!==oldCat?" moved to "+newCat:"")+(newName!==oldSub?" as "+newName:" renamed"),"green");
+}
 
 // ── FEATURE 4: BIOMETRIC ──
 function toggleBiometric(on){biometricEnabled=on;save();render();}
@@ -577,7 +650,10 @@ window.onSaveResult=function(success){
 };
 function exportCSV(){
   const h=["Date","Description","Amount","Type","Category","Subcategory","Account"];
-  const rows=txns.sort((a,b)=>b.date.localeCompare(a.date)).map(t=>{const acc=accounts.find(a=>a.id===t.accountId);return[t.date,t.description||"",t.amount,t.type,t.category,t.subcategory||"",acc?acc.name:""].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",");});
+  const rows=txns.sort((a,b)=>b.date.localeCompare(a.date)).map(t=>{
+    if(t.type==="transfer")return[t.date,t.description||"",t.amount,"transfer","Transfer","",accName(t.fromAccountId)+" → "+accName(t.toAccountId)].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",");
+    const acc=accounts.find(a=>a.id===t.accountId);return[t.date,t.description||"",t.amount,t.type,t.category,t.subcategory||"",acc?acc.name:""].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",");
+  });
   const csv=[h.join(","),...rows].join("\n");
   saveOrDownload("financeflow_"+new Date().toISOString().split("T")[0]+".csv",csv,"text/csv");
 }
@@ -596,6 +672,17 @@ function showModal(type,id){
   const mc=$("modal-container");if(type==="close"){mc.innerHTML="";return;}
   const EC=getEC(),IC=getIC();
 
+  if(type==="edit"&&id){const t=txns.find(x=>x.id===id);if(t&&t.type==="transfer"){
+    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">&#8646; Edit Transfer</span><div class="flex g6"><button class="btn btn-sm btn-rd" onclick="deleteTx('${t.id}');showModal('close')">&#128465;</button><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div></div>
+    <div style="display:grid;gap:12px">
+      <div><span class="edit-label">Date</span><input class="inp" type="date" id="tfDate" value="${t.date}"></div>
+      <div><span class="edit-label">Description</span><input class="inp" id="tfDesc" value="${esc(t.description)}" placeholder="e.g. Move to savings"></div>
+      <div><span class="edit-label">Amount (&#8358;)</span><input class="inp" type="number" id="tfAmt" value="${t.amount}" inputmode="numeric"></div>
+      <div><span class="edit-label">From Account</span><select class="inp" id="tfFrom">${accounts.map(a=>`<option value="${esc(a.id)}" ${a.id===t.fromAccountId?"selected":""}>${esc(a.name)}</option>`).join("")}</select></div>
+      <div><span class="edit-label">To Account</span><select class="inp" id="tfTo">${accounts.map(a=>`<option value="${esc(a.id)}" ${a.id===t.toAccountId?"selected":""}>${esc(a.name)}</option>`).join("")}</select></div>
+    </div>
+    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="saveTransfer('${t.id}')">&#10003; Save</button></div></div>`;return;}}
+
   if(type==="edit"){const t=txns.find(x=>x.id===id);if(!t)return;const cats=t.type==="income"?Object.keys(IC):Object.keys(EC);const subs=(t.type==="income"?IC:EC)[t.category]||[];
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Edit Transaction</span><div class="flex g6"><button class="btn btn-sm btn-rd" onclick="deleteTx('${t.id}');showModal('close')">&#128465;</button><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div></div>
     <div style="display:grid;gap:12px"><div><span class="edit-label">Type</span><div class="flex g4"><button class="btn w100" id="eExp" style="border:1px solid ${t.type==="expense"?"var(--red)":"var(--border)"};background:${t.type==="expense"?"rgba(239,68,68,.1)":"transparent"};color:${t.type==="expense"?"var(--red)":"var(--muted)"};padding:11px" onclick="eSetType('expense')">Expense</button><button class="btn w100" id="eInc" style="border:1px solid ${t.type==="income"?"var(--green)":"var(--border)"};background:${t.type==="income"?"rgba(34,197,94,.1)":"transparent"};color:${t.type==="income"?"var(--green)":"var(--muted)"};padding:11px" onclick="eSetType('income')">Income</button></div></div>
@@ -609,7 +696,7 @@ function showModal(type,id){
 
   if(type==="addtx"){
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Add Transaction</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div>
-    <div class="flex g4 mb14"><button class="btn w100" id="typeExp" style="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red);padding:11px" onclick="setTT('expense')">Expense</button><button class="btn w100" id="typeInc" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="setTT('income')">Income</button></div>
+    <div class="flex g4 mb14"><button class="btn w100" id="typeExp" style="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red);padding:11px" onclick="setTT('expense')">Expense</button><button class="btn w100" id="typeInc" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="setTT('income')">Income</button><button class="btn w100" id="typeTrf" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="showModal('transfer')">&#8646; Transfer</button></div>
     <div style="display:grid;gap:12px">
       <div><span class="edit-label">Date</span><input class="inp" type="date" id="txDate" value="${new Date().toISOString().split("T")[0]}"></div>
       <div><span class="edit-label">Description</span><input class="inp" id="txDesc" placeholder="e.g. Grocery run"></div>
@@ -623,6 +710,18 @@ function showModal(type,id){
       </div>
     </div>
     <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="addTx()">+ Add Transaction</button></div></div>`;window._txT="expense";}
+
+  if(type==="transfer"){
+    if(accounts.length<2){mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb12"><span class="fz14 fw7">&#8646; Transfer</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div><div class="fz12 muted tac" style="padding:20px 0">Add a second account first to transfer between accounts.</div></div></div>`;return;}
+    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">&#8646; Transfer Between Accounts</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div>
+    <div style="display:grid;gap:12px">
+      <div><span class="edit-label">Date</span><input class="inp" type="date" id="tfDate" value="${new Date().toISOString().split("T")[0]}"></div>
+      <div><span class="edit-label">Description (optional)</span><input class="inp" id="tfDesc" placeholder="e.g. Move to savings"></div>
+      <div><span class="edit-label">Amount (&#8358;)</span><input class="inp" type="number" id="tfAmt" placeholder="0.00" inputmode="numeric"></div>
+      <div><span class="edit-label">From Account</span><select class="inp" id="tfFrom">${accounts.map((a,i)=>`<option value="${esc(a.id)}" ${i===0?"selected":""}>${esc(a.name)}</option>`).join("")}</select></div>
+      <div><span class="edit-label">To Account</span><select class="inp" id="tfTo">${accounts.map((a,i)=>`<option value="${esc(a.id)}" ${i===1?"selected":""}>${esc(a.name)}</option>`).join("")}</select></div>
+    </div>
+    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="addTransfer()">&#8646; Transfer</button></div></div>`;}
 
   if(type==="upload"){
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb12"><span class="fz14 fw7">Upload Statement</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div><div class="mb8"><span class="edit-label">Account</span><select class="inp" id="uploadAcc">${accounts.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("")}</select></div><div class="drop-zone" id="dz" onclick="$('fi').click()"><div style="font-size:28px;margin-bottom:6px">&#128196;</div><div class="fz12 fw6">Tap to select CSV file</div><div class="fz10 muted mt4">Bank statement in CSV format</div><input type="file" id="fi" accept=".csv,.tsv,.txt" style="display:none" onchange="handleFile(this.files[0])"></div><div id="uMsg"></div><div id="uPrev"></div><div id="uAct"></div></div></div>`;
@@ -651,6 +750,27 @@ function addTx(){
   showModal("close");render();
 }
 
+// ── ACCOUNT TRANSFERS ──
+function addTransfer(){
+  const a=parseFloat($("tfAmt")?.value);if(!a)return alert("Enter an amount");
+  const from=$("tfFrom")?.value,to=$("tfTo")?.value;
+  if(!from||!to)return alert("Select both accounts");
+  if(from===to)return alert("From and To accounts must be different");
+  const t={id:uid(),type:"transfer",date:$("tfDate").value,description:$("tfDesc").value,amount:a,fromAccountId:from,toAccountId:to,source:"Manual"};
+  txns.push(t);save();
+  showModal("close");render();
+  showToast("⇄ Transferred "+fmt(a)+" "+accName(from)+" → "+accName(to),"green");
+}
+function saveTransfer(id){
+  const t=txns.find(x=>x.id===id);if(!t)return;
+  const a=parseFloat($("tfAmt")?.value);if(!a)return alert("Enter an amount");
+  const from=$("tfFrom")?.value,to=$("tfTo")?.value;
+  if(!from||!to)return alert("Select both accounts");
+  if(from===to)return alert("From and To accounts must be different");
+  t.date=$("tfDate").value;t.description=$("tfDesc").value;t.amount=a;t.fromAccountId=from;t.toAccountId=to;
+  save();showModal("close");render();
+}
+
 function parseCSV(text){const lines=text.split(/\r?\n/).filter(l=>l.trim());if(lines.length<2)return[];const sep=lines[0].includes("\t")?"\t":",";const pr=l=>{const r=[];let c="",q=false;for(let i=0;i<l.length;i++){const ch=l[i];if(ch==='"')q=!q;else if(ch===sep&&!q){r.push(c.trim());c="";}else c+=ch;}r.push(c.trim());return r;};const h=pr(lines[0]).map(x=>x.toLowerCase().replace(/['"]/g,""));return lines.slice(1).map(l=>{const v=pr(l);if(v.length<2)return null;const o={};h.forEach((k,j)=>{o[k]=v[j]||""});return o;}).filter(Boolean);}
 function detectTx(rows,accountId){if(!rows.length)return[];const keys=Object.keys(rows[0]),hdr=keys.map(k=>k.toLowerCase());let dC=-1,dsC=-1,drC=-1,crC=-1,amC=-1;hdr.forEach((h,i)=>{if(dC<0&&/date|trans.*date|value.*date|posting/i.test(h))dC=i;if(dsC<0&&/desc|narr|detail|particular|remark|reference/i.test(h))dsC=i;if(drC<0&&/debit|withdrawal|dr|outflow/i.test(h))drC=i;if(crC<0&&/credit|deposit|cr|inflow/i.test(h))crC=i;if(amC<0&&/^amount$|^value$/i.test(h))amC=i;});if(dsC<0)dsC=keys.findIndex((_,i)=>i!==dC&&i!==drC&&i!==crC&&i!==amC);const txs=[];rows.forEach(row=>{const vals=keys.map(k=>row[k]),desc=dsC>=0?String(vals[dsC]||"").trim():"";if(!desc||desc.length<2)return;let amount=0,type="expense";if(drC>=0&&crC>=0){const dr=parseFloat(String(vals[drC]||"0").replace(/[^0-9.-]/g,""))||0,cr=parseFloat(String(vals[crC]||"0").replace(/[^0-9.-]/g,""))||0;if(cr>0){amount=cr;type="income";}else if(dr>0){amount=dr;}else return;}else if(amC>=0){amount=parseFloat(String(vals[amC]||"0").replace(/[^0-9.-]/g,""))||0;if(amount>0)type="income";else{amount=Math.abs(amount);}}else return;if(!amount)return;let date=new Date().toISOString().split("T")[0];const ds=dC>=0?String(vals[dC]||""):"";try{const p=new Date(ds);if(!isNaN(p.getTime()))date=p.toISOString().split("T")[0];}catch{}const d2=desc.toLowerCase();let cat="Other",sub="";if(/salary|wage|payroll/.test(d2)){cat="Salary";type="income";}else if(/shoprite|spar|market|grocery|provision|supermarket/.test(d2)){cat="Food & Dining";sub="Groceries";}else if(/uber|bolt|taxi|fuel|petrol|transport|fare|keke/.test(d2)){cat="Transportation";sub="Ride-hailing";}else if(/phcn|ekedc|ikedc|electric|nepa/.test(d2)){cat="Housing";sub="Electricity";}else if(/airtime|mtn|glo|airtel|9mobile|data|recharge|vtu/.test(d2)){cat="Communication";sub="Airtime";}else if(/restaurant|food|chicken|pizza|eat|bukka|suya/.test(d2)){cat="Food & Dining";sub="Restaurants";}else if(/charge|fee|stamp|vat|sms|maintenance/.test(d2)){cat="Finance";sub="Bank Charges";}else if(/school|tuition|course|exam|book/.test(d2)){cat="Education";}else if(/hospital|clinic|pharm|drug|health/.test(d2)){cat="Health";}else if(/rent|house|estate/.test(d2)){cat="Housing";sub="Rent";}txs.push({id:uid(),date,description:desc,amount,type,category:cat,subcategory:sub,accountId:accountId||"cash",source:"Upload"});});return txs;}
 function handleFile(file){if(!file)return;const accId=$("uploadAcc")?.value||"cash";const acc=accounts.find(a=>a.id===accId);file.text().then(text=>{const rows=parseCSV(text);const parsed=detectTx(rows,accId);if(!parsed.length){$("uMsg").innerHTML='<div class="msg msg-err">&#9888; No transactions found. Check columns: Date, Description, Debit/Credit.</div>';return;}pendingTx=parsed;$("uMsg").innerHTML=`<div class="msg msg-ok">&#10003; ${parsed.length} transactions from ${esc(acc?.name||"account")}</div>`;$("uPrev").innerHTML=`<table class="preview-tbl mt8"><tr><th>Date</th><th>Desc</th><th>Cat</th><th>Amt</th></tr>${parsed.slice(0,5).map(t=>`<tr><td>${t.date}</td><td class="ellip" style="max-width:90px">${esc(t.description)}</td><td><span class="cat-badge" style="background:${clr(t.category)}22;color:${clr(t.category)}">${esc(t.category)}</span></td><td class="${t.type==="income"?"green":"red"} fw6">${fmt(t.amount)}</td></tr>`).join("")}</table>`;$("uAct").innerHTML=`<button class="btn btn-p w100 mt8" style="justify-content:center;padding:11px" onclick="addPend()">&#10003; Add ${parsed.length} Transactions</button>`;}).catch(e=>{$("uMsg").innerHTML=`<div class="msg msg-err">&#9888; ${esc(e.message)}</div>`;});}
@@ -658,9 +778,11 @@ function addPend(){const n=pendingTx.length;txns=[...txns,...pendingTx];pendingT
 
 function rTx(f,inc,exp){
   const sorted=[...f].sort((a,b)=>b.date.localeCompare(a.date));const groups={};sorted.forEach(t=>{(groups[t.date]=groups[t.date]||[]).push(t);});const dates=Object.keys(groups).sort((a,b)=>b.localeCompare(a));
-  $("main").innerHTML=ppHTML()+`<div class="flex g6 mb8 flex-w"><div style="position:relative;flex:1 1 120px"><span style="position:absolute;left:8px;top:10px;font-size:12px" class="muted">&#128269;</span><input class="inp" id="si" style="padding-left:28px;font-size:12px" placeholder="Search..." value="${esc(search)}" oninput="doS(this.value)"></div><select class="inp" style="width:90px;font-size:12px" onchange="fType=this.value;render()"><option value="all" ${fType==="all"?"selected":""}>All</option><option value="income" ${fType==="income"?"selected":""}>Income</option><option value="expense" ${fType==="expense"?"selected":""}>Expense</option></select><select class="inp" style="width:130px;font-size:12px" onchange="fCat=this.value;render()"><option value="all">All Categories</option>${allCats().map(c=>`<option value="${esc(c)}" ${fCat===c?"selected":""}>${esc(c)}</option>`).join("")}</select><select class="inp" style="width:100px;font-size:12px" onchange="fAcc=this.value;render()"><option value="all">All Accts</option>${accounts.map(a=>`<option value="${esc(a.id)}" ${fAcc===a.id?"selected":""}>${esc(a.name)}</option>`).join("")}</select></div>
+  $("main").innerHTML=ppHTML()+`<div class="flex g6 mb8 flex-w"><div style="position:relative;flex:1 1 120px"><span style="position:absolute;left:8px;top:10px;font-size:12px" class="muted">&#128269;</span><input class="inp" id="si" style="padding-left:28px;font-size:12px" placeholder="Search..." value="${esc(search)}" oninput="doS(this.value)"></div><select class="inp" style="width:90px;font-size:12px" onchange="fType=this.value;render()"><option value="all" ${fType==="all"?"selected":""}>All</option><option value="income" ${fType==="income"?"selected":""}>Income</option><option value="expense" ${fType==="expense"?"selected":""}>Expense</option><option value="transfer" ${fType==="transfer"?"selected":""}>Transfer</option></select><select class="inp" style="width:130px;font-size:12px" onchange="fCat=this.value;render()"><option value="all">All Categories</option>${allCats().map(c=>`<option value="${esc(c)}" ${fCat===c?"selected":""}>${esc(c)}</option>`).join("")}</select><select class="inp" style="width:100px;font-size:12px" onchange="fAcc=this.value;render()"><option value="all">All Accts</option>${accounts.map(a=>`<option value="${esc(a.id)}" ${fAcc===a.id?"selected":""}>${esc(a.name)}</option>`).join("")}</select></div>
   <div class="flex-b fz10 muted mb8"><span>${f.length} transactions</span><div class="flex g6"><span>In: <span class="green">${fmtK(inc)}</span> &middot; Out: <span class="red">${fmtK(exp)}</span></span><button class="btn btn-g btn-sm" onclick="exportCSV()">&#128196; CSV</button></div></div>
-  <div class="card" style="padding:0;overflow:hidden">${dates.length?dates.map(d=>`<div class="date-hdr">${fmtD(d)}</div>${groups[d].map(t=>{const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon ${t.type==="income"?"inc":"exp"}">${t.type==="income"?"&#8595;":"&#8593;"}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}</div><div class="fz9 muted">${esc(acc?acc.name:"")} ${t.subcategory?"· "+esc(t.subcategory):""}</div></div><span class="cat-badge" style="background:${clr(t.category)}22;color:${clr(t.category)}">${esc(t.category)}</span><div class="fz12 fw7 ${t.type==="income"?"green":"red"}" style="min-width:58px;text-align:right">${t.type==="income"?"+":"-"}${fmt(t.amount)}</div></div>`;}).join("")}`).join(""):'<div class="muted fz12 tac" style="padding:40px">No transactions found</div>'}</div>`;
+  <div class="card" style="padding:0;overflow:hidden">${dates.length?dates.map(d=>`<div class="date-hdr">${fmtD(d)}</div>${groups[d].map(t=>{
+    if(t.type==="transfer")return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:rgba(59,130,246,.1);color:var(--accent)">&#8646;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Transfer")}</div><div class="fz9 muted">${esc(accName(t.fromAccountId))} &#8594; ${esc(accName(t.toAccountId))}</div></div><span class="cat-badge" style="background:rgba(59,130,246,.15);color:var(--accent)">Transfer</span><div class="fz12 fw7 accent" style="min-width:58px;text-align:right">${fmt(t.amount)}</div></div>`;
+    const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon ${t.type==="income"?"inc":"exp"}">${t.type==="income"?"&#8595;":"&#8593;"}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}</div><div class="fz9 muted">${esc(acc?acc.name:"")} ${t.subcategory?"· "+esc(t.subcategory):""}</div></div><span class="cat-badge" style="background:${clr(t.category)}22;color:${clr(t.category)}">${esc(t.category)}</span><div class="fz12 fw7 ${t.type==="income"?"green":"red"}" style="min-width:58px;text-align:right">${t.type==="income"?"+":"-"}${fmt(t.amount)}</div></div>`;}).join("")}`).join(""):'<div class="muted fz12 tac" style="padding:40px">No transactions found</div>'}</div>`;
   const si=$("si");if(si&&search){si.focus();si.setSelectionRange(search.length,search.length);}
 }
 function fmtD(d){const dt=new Date(d),td=new Date(),df=Math.floor((td-dt)/864e5);if(df===0)return"Today";if(df===1)return"Yesterday";return dt.toLocaleDateString("en-NG",{weekday:"short",day:"numeric",month:"short"});}
