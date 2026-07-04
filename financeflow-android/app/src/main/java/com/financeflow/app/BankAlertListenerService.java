@@ -27,14 +27,22 @@ public class BankAlertListenerService extends NotificationListenerService {
     private static final int MAX_PENDING = 30;
     private static final int MAX_SEEN = 200;
 
-    // ₦12,345.67 / NGN12,345.67 / N12,345.67 — common Nigerian bank alert amount formats
+    // ₦12,345.67 / NGN12,345.67 — common Nigerian bank alert amount formats. Deliberately
+    // requires an explicit currency marker (no bare "N" — that alternative used to match
+    // unrelated things like "N5G" network notifications or "6.52° N" coordinates).
     private static final Pattern AMOUNT_PATTERN = Pattern.compile(
-        "(?:NGN|₦|N)\\s?([0-9]{1,3}(?:,[0-9]{3})*(?:\\.[0-9]{2})?)",
+        "(?:NGN|₦)\\s?([0-9]{1,3}(?:,[0-9]{3})*(?:\\.[0-9]{2})?)",
         Pattern.CASE_INSENSITIVE);
     private static final Pattern CREDIT_PATTERN = Pattern.compile(
         "credited|received|deposit|credit alert|inflow", Pattern.CASE_INSENSITIVE);
     private static final Pattern DEBIT_PATTERN = Pattern.compile(
         "debited|debit alert|purchase|withdrawn|withdrawal|sent to|outflow|paid",
+        Pattern.CASE_INSENSITIVE);
+    // A currency symbol alone isn't enough to know this is a real bank alert (some apps show
+    // prices, unrelated promos, etc). Require one of these banking-context words too.
+    private static final Pattern MONEY_CONTEXT_PATTERN = Pattern.compile(
+        "credited|debited|credit alert|debit alert|transaction|transfer|withdrawal|withdrawn|" +
+        "deposit|balance|acct|account|purchase|payment|received|sent to|paid to|pos|atm|inflow|outflow",
         Pattern.CASE_INSENSITIVE);
 
     @Override
@@ -56,7 +64,8 @@ public class BankAlertListenerService extends NotificationListenerService {
         if (combined.isEmpty()) return;
 
         Matcher amountMatcher = AMOUNT_PATTERN.matcher(combined);
-        if (!amountMatcher.find()) return; // not a financial-looking notification
+        if (!amountMatcher.find()) return; // no ₦/NGN amount at all
+        if (!MONEY_CONTEXT_PATTERN.matcher(combined).find()) return; // no banking-alert wording — skip
 
         String rawAmount = amountMatcher.group(1);
         if (rawAmount == null) return;

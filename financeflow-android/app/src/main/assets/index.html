@@ -163,6 +163,17 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
 .settings-card-icon{font-size:22px;line-height:1}
 .settings-card-label{font-weight:700;font-size:13px}
 .settings-card-sub{font-size:10.5px;color:var(--muted)}
+/* Amount / category / account picker overlays (above modals, below toasts) */
+.picker-list-row{padding:14px 16px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)}
+.picker-list-row:active{background:var(--active)}
+.picker-list-row.sel{font-weight:700}
+.calc-display{font-size:26px;font-weight:800;text-align:right;padding:14px 4px;min-height:44px;overflow-x:auto;white-space:nowrap}
+.calc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.calc-btn{padding:16px 0;border-radius:12px;font-size:19px;font-weight:600;border:none;background:var(--bg);color:var(--text);cursor:pointer}
+.calc-btn:active{background:var(--active)}
+.calc-btn.op{background:var(--border);color:var(--accent)}
+/* Per-day income/expense subtotal on the Transactions date header */
+.date-hdr-tot{display:flex;gap:8px;font-weight:700;font-size:10.5px}
 @media(max-width:400px){.grid2{grid-template-columns:1fr 1fr}.stat-row{gap:6px}}
 </style>
 </head>
@@ -261,6 +272,131 @@ const fmt=a=>currency.symbol+Number(a||0).toLocaleString(currency.locale,{minimu
 const fmtK=a=>{const n=Number(a||0);const s=currency.symbol;return n>=1e6?s+(n/1e6).toFixed(1)+"M":n>=1000?s+(n/1000).toFixed(0)+"k":s+n.toFixed(0);};
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).substr(2,5);
 const esc=s=>String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+
+// ── AMOUNT INPUT: live thousand-separator formatting ──
+function parseAmount(v){return parseFloat(String(v||"0").replace(/,/g,""))||0;}
+function formatAmountInput(el){
+  const caretFromEnd=el.value.length-el.selectionEnd;
+  let v=el.value.replace(/[^0-9.]/g,"");
+  const firstDot=v.indexOf(".");
+  if(firstDot>=0)v=v.slice(0,firstDot+1)+v.slice(firstDot+1).replace(/\./g,"");
+  let [intPart,decPart]=v.split(".");
+  intPart=(intPart||"").replace(/^0+(?=\d)/,"").replace(/\B(?=(\d{3})+(?!\d))/g,",");
+  el.value=decPart!==undefined?intPart+"."+decPart:intPart;
+  const pos=Math.max(0,el.value.length-caretFromEnd);
+  try{el.setSelectionRange(pos,pos);}catch(e){}
+}
+function setAmountValue(id,num){
+  const el=$(id);if(!el)return;
+  const n=Math.round((Number(num)||0)*100)/100;
+  el.value=n?n.toLocaleString("en-US",{maximumFractionDigits:2}):"";
+}
+
+// ── SCREEN CALCULATOR (opens over the amount field, "=" result becomes the amount) ──
+let _calcTargetId=null,_calcExpr="";
+function openCalc(targetId){
+  _calcTargetId=targetId;
+  const cur=parseAmount($(targetId)?.value);
+  _calcExpr=cur?String(cur):"";
+  renderCalc();
+}
+function calcPress(k){
+  if(k==="C"){_calcExpr="";}
+  else if(k==="back"){_calcExpr=_calcExpr.slice(0,-1);}
+  else if(k==="="){
+    const v=safeEval(_calcExpr);
+    if(v!==null)_calcExpr=String(Math.round(v*100)/100);
+  }else{
+    if(/[+\-*/]/.test(k)&&/[+\-*/]$/.test(_calcExpr))_calcExpr=_calcExpr.slice(0,-1);
+    _calcExpr+=k;
+  }
+  renderCalc();
+}
+function safeEval(expr){
+  if(!expr||!/^[0-9+\-*/.() ]+$/.test(expr))return null;
+  try{const v=Function('"use strict";return ('+expr+')')();return isFinite(v)?v:null;}catch(e){return null;}
+}
+function calcDone(){
+  const v=safeEval(_calcExpr)||0;
+  setAmountValue(_calcTargetId,v);
+  closeCalc();
+}
+function closeCalc(){const ov=document.getElementById("pickerOverlay");if(ov)ov.innerHTML="";}
+function renderCalc(){
+  const resultPreview=/[+\-*/]$/.test(_calcExpr)||!_calcExpr?null:safeEval(_calcExpr);
+  const html=`<div class="modal-bg" onclick="closeCalc()" style="z-index:260;align-items:center"><div class="modal" style="max-width:360px;border-radius:20px" onclick="event.stopPropagation()">
+    <div class="flex-b mb8"><span class="fz13 fw7">Calculator</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="closeCalc()">&#10005;</button></div>
+    <div class="calc-display">${esc(currency.symbol)}${esc(_calcExpr||"0")}</div>
+    ${resultPreview!==null&&String(resultPreview)!==_calcExpr?`<div class="fz11 muted tar mb8" style="margin-top:-8px">= ${fmt(resultPreview)}</div>`:""}
+    <div class="calc-grid">
+      <button class="calc-btn" onclick="calcPress('7')">7</button><button class="calc-btn" onclick="calcPress('8')">8</button><button class="calc-btn" onclick="calcPress('9')">9</button><button class="calc-btn op" onclick="calcPress('/')">&#247;</button>
+      <button class="calc-btn" onclick="calcPress('4')">4</button><button class="calc-btn" onclick="calcPress('5')">5</button><button class="calc-btn" onclick="calcPress('6')">6</button><button class="calc-btn op" onclick="calcPress('*')">&#215;</button>
+      <button class="calc-btn" onclick="calcPress('1')">1</button><button class="calc-btn" onclick="calcPress('2')">2</button><button class="calc-btn" onclick="calcPress('3')">3</button><button class="calc-btn op" onclick="calcPress('-')">&#8722;</button>
+      <button class="calc-btn" onclick="calcPress('C')">C</button><button class="calc-btn" onclick="calcPress('0')">0</button><button class="calc-btn" onclick="calcPress('.')">.</button><button class="calc-btn op" onclick="calcPress('+')">+</button>
+      <button class="calc-btn" style="grid-column:span 2" onclick="calcPress('back')">&#9003;</button>
+      <button class="calc-btn op" style="grid-column:span 2" onclick="calcPress('=')">=</button>
+    </div>
+    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px" onclick="calcDone()">Use This Amount</button>
+  </div></div>`;
+  let ov=document.getElementById("pickerOverlay");if(!ov){ov=document.createElement("div");ov.id="pickerOverlay";document.body.appendChild(ov);}
+  ov.innerHTML=html;
+}
+
+// ── ACCOUNT PICKER (tap-to-choose grid, replaces plain <select>) ──
+let _pickerVarName=null,_pickerLabelId=null;
+function openAccPicker(varName,labelId){_pickerVarName=varName;_pickerLabelId=labelId;renderAccPicker();}
+function renderAccPicker(){
+  const current=window[_pickerVarName];
+  const html=`<div class="modal-bg" onclick="closePicker()" style="z-index:260"><div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="flex-b mb12"><span class="fz14 fw7">Select Account</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="closePicker()">&#10005;</button></div>
+    <div class="grid2">${accounts.map(a=>`<button type="button" class="btn ${a.id===current?"btn-p":"btn-g"} w100" style="padding:14px;justify-content:center" onclick="pickAccountFor('${esc(a.id)}')">${esc(a.name)}</button>`).join("")}</div>
+  </div></div>`;
+  let ov=document.getElementById("pickerOverlay");if(!ov){ov=document.createElement("div");ov.id="pickerOverlay";document.body.appendChild(ov);}
+  ov.innerHTML=html;
+}
+function pickAccountFor(id){
+  window[_pickerVarName]=id;
+  const acc=accounts.find(a=>a.id===id);
+  const lbl=$(_pickerLabelId);if(lbl)lbl.textContent=acc?acc.name:"";
+  closePicker();
+}
+function closePicker(){const ov=document.getElementById("pickerOverlay");if(ov)ov.innerHTML="";}
+
+// ── CATEGORY + SUBCATEGORY PICKER (two-column, tap category on the left then a subcategory on the right) ──
+let _catPicker=null; // {typeVar, catVar, subVar, labelId}
+let _catPickerActiveCat=null;
+function openCatPicker(typeVar,catVar,subVar,labelId){
+  _catPicker={typeVar,catVar,subVar,labelId};
+  _catPickerActiveCat=window[catVar];
+  renderCatPicker();
+}
+function renderCatPicker(){
+  const type=window[_catPicker.typeVar];
+  const cats=type==="income"?getIC():getEC();
+  const names=Object.keys(cats);
+  if(!_catPickerActiveCat||!names.includes(_catPickerActiveCat))_catPickerActiveCat=names[0];
+  const subs=cats[_catPickerActiveCat]||[];
+  const curSub=window[_catPicker.subVar];
+  const html=`<div class="modal-bg" onclick="closePicker()" style="align-items:center;z-index:260"><div class="modal" style="max-width:480px;padding:0;border-radius:20px;max-height:80vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
+    <div class="flex-b" style="padding:16px 16px 10px"><span class="fz14 fw7">Category</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="closePicker()">&#10005;</button></div>
+    <div style="display:flex;flex:1;min-height:50vh;overflow:hidden;border-top:1px solid var(--border)">
+      <div style="flex:1;overflow-y:auto;border-right:1px solid var(--border)">${names.map(c=>`<div class="picker-list-row ${c===_catPickerActiveCat?"sel":""}" style="color:${c===_catPickerActiveCat?clr(c):"var(--text)"};background:${c===_catPickerActiveCat?clr(c)+"1a":"transparent"}" onclick="selectPickerCat('${esc(c)}')">${esc(c)}</div>`).join("")}</div>
+      <div style="flex:1;overflow-y:auto">${subs.length?subs.map(s=>`<div class="picker-list-row ${s===curSub&&_catPickerActiveCat===window[_catPicker.catVar]?"sel":""}" onclick="pickCatSub('${esc(s)}')">${esc(s)}</div>`).join(""):`<div class="picker-list-row muted" onclick="pickCatSub('')">No subcategory</div>`}
+      ${subs.length?`<div class="picker-list-row muted" onclick="pickCatSub('')">&#8212; Just "${esc(_catPickerActiveCat)}" &#8212;</div>`:""}
+      </div>
+    </div>
+  </div></div>`;
+  let ov=document.getElementById("pickerOverlay");if(!ov){ov=document.createElement("div");ov.id="pickerOverlay";document.body.appendChild(ov);}
+  ov.innerHTML=html;
+}
+function selectPickerCat(c){_catPickerActiveCat=c;renderCatPicker();}
+function pickCatSub(sub){
+  const{catVar,subVar,labelId}=_catPicker;
+  window[catVar]=_catPickerActiveCat;window[subVar]=sub;
+  const lbl=$(labelId);if(lbl)lbl.textContent=sub?_catPickerActiveCat+" / "+sub:_catPickerActiveCat;
+  closePicker();
+}
 const $=id=>document.getElementById(id);
 
 // ── PERSISTENCE ──
@@ -719,7 +855,7 @@ function confirmBankAlert(id){
   showModal("addtx");
   window._bankAlertId=id;
   setTimeout(()=>{
-    if($("txAmt"))$("txAmt").value=a.amount;
+    setAmountValue("txAmt",a.amount);
     if($("txDesc"))$("txDesc").value=(a.text||"").slice(0,60);
     setTT(a.type==="income"?"income":"expense");
   },30);
@@ -838,70 +974,99 @@ function showModal(type,id){
   const EC=getEC(),IC=getIC();
 
   if(type==="edit"&&id){const t=txns.find(x=>x.id===id);if(t&&t.type==="transfer"){
+    window._tfFrom=t.fromAccountId;window._tfTo=t.toAccountId;
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">&#8646; Edit Transfer</span><div class="flex g6"><button class="btn btn-sm btn-rd" onclick="deleteTx('${t.id}');showModal('close')">&#128465;</button><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div></div>
     <div style="display:grid;gap:12px">
       <div><span class="edit-label">Date</span><input class="inp" type="date" id="tfDate" value="${t.date}"></div>
       <div><span class="edit-label">Description</span><input class="inp" id="tfDesc" value="${esc(t.description)}" placeholder="e.g. Move to savings"></div>
-      <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><input class="inp" type="number" id="tfAmt" value="${t.amount}" inputmode="numeric"></div>
-      <div><span class="edit-label">From Account</span><select class="inp" id="tfFrom">${accounts.map(a=>`<option value="${esc(a.id)}" ${a.id===t.fromAccountId?"selected":""}>${esc(a.name)}</option>`).join("")}</select></div>
-      <div><span class="edit-label">To Account</span><select class="inp" id="tfTo">${accounts.map(a=>`<option value="${esc(a.id)}" ${a.id===t.toAccountId?"selected":""}>${esc(a.name)}</option>`).join("")}</select></div>
+      <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="tfAmt" value="${t.amount.toLocaleString("en-US",{maximumFractionDigits:2})}" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('tfAmt')" title="Calculator">&#129518;</button></div></div>
+      <div><span class="edit-label">From Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_tfFrom','tfFromLabel')"><span id="tfFromLabel"></span><span class="muted">&#8250;</span></button></div>
+      <div><span class="edit-label">To Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_tfTo','tfToLabel')"><span id="tfToLabel"></span><span class="muted">&#8250;</span></button></div>
     </div>
-    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="saveTransfer('${t.id}')">&#10003; Save</button></div></div>`;return;}}
+    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="saveTransfer('${t.id}')">&#10003; Save</button></div></div>`;
+    $("tfFromLabel").textContent=accName(t.fromAccountId);$("tfToLabel").textContent=accName(t.toAccountId);
+    return;}}
 
-  if(type==="edit"){const t=txns.find(x=>x.id===id);if(!t)return;const cats=t.type==="income"?Object.keys(IC):Object.keys(EC);const subs=(t.type==="income"?IC:EC)[t.category]||[];
+  if(type==="edit"){const t=txns.find(x=>x.id===id);if(!t)return;
+    window._eType=t.type;window._eCat=t.category;window._eSub=t.subcategory||"";window._eAcc=t.accountId;
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Edit Transaction</span><div class="flex g6"><button class="btn btn-sm btn-rd" onclick="deleteTx('${t.id}');showModal('close')">&#128465;</button><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div></div>
     <div style="display:grid;gap:12px"><div><span class="edit-label">Type</span><div class="flex g4"><button class="btn w100" id="eExp" style="border:1px solid ${t.type==="expense"?"var(--red)":"var(--border)"};background:${t.type==="expense"?"rgba(239,68,68,.1)":"transparent"};color:${t.type==="expense"?"var(--red)":"var(--muted)"};padding:11px" onclick="eSetType('expense')">Expense</button><button class="btn w100" id="eInc" style="border:1px solid ${t.type==="income"?"var(--green)":"var(--border)"};background:${t.type==="income"?"rgba(34,197,94,.1)":"transparent"};color:${t.type==="income"?"var(--green)":"var(--muted)"};padding:11px" onclick="eSetType('income')">Income</button></div></div>
     <div><span class="edit-label">Date</span><input class="inp" type="date" id="eDate" value="${t.date}"></div>
     <div><span class="edit-label">Description</span><input class="inp" id="eDesc" value="${esc(t.description)}"></div>
-    <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><input class="inp" type="number" id="eAmt" value="${t.amount}" inputmode="numeric"></div>
-    <div><span class="edit-label">Category</span><select class="inp" id="eCat" onchange="eUpdSub()">${cats.map(c=>`<option value="${esc(c)}" ${c===t.category?"selected":""}>${esc(c)}</option>`).join("")}</select></div>
-    <div><span class="edit-label">Subcategory</span><select class="inp" id="eSub"><option value="">&#8212; None &#8212;</option>${subs.map(s=>`<option value="${esc(s)}" ${s===t.subcategory?"selected":""}>${esc(s)}</option>`).join("")}</select></div>
-    <div><span class="edit-label">Account</span><select class="inp" id="eAcc">${accounts.map(a=>`<option value="${esc(a.id)}" ${a.id===t.accountId?"selected":""}>${esc(a.name)}</option>`).join("")}</select></div></div>
-    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="saveTx('${t.id}')">&#10003; Save</button></div></div>`;window._eType=t.type;}
+    <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="eAmt" value="${t.amount.toLocaleString("en-US",{maximumFractionDigits:2})}" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('eAmt')" title="Calculator">&#129518;</button></div></div>
+    <div><span class="edit-label">Category</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openCatPicker('_eType','_eCat','_eSub','eCatLabel')"><span id="eCatLabel"></span><span class="muted">&#8250;</span></button></div>
+    <div><span class="edit-label">Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_eAcc','eAccLabel')"><span id="eAccLabel"></span><span class="muted">&#8250;</span></button></div></div>
+    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="saveTx('${t.id}')">&#10003; Save</button></div></div>`;
+    $("eCatLabel").textContent=window._eSub?window._eCat+" / "+window._eSub:window._eCat;
+    $("eAccLabel").textContent=accName(t.accountId);
+  }
 
   if(type==="addtx"){
+    const EC0=getEC();const firstCat=Object.keys(EC0)[0]||"";
+    window._txT="expense";window._txCat=firstCat;window._txSub=(EC0[firstCat]||[])[0]||"";window._txAcc=accounts[0]?.id||"";
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Add Transaction</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div>
     <div class="flex g4 mb14"><button class="btn w100" id="typeExp" style="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red);padding:11px" onclick="setTT('expense')">Expense</button><button class="btn w100" id="typeInc" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="setTT('income')">Income</button><button class="btn w100" id="typeTrf" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="showModal('transfer')">&#8646; Transfer</button></div>
     <div style="display:grid;gap:12px">
       <div><span class="edit-label">Date</span><input class="inp" type="date" id="txDate" value="${new Date().toISOString().split("T")[0]}"></div>
       <div><span class="edit-label">Description</span><input class="inp" id="txDesc" placeholder="e.g. Grocery run"></div>
-      <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><input class="inp" type="number" id="txAmt" placeholder="0.00" inputmode="numeric"></div>
-      <div><span class="edit-label">Category</span><select class="inp" id="txCat" onchange="updSub()">${Object.keys(EC).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select></div>
-      <div><span class="edit-label">Subcategory</span><select class="inp" id="txSub"><option value="">&#8212; Subcategory &#8212;</option>${(EC[Object.keys(EC)[0]]||[]).map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select></div>
-      <div><span class="edit-label">Account</span><select class="inp" id="txAcc">${accounts.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("")}</select></div>
+      <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="txAmt" placeholder="0.00" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('txAmt')" title="Calculator">&#129518;</button></div></div>
+      <div><span class="edit-label">Category</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openCatPicker('_txT','_txCat','_txSub','txCatLabel')"><span id="txCatLabel"></span><span class="muted">&#8250;</span></button></div>
+      <div><span class="edit-label">Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_txAcc','txAccLabel')"><span id="txAccLabel"></span><span class="muted">&#8250;</span></button></div>
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px">
         <div class="flex-b mb6"><span class="fz12 fw6">&#128257; Make Recurring</span><label class="toggle"><input type="checkbox" id="txRec" onchange="toggleRecUI(this.checked)"><span class="toggle-slider"></span></label></div>
         <div id="recUI" style="display:none"><select class="inp" id="txFreq" style="margin-top:8px"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly" selected>Monthly</option><option value="yearly">Yearly</option></select></div>
       </div>
     </div>
-    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="addTx()">+ Add Transaction</button></div></div>`;window._txT="expense";}
+    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="addTx()">+ Add Transaction</button></div></div>`;
+    $("txCatLabel").textContent=window._txSub?firstCat+" / "+window._txSub:firstCat;
+    $("txAccLabel").textContent=accName(window._txAcc);
+  }
 
   if(type==="transfer"){
     if(accounts.length<2){mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb12"><span class="fz14 fw7">&#8646; Transfer</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div><div class="fz12 muted tac" style="padding:20px 0">Add a second account first to transfer between accounts.</div></div></div>`;return;}
+    window._tfFrom=accounts[0]?.id;window._tfTo=accounts[1]?.id||accounts[0]?.id;
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">&#8646; Transfer Between Accounts</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div>
     <div style="display:grid;gap:12px">
       <div><span class="edit-label">Date</span><input class="inp" type="date" id="tfDate" value="${new Date().toISOString().split("T")[0]}"></div>
       <div><span class="edit-label">Description (optional)</span><input class="inp" id="tfDesc" placeholder="e.g. Move to savings"></div>
-      <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><input class="inp" type="number" id="tfAmt" placeholder="0.00" inputmode="numeric"></div>
-      <div><span class="edit-label">From Account</span><select class="inp" id="tfFrom">${accounts.map((a,i)=>`<option value="${esc(a.id)}" ${i===0?"selected":""}>${esc(a.name)}</option>`).join("")}</select></div>
-      <div><span class="edit-label">To Account</span><select class="inp" id="tfTo">${accounts.map((a,i)=>`<option value="${esc(a.id)}" ${i===1?"selected":""}>${esc(a.name)}</option>`).join("")}</select></div>
+      <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="tfAmt" placeholder="0.00" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('tfAmt')" title="Calculator">&#129518;</button></div></div>
+      <div><span class="edit-label">From Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_tfFrom','tfFromLabel')"><span id="tfFromLabel"></span><span class="muted">&#8250;</span></button></div>
+      <div><span class="edit-label">To Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_tfTo','tfToLabel')"><span id="tfToLabel"></span><span class="muted">&#8250;</span></button></div>
     </div>
-    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="addTransfer()">&#8646; Transfer</button></div></div>`;}
+    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="addTransfer()">&#8646; Transfer</button></div></div>`;
+    $("tfFromLabel").textContent=accName(window._tfFrom);$("tfToLabel").textContent=accName(window._tfTo);
+  }
 
   if(type==="upload"){
-    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb12"><span class="fz14 fw7">Upload Statement</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div><div class="mb8"><span class="edit-label">Account</span><select class="inp" id="uploadAcc">${accounts.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("")}</select></div><div class="drop-zone" id="dz" onclick="$('fi').click()"><div style="font-size:28px;margin-bottom:6px">&#128196;</div><div class="fz12 fw6">Tap to select CSV file</div><div class="fz10 muted mt4">Bank statement in CSV format</div><input type="file" id="fi" accept=".csv,.tsv,.txt" style="display:none" onchange="handleFile(this.files[0])"></div><div id="uMsg"></div><div id="uPrev"></div><div id="uAct"></div></div></div>`;
+    window._uploadAcc=accounts[0]?.id||"cash";
+    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb12"><span class="fz14 fw7">Upload Statement</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div><div class="mb8"><span class="edit-label">Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_uploadAcc','uploadAccLabel')"><span id="uploadAccLabel"></span><span class="muted">&#8250;</span></button></div><div class="drop-zone" id="dz" onclick="$('fi').click()"><div style="font-size:28px;margin-bottom:6px">&#128196;</div><div class="fz12 fw6">Tap to select CSV file</div><div class="fz10 muted mt4">Bank statement in CSV format</div><input type="file" id="fi" accept=".csv,.tsv,.txt" style="display:none" onchange="handleFile(this.files[0])"></div><div id="uMsg"></div><div id="uPrev"></div><div id="uAct"></div></div></div>`;
+    $("uploadAccLabel").textContent=accName(window._uploadAcc);
     const dz=$("dz");dz.ondragover=e=>{e.preventDefault();dz.classList.add("over");};dz.ondragleave=()=>dz.classList.remove("over");dz.ondrop=e=>{e.preventDefault();dz.classList.remove("over");handleFile(e.dataTransfer.files[0]);};}
 }
 
 function toggleRecUI(on){const ui=$("recUI");if(ui)ui.style.display=on?"block":"none";}
-function eUpdSub(){const c=$("eCat")?.value;const EC=getEC(),IC=getIC();const s=(window._eType==="income"?IC:EC)[c]||[];$("eSub").innerHTML=`<option value="">&#8212; None &#8212;</option>${s.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("")}`;}
-function eSetType(t){window._eType=t;const EC=getEC(),IC=getIC();const e=$("eExp"),i=$("eInc");if(t==="expense"){e.style.cssText="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red)";i.style.cssText="border:1px solid var(--border);background:transparent;color:var(--muted)";$("eCat").innerHTML=Object.keys(EC).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");}else{i.style.cssText="border:1px solid var(--green);background:rgba(34,197,94,.1);color:var(--green)";e.style.cssText="border:1px solid var(--border);background:transparent;color:var(--muted)";$("eCat").innerHTML=Object.keys(IC).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");}eUpdSub();}
-function saveTx(id){const t=txns.find(x=>x.id===id);if(!t)return;const a=parseFloat($("eAmt")?.value);if(!a)return alert("Enter amount");t.date=$("eDate").value;t.description=$("eDesc").value;t.amount=a;t.type=window._eType||t.type;t.category=$("eCat").value;t.subcategory=$("eSub").value;t.accountId=$("eAcc").value;save();showModal("close");render();}
-function updSub(){const c=$("txCat")?.value;const EC=getEC(),IC=getIC();const s=(window._txT==="income"?IC:EC)[c]||[];$("txSub").innerHTML=`<option value="">&#8212; Subcategory &#8212;</option>${s.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("")}`;}
-function setTT(t){window._txT=t;const EC=getEC(),IC=getIC();const e=$("typeExp"),i=$("typeInc");if(t==="expense"){e.style.cssText="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red)";i.style.cssText="border:1px solid var(--border);color:var(--muted)";$("txCat").innerHTML=Object.keys(EC).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");}else{i.style.cssText="border:1px solid var(--green);background:rgba(34,197,94,.1);color:var(--green)";e.style.cssText="border:1px solid var(--border);color:var(--muted)";$("txCat").innerHTML=Object.keys(IC).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");}updSub();}
+function eSetType(t){
+  window._eType=t;
+  const EC=getEC(),IC=getIC();const cats=t==="income"?IC:EC;const firstCat=Object.keys(cats)[0]||"";
+  window._eCat=firstCat;window._eSub=(cats[firstCat]||[])[0]||"";
+  const lbl=$("eCatLabel");if(lbl)lbl.textContent=window._eSub?firstCat+" / "+window._eSub:firstCat;
+  const e=$("eExp"),i=$("eInc");
+  if(t==="expense"){e.style.cssText="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red)";i.style.cssText="border:1px solid var(--border);background:transparent;color:var(--muted)";}
+  else{i.style.cssText="border:1px solid var(--green);background:rgba(34,197,94,.1);color:var(--green)";e.style.cssText="border:1px solid var(--border);background:transparent;color:var(--muted)";}
+}
+function saveTx(id){const t=txns.find(x=>x.id===id);if(!t)return;const a=parseAmount($("eAmt")?.value);if(!a)return alert("Enter amount");t.date=$("eDate").value;t.description=$("eDesc").value;t.amount=a;t.type=window._eType||t.type;t.category=window._eCat;t.subcategory=window._eSub||"";t.accountId=window._eAcc;save();showModal("close");render();}
+function setTT(t){
+  window._txT=t;
+  const EC=getEC(),IC=getIC();const cats=t==="income"?IC:EC;const firstCat=Object.keys(cats)[0]||"";
+  window._txCat=firstCat;window._txSub=(cats[firstCat]||[])[0]||"";
+  const lbl=$("txCatLabel");if(lbl)lbl.textContent=window._txSub?firstCat+" / "+window._txSub:firstCat;
+  const e=$("typeExp"),i=$("typeInc");
+  if(t==="expense"){e.style.cssText="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red)";i.style.cssText="border:1px solid var(--border);color:var(--muted)";}
+  else{i.style.cssText="border:1px solid var(--green);background:rgba(34,197,94,.1);color:var(--green)";e.style.cssText="border:1px solid var(--border);color:var(--muted)";}
+}
 function addTx(){
-  const a=parseFloat($("txAmt")?.value);if(!a)return alert("Enter an amount");
-  const newTx={id:uid(),date:$("txDate").value,description:$("txDesc").value,amount:a,type:window._txT||"expense",category:$("txCat").value,subcategory:$("txSub").value,accountId:$("txAcc").value,source:"Manual"};
+  const a=parseAmount($("txAmt")?.value);if(!a)return alert("Enter an amount");
+  const newTx={id:uid(),date:$("txDate").value,description:$("txDesc").value,amount:a,type:window._txT||"expense",category:window._txCat,subcategory:window._txSub||"",accountId:window._txAcc,source:"Manual"};
   txns.push(newTx);
   // Feature 2: recurring
   if($("txRec")?.checked){
@@ -918,8 +1083,8 @@ function addTx(){
 
 // ── ACCOUNT TRANSFERS ──
 function addTransfer(){
-  const a=parseFloat($("tfAmt")?.value);if(!a)return alert("Enter an amount");
-  const from=$("tfFrom")?.value,to=$("tfTo")?.value;
+  const a=parseAmount($("tfAmt")?.value);if(!a)return alert("Enter an amount");
+  const from=window._tfFrom,to=window._tfTo;
   if(!from||!to)return alert("Select both accounts");
   if(from===to)return alert("From and To accounts must be different");
   const t={id:uid(),type:"transfer",date:$("tfDate").value,description:$("tfDesc").value,amount:a,fromAccountId:from,toAccountId:to,source:"Manual"};
@@ -929,8 +1094,8 @@ function addTransfer(){
 }
 function saveTransfer(id){
   const t=txns.find(x=>x.id===id);if(!t)return;
-  const a=parseFloat($("tfAmt")?.value);if(!a)return alert("Enter an amount");
-  const from=$("tfFrom")?.value,to=$("tfTo")?.value;
+  const a=parseAmount($("tfAmt")?.value);if(!a)return alert("Enter an amount");
+  const from=window._tfFrom,to=window._tfTo;
   if(!from||!to)return alert("Select both accounts");
   if(from===to)return alert("From and To accounts must be different");
   t.date=$("tfDate").value;t.description=$("tfDesc").value;t.amount=a;t.fromAccountId=from;t.toAccountId=to;
@@ -939,16 +1104,16 @@ function saveTransfer(id){
 
 function parseCSV(text){const lines=text.split(/\r?\n/).filter(l=>l.trim());if(lines.length<2)return[];const sep=lines[0].includes("\t")?"\t":",";const pr=l=>{const r=[];let c="",q=false;for(let i=0;i<l.length;i++){const ch=l[i];if(ch==='"')q=!q;else if(ch===sep&&!q){r.push(c.trim());c="";}else c+=ch;}r.push(c.trim());return r;};const h=pr(lines[0]).map(x=>x.toLowerCase().replace(/['"]/g,""));return lines.slice(1).map(l=>{const v=pr(l);if(v.length<2)return null;const o={};h.forEach((k,j)=>{o[k]=v[j]||""});return o;}).filter(Boolean);}
 function detectTx(rows,accountId){if(!rows.length)return[];const keys=Object.keys(rows[0]),hdr=keys.map(k=>k.toLowerCase());let dC=-1,dsC=-1,drC=-1,crC=-1,amC=-1;hdr.forEach((h,i)=>{if(dC<0&&/date|trans.*date|value.*date|posting/i.test(h))dC=i;if(dsC<0&&/desc|narr|detail|particular|remark|reference/i.test(h))dsC=i;if(drC<0&&/debit|withdrawal|dr|outflow/i.test(h))drC=i;if(crC<0&&/credit|deposit|cr|inflow/i.test(h))crC=i;if(amC<0&&/^amount$|^value$/i.test(h))amC=i;});if(dsC<0)dsC=keys.findIndex((_,i)=>i!==dC&&i!==drC&&i!==crC&&i!==amC);const txs=[];rows.forEach(row=>{const vals=keys.map(k=>row[k]),desc=dsC>=0?String(vals[dsC]||"").trim():"";if(!desc||desc.length<2)return;let amount=0,type="expense";if(drC>=0&&crC>=0){const dr=parseFloat(String(vals[drC]||"0").replace(/[^0-9.-]/g,""))||0,cr=parseFloat(String(vals[crC]||"0").replace(/[^0-9.-]/g,""))||0;if(cr>0){amount=cr;type="income";}else if(dr>0){amount=dr;}else return;}else if(amC>=0){amount=parseFloat(String(vals[amC]||"0").replace(/[^0-9.-]/g,""))||0;if(amount>0)type="income";else{amount=Math.abs(amount);}}else return;if(!amount)return;let date=new Date().toISOString().split("T")[0];const ds=dC>=0?String(vals[dC]||""):"";try{const p=new Date(ds);if(!isNaN(p.getTime()))date=p.toISOString().split("T")[0];}catch{}const d2=desc.toLowerCase();let cat="Other",sub="";if(/salary|wage|payroll/.test(d2)){cat="Salary";type="income";}else if(/shoprite|spar|market|grocery|provision|supermarket/.test(d2)){cat="Food & Dining";sub="Groceries";}else if(/uber|bolt|taxi|fuel|petrol|transport|fare|keke/.test(d2)){cat="Transportation";sub="Ride-hailing";}else if(/phcn|ekedc|ikedc|electric|nepa/.test(d2)){cat="Housing";sub="Electricity";}else if(/airtime|mtn|glo|airtel|9mobile|data|recharge|vtu/.test(d2)){cat="Communication";sub="Airtime";}else if(/restaurant|food|chicken|pizza|eat|bukka|suya/.test(d2)){cat="Food & Dining";sub="Restaurants";}else if(/charge|fee|stamp|vat|sms|maintenance/.test(d2)){cat="Finance";sub="Bank Charges";}else if(/school|tuition|course|exam|book/.test(d2)){cat="Education";}else if(/hospital|clinic|pharm|drug|health/.test(d2)){cat="Health";}else if(/rent|house|estate/.test(d2)){cat="Housing";sub="Rent";}txs.push({id:uid(),date,description:desc,amount,type,category:cat,subcategory:sub,accountId:accountId||"cash",source:"Upload"});});return txs;}
-function handleFile(file){if(!file)return;const accId=$("uploadAcc")?.value||"cash";const acc=accounts.find(a=>a.id===accId);file.text().then(text=>{const rows=parseCSV(text);const parsed=detectTx(rows,accId);if(!parsed.length){$("uMsg").innerHTML='<div class="msg msg-err">&#9888; No transactions found. Check columns: Date, Description, Debit/Credit.</div>';return;}pendingTx=parsed;$("uMsg").innerHTML=`<div class="msg msg-ok">&#10003; ${parsed.length} transactions from ${esc(acc?.name||"account")}</div>`;$("uPrev").innerHTML=`<table class="preview-tbl mt8"><tr><th>Date</th><th>Desc</th><th>Cat</th><th>Amt</th></tr>${parsed.slice(0,5).map(t=>`<tr><td>${t.date}</td><td class="ellip" style="max-width:90px">${esc(t.description)}</td><td><span class="cat-badge" style="background:${clr(t.category)}22;color:${clr(t.category)}">${esc(t.category)}</span></td><td class="${t.type==="income"?"green":"red"} fw6">${fmt(t.amount)}</td></tr>`).join("")}</table>`;$("uAct").innerHTML=`<button class="btn btn-p w100 mt8" style="justify-content:center;padding:11px" onclick="addPend()">&#10003; Add ${parsed.length} Transactions</button>`;}).catch(e=>{$("uMsg").innerHTML=`<div class="msg msg-err">&#9888; ${esc(e.message)}</div>`;});}
+function handleFile(file){if(!file)return;const accId=window._uploadAcc||"cash";const acc=accounts.find(a=>a.id===accId);file.text().then(text=>{const rows=parseCSV(text);const parsed=detectTx(rows,accId);if(!parsed.length){$("uMsg").innerHTML='<div class="msg msg-err">&#9888; No transactions found. Check columns: Date, Description, Debit/Credit.</div>';return;}pendingTx=parsed;$("uMsg").innerHTML=`<div class="msg msg-ok">&#10003; ${parsed.length} transactions from ${esc(acc?.name||"account")}</div>`;$("uPrev").innerHTML=`<table class="preview-tbl mt8"><tr><th>Date</th><th>Desc</th><th>Cat</th><th>Amt</th></tr>${parsed.slice(0,5).map(t=>`<tr><td>${t.date}</td><td class="ellip" style="max-width:90px">${esc(t.description)}</td><td><span class="cat-badge" style="background:${clr(t.category)}22;color:${clr(t.category)}">${esc(t.category)}</span></td><td class="${t.type==="income"?"green":"red"} fw6">${fmt(t.amount)}</td></tr>`).join("")}</table>`;$("uAct").innerHTML=`<button class="btn btn-p w100 mt8" style="justify-content:center;padding:11px" onclick="addPend()">&#10003; Add ${parsed.length} Transactions</button>`;}).catch(e=>{$("uMsg").innerHTML=`<div class="msg msg-err">&#9888; ${esc(e.message)}</div>`;});}
 function addPend(){const n=pendingTx.length;txns=[...txns,...pendingTx];pendingTx=[];save();$("uMsg").innerHTML=`<div class="msg msg-ok">&#10003; ${n} transactions added!</div>`;$("uPrev").innerHTML="";$("uAct").innerHTML=`<button class="btn btn-p w100 mt8" style="justify-content:center" onclick="showModal('close');goTo('transactions')">View Transactions</button>`;}
 
 function rTx(f,inc,exp){
   const sorted=[...f].sort((a,b)=>b.date.localeCompare(a.date));const groups={};sorted.forEach(t=>{(groups[t.date]=groups[t.date]||[]).push(t);});const dates=Object.keys(groups).sort((a,b)=>b.localeCompare(a));
   $("main").innerHTML=ppHTML()+`<div class="flex g6 mb8 flex-w"><div style="position:relative;flex:1 1 120px"><span style="position:absolute;left:8px;top:10px;font-size:12px" class="muted">&#128269;</span><input class="inp" id="si" style="padding-left:28px;font-size:12px" placeholder="Search..." value="${esc(search)}" oninput="doS(this.value)"></div><select class="inp" style="width:90px;font-size:12px" onchange="fType=this.value;render()"><option value="all" ${fType==="all"?"selected":""}>All</option><option value="income" ${fType==="income"?"selected":""}>Income</option><option value="expense" ${fType==="expense"?"selected":""}>Expense</option><option value="transfer" ${fType==="transfer"?"selected":""}>Transfer</option></select><select class="inp" style="width:130px;font-size:12px" onchange="fCat=this.value;render()"><option value="all">All Categories</option>${allCats().map(c=>`<option value="${esc(c)}" ${fCat===c?"selected":""}>${esc(c)}</option>`).join("")}</select><select class="inp" style="width:100px;font-size:12px" onchange="fAcc=this.value;render()"><option value="all">All Accts</option>${accounts.map(a=>`<option value="${esc(a.id)}" ${fAcc===a.id?"selected":""}>${esc(a.name)}</option>`).join("")}</select></div>
   <div class="flex-b fz10 muted mb8"><span>${f.length} transactions</span><div class="flex g6"><span>In: <span class="green">${fmtK(inc)}</span> &middot; Out: <span class="red">${fmtK(exp)}</span></span><button class="btn btn-g btn-sm" onclick="exportCSV()">&#128196; CSV</button></div></div>
-  <div class="card" style="padding:0;overflow:hidden">${dates.length?dates.map(d=>`<div class="date-hdr">${fmtD(d)}</div>${groups[d].map(t=>{
+  <div class="card" style="padding:0;overflow:hidden">${dates.length?dates.map(d=>{const dayInc=groups[d].filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);const dayExp=groups[d].filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);return`<div class="date-hdr flex-b"><span>${fmtD(d)}</span><span class="date-hdr-tot"><span class="green">${fmtK(dayInc)}</span><span class="red">${fmtK(dayExp)}</span></span></div>${groups[d].map(t=>{
     if(t.type==="transfer")return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:rgba(59,130,246,.1);color:var(--accent)">&#8646;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Transfer")}</div><div class="fz9 muted">${esc(accName(t.fromAccountId))} &#8594; ${esc(accName(t.toAccountId))}</div></div><span class="cat-badge" style="background:rgba(59,130,246,.15);color:var(--accent)">Transfer</span><div class="fz12 fw7 accent" style="min-width:58px;text-align:right">${fmt(t.amount)}</div></div>`;
-    const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}</div><div class="fz9 muted">${esc(acc?acc.name:"")} ${t.subcategory?"· "+esc(t.subcategory):""}</div></div><span class="cat-badge" style="background:${clr(t.category)}22;color:${clr(t.category)}">${esc(t.category)}</span><div class="fz12 fw7 ${t.type==="income"?"green":"red"}" style="min-width:58px;text-align:right">${t.type==="income"?"+":"-"}${fmt(t.amount)}</div></div>`;}).join("")}`).join(""):'<div class="muted fz12 tac" style="padding:40px">No transactions found</div>'}</div>`;
+    const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}</div><div class="fz9 muted">${esc(acc?acc.name:"")} ${t.subcategory?"· "+esc(t.subcategory):""}</div></div><span class="cat-badge" style="background:${clr(t.category)}22;color:${clr(t.category)}">${esc(t.category)}</span><div class="fz12 fw7 ${t.type==="income"?"green":"red"}" style="min-width:58px;text-align:right">${t.type==="income"?"+":"-"}${fmt(t.amount)}</div></div>`;}).join("")}`;}).join(""):'<div class="muted fz12 tac" style="padding:40px">No transactions found</div>'}</div>`;
   const si=$("si");if(si&&search){si.focus();si.setSelectionRange(search.length,search.length);}
 }
 function fmtD(d){const dt=new Date(d),td=new Date(),df=Math.floor((td-dt)/864e5);if(df===0)return"Today";if(df===1)return"Yesterday";return dt.toLocaleDateString("en-NG",{weekday:"short",day:"numeric",month:"short"});}
