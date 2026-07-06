@@ -97,6 +97,11 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
 .cat-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer}
 .sub-pill{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:500;background:var(--border);color:var(--muted);margin:2px}
 .sub-pill.sel{background:rgba(59,130,246,.2);color:var(--accent)}
+/* Category/subcategory reorder controls */
+.reorder-btns{display:flex;gap:2px}
+.reorder-btns button,.sub-move{background:none;border:1px solid var(--border);border-radius:5px;color:var(--muted);cursor:pointer;font-size:11px;width:22px;height:22px;flex-shrink:0}
+.reorder-btns button[disabled],.sub-move[disabled]{opacity:.3;pointer-events:none}
+.sub-row-item{display:flex;align-items:center;gap:4px;margin:2px 0}
 .cmp-toggle{cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:6px;padding:4px 9px;font-size:10px;font-weight:600;font-family:inherit;white-space:nowrap}
 .cmp-toggle.on{background:rgba(59,130,246,.15);border-color:var(--accent);color:var(--accent)}
 .mini-pick{padding:8px;background:var(--bg);border-radius:8px;border:1px solid var(--border)}
@@ -174,6 +179,14 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
 .calc-btn.op{background:var(--border);color:var(--accent)}
 /* Per-day income/expense subtotal on the Transactions date header */
 .date-hdr-tot{display:flex;gap:8px;font-weight:700;font-size:10.5px}
+/* Multi-select transactions */
+.sel-check{width:22px;height:22px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px}
+.sel-check.on{background:var(--accent);border-color:var(--accent)}
+.select-bar{position:fixed;left:0;right:0;bottom:56px;background:var(--surface2);border-top:1px solid var(--border);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;z-index:56;box-shadow:0 -2px 10px rgba(0,0,0,.3)}
+/* Home dashboard: reorderable sections */
+.home-sec{margin-bottom:12px;position:relative}
+.home-sec-ctrl{display:flex;gap:6px;justify-content:flex-end;margin-bottom:6px}
+.home-sec-ctrl .btn[disabled]{opacity:.35;pointer-events:none}
 @media(max-width:400px){.grid2{grid-template-columns:1fr 1fr}.stat-row{gap:6px}}
 </style>
 </head>
@@ -239,6 +252,11 @@ let editingCat=null; // category name currently open for rename in Categories ta
 let expandedBudget=null,expandedCatSet=null;
 let hiddenDefaultCats={expense:[],income:[]}; // default category names hidden after being renamed
 let bankAlertsEnabled=false; // Feature: auto-detect bank transactions from notifications
+let selectMode=false,selectedTxIds=new Set(); // Transactions multi-select for bulk edit
+let homeChartMode="week"; // Daily income/expense trend card: week or month view
+let homeLayout=["stats","chart","trend","insights","budget","recent"]; // Home section order
+let homeCustomize=false;
+let catOrder={expense:[],income:[]}; // custom display order for categories (falls back to natural order)
 
 function getEC(){const r={};Object.keys(DEF_EC).forEach(k=>{if(hiddenDefaultCats.expense.includes(k))return;r[k]=[...(userEC[k]||DEF_EC[k])];});Object.keys(userEC).forEach(k=>{if(!DEF_EC[k])r[k]=[...(userEC[k]||[])];});return r;}
 function getIC(){const r={};Object.keys(DEF_IC).forEach(k=>{if(hiddenDefaultCats.income.includes(k))return;r[k]=[...(userIC[k]||DEF_IC[k])];});Object.keys(userIC).forEach(k=>{if(!DEF_IC[k])r[k]=[...(userIC[k]||[])];});return r;}
@@ -259,9 +277,36 @@ function renameCategory(type,oldCat,newCat){
   if(isExpense)budgets.forEach(b=>{if(b.cat===oldCat)b.cat=newCat;});
   if(CAT_COLORS[oldCat]&&!CAT_COLORS[newCat])CAT_COLORS[newCat]=CAT_COLORS[oldCat];
   if(CAT_ICONS[oldCat]&&!CAT_ICONS[newCat])CAT_ICONS[newCat]=CAT_ICONS[oldCat];
+  const ordIdx=(catOrder[type]||[]).indexOf(oldCat);if(ordIdx>=0)catOrder[type][ordIdx]=newCat;
   editingCat=null;
   save();render();
   showToast("✏️ "+oldCat+" renamed to "+newCat,"green");
+}
+// ── CATEGORY / SUBCATEGORY REORDERING (display order only — editing is unaffected) ──
+function orderedCatNames(type){
+  const names=Object.keys(type==="income"?getIC():getEC());
+  const order=(catOrder[type]||[]).filter(n=>names.includes(n));
+  const rest=names.filter(n=>!order.includes(n));
+  return[...order,...rest];
+}
+function moveCat(type,name,dir){
+  const names=orderedCatNames(type);
+  const i=names.indexOf(name),j=i+dir;
+  if(i<0||j<0||j>=names.length)return;
+  [names[i],names[j]]=[names[j],names[i]];
+  catOrder[type]=names;
+  save();render();
+}
+function moveSub(type,cat,subName,dir){
+  const isExpense=type==="expense";
+  const DEF=isExpense?DEF_EC:DEF_IC;
+  const USER=isExpense?userEC:userIC;
+  if(!USER[cat])USER[cat]=[...(DEF[cat]||[])];
+  const arr=USER[cat];
+  const i=arr.indexOf(subName),j=i+dir;
+  if(i<0||j<0||j>=arr.length)return;
+  [arr[i],arr[j]]=[arr[j],arr[i]];
+  save();render();
 }
 function allEC(){return Object.keys(getEC());}
 function allIC(){return Object.keys(getIC());}
@@ -298,7 +343,8 @@ function openCalc(targetId){
   _calcTargetId=targetId;
   const cur=parseAmount($(targetId)?.value);
   _calcExpr=cur?String(cur):"";
-  renderCalc();
+  buildCalcDOM();
+  updateCalcDisplay();
 }
 function calcPress(k){
   if(k==="C"){_calcExpr="";}
@@ -310,7 +356,7 @@ function calcPress(k){
     if(/[+\-*/]/.test(k)&&/[+\-*/]$/.test(_calcExpr))_calcExpr=_calcExpr.slice(0,-1);
     _calcExpr+=k;
   }
-  renderCalc();
+  updateCalcDisplay();
 }
 function safeEval(expr){
   if(!expr||!/^[0-9+\-*/.() ]+$/.test(expr))return null;
@@ -322,12 +368,22 @@ function calcDone(){
   closeCalc();
 }
 function closeCalc(){const ov=document.getElementById("pickerOverlay");if(ov)ov.innerHTML="";}
-function renderCalc(){
+// Only the display text updates per keypress (not the whole overlay) — rebuilding the
+// whole modal on every digit was restarting its fade-in animation, causing a visible blink.
+function updateCalcDisplay(){
+  const disp=$("calcDisp");if(disp)disp.textContent=currency.symbol+(_calcExpr||"0");
   const resultPreview=/[+\-*/]$/.test(_calcExpr)||!_calcExpr?null:safeEval(_calcExpr);
+  const prev=$("calcPreview");
+  if(prev){
+    if(resultPreview!==null&&String(resultPreview)!==_calcExpr){prev.style.display="block";prev.textContent="= "+fmt(resultPreview);}
+    else{prev.style.display="none";}
+  }
+}
+function buildCalcDOM(){
   const html=`<div class="modal-bg" onclick="closeCalc()" style="z-index:260;align-items:center"><div class="modal" style="max-width:360px;border-radius:20px" onclick="event.stopPropagation()">
     <div class="flex-b mb8"><span class="fz13 fw7">Calculator</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="closeCalc()">&#10005;</button></div>
-    <div class="calc-display">${esc(currency.symbol)}${esc(_calcExpr||"0")}</div>
-    ${resultPreview!==null&&String(resultPreview)!==_calcExpr?`<div class="fz11 muted tar mb8" style="margin-top:-8px">= ${fmt(resultPreview)}</div>`:""}
+    <div class="calc-display" id="calcDisp"></div>
+    <div class="fz11 muted tar mb8" id="calcPreview" style="margin-top:-8px;display:none"></div>
     <div class="calc-grid">
       <button class="calc-btn" onclick="calcPress('7')">7</button><button class="calc-btn" onclick="calcPress('8')">8</button><button class="calc-btn" onclick="calcPress('9')">9</button><button class="calc-btn op" onclick="calcPress('/')">&#247;</button>
       <button class="calc-btn" onclick="calcPress('4')">4</button><button class="calc-btn" onclick="calcPress('5')">5</button><button class="calc-btn" onclick="calcPress('6')">6</button><button class="calc-btn op" onclick="calcPress('*')">&#215;</button>
@@ -374,7 +430,7 @@ function openCatPicker(typeVar,catVar,subVar,labelId){
 function renderCatPicker(){
   const type=window[_catPicker.typeVar];
   const cats=type==="income"?getIC():getEC();
-  const names=Object.keys(cats);
+  const names=orderedCatNames(type==="income"?"income":"expense");
   if(!_catPickerActiveCat||!names.includes(_catPickerActiveCat))_catPickerActiveCat=names[0];
   const subs=cats[_catPickerActiveCat]||[];
   const curSub=window[_catPicker.subVar];
@@ -413,6 +469,8 @@ function save(){
   localStorage.setItem("ffd_currency",currency.code);
   localStorage.setItem("ffd_hidecats",JSON.stringify(hiddenDefaultCats));
   localStorage.setItem("ffd_bankalerts",JSON.stringify(bankAlertsEnabled));
+  localStorage.setItem("ffd_homelayout",JSON.stringify(homeLayout));
+  localStorage.setItem("ffd_catorder",JSON.stringify(catOrder));
 }
 function load(){
   try{const t=localStorage.getItem("ffd_tx");if(t)txns=JSON.parse(t);}catch(e){}
@@ -427,6 +485,8 @@ function load(){
   try{const cc=localStorage.getItem("ffd_currency");if(cc){const found=CURRENCIES.find(c=>c.code===cc);if(found)currency=found;}}catch(e){}
   try{const hc=localStorage.getItem("ffd_hidecats");if(hc)hiddenDefaultCats=JSON.parse(hc);}catch(e){}
   try{const ba=localStorage.getItem("ffd_bankalerts");if(ba)bankAlertsEnabled=JSON.parse(ba);}catch(e){}
+  try{const hl=localStorage.getItem("ffd_homelayout");if(hl){const arr=JSON.parse(hl);const valid=["stats","chart","trend","insights","budget","recent"];if(Array.isArray(arr)&&arr.every(x=>valid.includes(x))&&arr.length===valid.length)homeLayout=arr;}}catch(e){}
+  try{const co=localStorage.getItem("ffd_catorder");if(co)catOrder=JSON.parse(co);}catch(e){}
   if(!accounts.length)accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];
   applyTheme();
   if(window.Android&&window.Android.setBankAlertsEnabled)window.Android.setBankAlertsEnabled(bankAlertsEnabled);
@@ -489,6 +549,39 @@ function render(){renderNav();if(settingsOpen){renderSettings();return;}const f=
 function needsOnboarding(){return !profile.name;}
 
 // ── FEATURE 5: INSIGHTS ──
+// ── HOME: daily income/expense trend chart (week or month view) ──
+function dailyTrendData(mode){
+  const days=mode==="week"?7:30;
+  const arr=[];
+  for(let i=days-1;i>=0;i--){
+    const d=new Date();d.setDate(d.getDate()-i);
+    const ds=d.toISOString().split("T")[0];
+    const dayTx=txns.filter(t=>t.date===ds);
+    arr.push({
+      label:mode==="week"?d.toLocaleDateString("en-NG",{weekday:"short"}).slice(0,2):String(d.getDate()),
+      inc:dayTx.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0),
+      exp:dayTx.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0)
+    });
+  }
+  return arr;
+}
+function dailyTrendSVG(mode){
+  const data=dailyTrendData(mode);
+  const w=300,h=104,padB=14,padT=6;
+  const max=Math.max(...data.map(d=>Math.max(d.inc,d.exp)),1);
+  const stepX=data.length>1?w/(data.length-1):w;
+  const yOf=v=>padT+(1-(v/max))*(h-padT-padB);
+  const pathFor=key=>data.map((d,i)=>`${i===0?"M":"L"}${(i*stepX).toFixed(1)},${yOf(d[key]).toFixed(1)}`).join(" ");
+  const labelEvery=mode==="week"?1:5;
+  const labels=data.map((d,i)=>i%labelEvery===0||i===data.length-1?`<text x="${(i*stepX).toFixed(1)}" y="${h+6}" font-size="8" text-anchor="middle" style="fill:var(--muted)">${esc(d.label)}</text>`:"").join("");
+  return`<svg viewBox="0 0 ${w} ${h+10}" style="width:100%;height:120px;overflow:visible">
+    <path d="${pathFor("inc")}" fill="none" style="stroke:var(--green)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="${pathFor("exp")}" fill="none" style="stroke:var(--red)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${labels}
+  </svg>`;
+}
+function setHomeChartMode(m){homeChartMode=m;render();}
+
 function buildInsights(f,inc,exp){
   const insights=[];
   const savRate=inc>0?((inc-exp)/inc*100):0;
@@ -499,7 +592,18 @@ function buildInsights(f,inc,exp){
   if(top&&exp>0)insights.push({icon:"&#128269;",color:"#3b82f6",text:`${top[0]} is your biggest expense at ${(top[1]/exp*100).toFixed(0)}% of total spend (${fmt(top[1])}).`});
   const overBuds=budgets.filter(b=>{const sp=f.filter(t=>t.type==="expense"&&t.category===b.cat).reduce((s,t)=>s+t.amount,0);return b.limit>0&&sp>b.limit;});
   if(overBuds.length)insights.push({icon:"&#9888;",color:"#ef4444",text:`Over budget in ${overBuds.length} categor${overBuds.length>1?"ies":"y"}: ${overBuds.map(b=>b.cat).join(", ")}.`});
-  return insights.slice(0,3);
+  const prevDate=new Date(pDate);
+  if(pMode==="week")prevDate.setDate(prevDate.getDate()-7);
+  else if(pMode==="month")prevDate.setMonth(prevDate.getMonth()-1);
+  else if(pMode==="quarter")prevDate.setMonth(prevDate.getMonth()-3);
+  else prevDate.setFullYear(prevDate.getFullYear()-1);
+  const prevRange=getRangeFor(pMode,prevDate);
+  const prevExp=txns.filter(t=>t.type==="expense"&&new Date(t.date)>=prevRange.start&&new Date(t.date)<=prevRange.end).reduce((s,t)=>s+t.amount,0);
+  if(prevExp>0&&exp>0){
+    const diffPct=(exp-prevExp)/prevExp*100;
+    if(Math.abs(diffPct)>=5)insights.push({icon:diffPct>0?"&#128200;":"&#128201;",color:diffPct>0?"#ef4444":"#22c55e",text:`Spending is ${Math.abs(diffPct).toFixed(0)}% ${diffPct>0?"higher":"lower"} than the previous period (${fmt(prevExp)} &#8594; ${fmt(exp)}).`});
+  }
+  return insights.slice(0,4);
 }
 
 // ── DASHBOARD ──
@@ -514,29 +618,48 @@ function rDash(f,inc,exp){
   const recent=[...f].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
   const insights=buildInsights(f,inc,exp);
   const savColor=savRate<0?"var(--red)":savRate<20?"var(--warn)":"var(--green)";
-  $("main").innerHTML=ppHTML()+`<div class="fz12 fw7 mb10">Hi, ${esc(profile.name.split(" ")[0])}! &#128075;</div>
-  <div class="stat-row">
-    <div class="stat"><div class="stat-label">Income</div><div class="stat-val green">${fmtK(inc)}</div></div>
-    <div class="stat"><div class="stat-label">Expenses</div><div class="stat-val red">${fmtK(exp)}</div></div>
-    <div class="stat"><div class="stat-label">Net</div><div class="stat-val" style="color:${net>=0?"var(--green)":"var(--red)"}">${fmtK(net)}</div></div>
-    <div class="stat" style="cursor:pointer" onclick="openSettings('accounts')"><div class="stat-label">Balance</div><div class="stat-val accent">${fmtK(tb)}</div></div>
-    <div class="stat"><div class="stat-label">Savings%</div><div class="stat-val" style="color:${savColor}">${savRate.toFixed(0)}%</div></div>
-    <div class="stat"><div class="stat-label">Budgets</div><div class="stat-val">${budgets.length}</div></div>
-  </div>
-  ${txns.length===0?`<div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#128179;</div><div class="fz13 fw6 mb4">No transactions yet</div><div class="fz11 muted mb12">Add your first transaction or upload a bank statement</div><div class="flex g8" style="justify-content:center"><button class="btn btn-p btn-sm" onclick="showModal('addtx')">+ Add</button><button class="btn btn-g btn-sm" onclick="showModal('upload')">&#8679; Upload CSV</button></div></div>`:`
-  <div class="grid2 mb12">
-    <div class="card" style="margin:0"><div class="fz11 fw7 mb6">6-Month Trend</div><div class="chart-row">${trend.map(t=>`<div class="chart-col"><div class="chart-pair"><div class="chart-bar" style="background:var(--green);height:${Math.max((t.inc/tMax)*100,.5)}%"></div><div class="chart-bar" style="background:var(--red);height:${Math.max((t.exp/tMax)*100,.5)}%"></div></div><div class="chart-lbl">${t.month}</div></div>`).join("")}</div><div class="flex g8 mt6" style="justify-content:center"><span class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>Inc</span><span class="legend-item"><span class="legend-dot" style="background:var(--red)"></span>Exp</span></div></div>
-    <div class="card" style="margin:0"><div class="fz11 fw7 mb6">Top Spending</div>${catArr.slice(0,5).map(([n,v])=>`<div class="cat-row"><div class="cat-dot" style="background:${clr(n)}"></div><span class="fz10 muted ellip" style="flex:1">${esc(n)}</span><span class="fz10 fw6">${fmtK(v)}</span><span class="fz9 muted tar" style="width:26px">${tot?(v/tot*100).toFixed(0):0}%</span></div>`).join("")||'<div class="muted fz11 tac" style="padding:12px">No data</div>'}</div>
-  </div>
-  ${insights.length?`<div class="card mb12"><div class="fz11 fw7 mb8">&#128161; Insights</div>${insights.map(i=>`<div class="insight-row"><div class="insight-icon" style="background:${i.color}20">${i.icon}</div><div class="fz11" style="flex:1">${i.text}</div></div>`).join("")}</div>`:""}
-  ${budH?`<div class="card"><div class="flex-b mb8"><span class="fz12 fw7">Budget</span><button class="btn btn-g btn-sm" onclick="goTo('budgets')">Details</button></div>${budH}</div>`:""}
-  <div class="card"><div class="flex-b mb8"><span class="fz12 fw7">Recent</span><button class="btn btn-g btn-sm" onclick="goTo('transactions')">All</button></div>${recent.map(txRow).join("")}</div>`}
+
+  if(txns.length===0){
+    $("main").innerHTML=ppHTML()+`<div class="fz12 fw7 mb10">Hi, ${esc(profile.name.split(" ")[0])}! &#128075;</div><div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#128179;</div><div class="fz13 fw6 mb4">No transactions yet</div><div class="fz11 muted mb12">Add your first transaction or upload a bank statement</div><div class="flex g8" style="justify-content:center"><button class="btn btn-p btn-sm" onclick="showModal('addtx')">+ Add</button><button class="btn btn-g btn-sm" onclick="showModal('upload')">&#8679; Upload CSV</button></div></div>`;
+    return;
+  }
+
+  const wrap=(key,inner)=>`<div class="home-sec">${homeCustomize?`<div class="home-sec-ctrl"><button class="btn btn-sm btn-g" onclick="moveHomeSection('${key}',-1)" ${homeLayout.indexOf(key)===0?"disabled":""}>&#8593;</button><button class="btn btn-sm btn-g" onclick="moveHomeSection('${key}',1)" ${homeLayout.indexOf(key)===homeLayout.length-1?"disabled":""}>&#8595;</button></div>`:""}${inner}</div>`;
+
+  const sections={
+    stats:`<div class="stat-row">
+      <div class="stat"><div class="stat-label">Income</div><div class="stat-val green">${fmtK(inc)}</div></div>
+      <div class="stat"><div class="stat-label">Expenses</div><div class="stat-val red">${fmtK(exp)}</div></div>
+      <div class="stat"><div class="stat-label">Net</div><div class="stat-val" style="color:${net>=0?"var(--green)":"var(--red)"}">${fmtK(net)}</div></div>
+      <div class="stat" style="cursor:pointer" onclick="openSettings('accounts')"><div class="stat-label">Balance</div><div class="stat-val accent">${fmtK(tb)}</div></div>
+      <div class="stat"><div class="stat-label">Savings%</div><div class="stat-val" style="color:${savColor}">${savRate.toFixed(0)}%</div></div>
+      <div class="stat"><div class="stat-label">Budgets</div><div class="stat-val">${budgets.length}</div></div>
+    </div>`,
+    chart:`<div class="card"><div class="flex-b mb6"><span class="fz11 fw7">Daily Trend</span><div class="tab-row" style="width:130px"><button class="tab-btn ${homeChartMode==="week"?"active":""}" onclick="setHomeChartMode('week')">Week</button><button class="tab-btn ${homeChartMode==="month"?"active":""}" onclick="setHomeChartMode('month')">Month</button></div></div>${dailyTrendSVG(homeChartMode)}<div class="flex g8 mt6" style="justify-content:center"><span class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>Income</span><span class="legend-item"><span class="legend-dot" style="background:var(--red)"></span>Expenses</span></div></div>`,
+    trend:`<div class="grid2">
+      <div class="card" style="margin:0"><div class="fz11 fw7 mb6">6-Month Trend</div><div class="chart-row">${trend.map(t=>`<div class="chart-col"><div class="chart-pair"><div class="chart-bar" style="background:var(--green);height:${Math.max((t.inc/tMax)*100,.5)}%"></div><div class="chart-bar" style="background:var(--red);height:${Math.max((t.exp/tMax)*100,.5)}%"></div></div><div class="chart-lbl">${t.month}</div></div>`).join("")}</div><div class="flex g8 mt6" style="justify-content:center"><span class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>Inc</span><span class="legend-item"><span class="legend-dot" style="background:var(--red)"></span>Exp</span></div></div>
+      <div class="card" style="margin:0"><div class="fz11 fw7 mb6">Top Spending</div>${catArr.slice(0,5).map(([n,v])=>`<div class="cat-row"><div class="cat-dot" style="background:${clr(n)}"></div><span class="fz10 muted ellip" style="flex:1">${esc(n)}</span><span class="fz10 fw6">${fmtK(v)}</span><span class="fz9 muted tar" style="width:26px">${tot?(v/tot*100).toFixed(0):0}%</span></div>`).join("")||'<div class="muted fz11 tac" style="padding:12px">No data</div>'}</div>
+    </div>`,
+    insights:insights.length?`<div class="card"><div class="fz11 fw7 mb8">&#128161; Insights</div>${insights.map(i=>`<div class="insight-row"><div class="insight-icon" style="background:${i.color}20">${i.icon}</div><div class="fz11" style="flex:1">${i.text}</div></div>`).join("")}</div>`:"",
+    budget:budH?`<div class="card"><div class="flex-b mb8"><span class="fz12 fw7">Budget</span><button class="btn btn-g btn-sm" onclick="goTo('budgets')">Details</button></div>${budH}</div>`:"",
+    recent:`<div class="card"><div class="flex-b mb8"><span class="fz12 fw7">Recent</span><button class="btn btn-g btn-sm" onclick="goTo('transactions')">All</button></div>${recent.map(txRow).join("")}</div>`,
+  };
+
+  $("main").innerHTML=ppHTML()+`<div class="flex-b mb10"><span class="fz12 fw7">Hi, ${esc(profile.name.split(" ")[0])}! &#128075;</span><button class="btn btn-sm ${homeCustomize?"btn-p":"btn-g"}" onclick="toggleHomeCustomize()">${homeCustomize?"&#10003; Done":"&#9881; Rearrange"}</button></div>
+  ${homeLayout.map(key=>sections[key]?wrap(key,sections[key]):"").join("")}
   <div class="tac mt8 flex g8" style="justify-content:center">
     <button class="btn btn-g btn-sm" onclick="exportData()">&#128228; JSON</button>
     <button class="btn btn-g btn-sm" onclick="exportCSV()">&#128196; CSV</button>
     <button class="btn btn-g btn-sm" onclick="$('impFile').click()">&#128229; Import</button>
     <input type="file" id="impFile" accept=".json" style="display:none" onchange="importData(this.files[0])">
   </div>`;
+}
+function toggleHomeCustomize(){homeCustomize=!homeCustomize;render();}
+function moveHomeSection(key,dir){
+  const i=homeLayout.indexOf(key);const j=i+dir;
+  if(j<0||j>=homeLayout.length)return;
+  [homeLayout[i],homeLayout[j]]=[homeLayout[j],homeLayout[i]];
+  save();render();
 }
 function txRow(t){
   if(t.type==="transfer")return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:rgba(59,130,246,.1);color:var(--accent)">&#8646;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Transfer")}</div><div class="fz9 muted">${esc(accName(t.fromAccountId))} &#8594; ${esc(accName(t.toAccountId))}</div></div><div><div class="fz12 fw7 tar accent">${fmt(t.amount)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
@@ -557,14 +680,30 @@ function rStats(inc,exp){
   }
 }
 
-// ── BUDGETS ──
+// ── BUDGETS ── (shared by Settings > Budgets and the inline "Manage" panel on the Budgets tab)
+function budgetsManageHTML(){
+  const ec=getEC();
+  const catList=Object.keys(ec);
+  if(!nbCat||!catList.includes(nbCat))nbCat=catList[0];
+  return`<span class="st-label">Your Budgets</span>
+      ${budgets.length?budgets.map(b=>{const isE=expandedBudget===b.id;const subTotal=(b.subs||[]).reduce((s,x)=>s+(x.limit||0),0);const effLimit=b.limit>0?b.limit:subTotal;return`<div class="bud-item"><div class="flex-b" onclick="expandedBudget=expandedBudget==='${b.id}'?null:'${b.id}';render()" style="cursor:pointer"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw6 fz12">${esc(b.cat)}</span>${b.subs.length?`<span class="rec-badge">${b.subs.length} sub</span>`:""}</div><div class="flex g6"><span class="fz11 fw7">${effLimit>0?fmtK(effLimit):"—"}</span><span class="fz11 muted">${isE?"&#9650;":"&#9660;"}</span></div></div>
+      ${isE?`<div class="mt8"><div class="flex g6 mb6"><span class="st-label" style="margin:0;flex:1">Category</span><select class="inp" style="width:155px;font-size:11px" id="bCat_${b.id}">${Object.keys(ec).map(c=>`<option value="${esc(c)}" ${c===b.cat?"selected":""}>${esc(c)}</option>`).join("")}</select></div><div class="flex g6 mb8"><span class="st-label" style="margin:0;flex:1">Limit (${esc(currency.symbol)})</span><input class="inp" style="width:120px;font-size:11px" type="text" inputmode="decimal" id="bLim_${b.id}" value="${b.limit?b.limit.toLocaleString('en-US',{maximumFractionDigits:2}):''}" oninput="formatAmountInput(this)"></div><span class="st-label">Subcategory Limits</span>${b.subs.length?b.subs.map((s,si)=>`<div class="bud-sub-item"><span class="fz11 muted" style="flex:1">${esc(s.name)}</span><input class="inp" style="width:90px;font-size:11px;padding:4px 8px" type="text" inputmode="decimal" id="bSub_${b.id}_${si}" value="${s.limit?s.limit.toLocaleString('en-US',{maximumFractionDigits:2}):''}" oninput="formatAmountInput(this)"><button class="btn btn-sm btn-rd" style="padding:3px 6px" onclick="rmBudSub('${b.id}',${si})">&#10005;</button></div>`).join(""):`<div class="fz10 muted mb6">None yet — add one below.</div>`}<div class="flex g6 mt6"><select class="inp" style="flex:1;font-size:11px" id="nsc_${b.id}"><option value="">+ Sub limit</option>${(ec[b.cat]||[]).map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select><input class="inp" style="width:90px;font-size:11px;padding:4px 8px" type="text" inputmode="decimal" id="nsl_${b.id}" placeholder="${esc(currency.symbol)}" oninput="formatAmountInput(this)"></div><div class="flex g6 mt8"><button class="btn btn-p btn-sm" style="flex:1;justify-content:center" onclick="saveBudget('${b.id}')">&#10003; Save</button><button class="btn btn-sm btn-rd" onclick="deleteBudget('${b.id}')">&#128465; Delete</button></div></div>`:""}
+      </div>`;}).join(""):`<div class="fz11 muted tac" style="padding:12px">No budgets yet.</div>`}
+      <div class="divider"></div>
+      <span class="st-label">New Budget</span>
+      <div class="tab-row mb8"><button class="tab-btn ${nbMode==="cat"?"active":""}" onclick="setNbMode('cat')">Whole Category</button><button class="tab-btn ${nbMode==="sub"?"active":""}" onclick="setNbMode('sub')">Subcategory</button></div>
+      <select class="inp mb6" id="nbc" onchange="setNbCat(this.value)">${catList.map(c=>`<option value="${esc(c)}" ${c===nbCat?"selected":""}>${esc(c)}</option>`).join("")}</select>
+      ${nbMode==="sub"?((ec[nbCat]||[]).length?`<select class="inp mb6" id="nbSubSel">${(ec[nbCat]||[]).map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select><input class="inp mb6" type="text" inputmode="decimal" id="nbl" placeholder="Subcategory limit (${esc(currency.symbol)})" oninput="formatAmountInput(this)"><button class="btn btn-p w100" style="justify-content:center" onclick="addBudget()">+ Add Budget</button><div class="fz9 muted mt6">Sets a limit for just this subcategory — it still rolls up under ${esc(nbCat)} in your budget report.</div>`:`<div class="fz10 muted" style="padding:8px 0">${esc(nbCat)} has no subcategories yet. Add one from the Categories tab first.</div>`):`<input class="inp mb6" type="text" inputmode="decimal" id="nbl" placeholder="Monthly limit (${esc(currency.symbol)})" oninput="formatAmountInput(this)"><button class="btn btn-p w100" style="justify-content:center" onclick="addBudget()">+ Add Budget</button>`}`;
+}
+let budgetManageOpen=false;
+function toggleBudgetManage(){budgetManageOpen=!budgetManageOpen;render();}
 function rBud(f){
-  const hdr=`<div class="flex-b mb10"><span class="fz16 fw7">Budgets</span><div class="flex g6"><button class="btn btn-g btn-sm" onclick="openSettings('budgets')">&#9881; Manage</button><button class="cmp-toggle ${cmpMode?"on":""}" onclick="toggleCmp()">${cmpMode?"&#10005; Close":"&#9145; Compare"}</button></div></div>`;
+  const hdr=`<div class="flex-b mb10"><span class="fz16 fw7">Budgets</span><div class="flex g6"><button class="btn ${budgetManageOpen?"btn-p":"btn-g"} btn-sm" onclick="toggleBudgetManage()">${budgetManageOpen?"&#10003; Done":"&#43; Add / Edit"}</button><button class="cmp-toggle ${cmpMode?"on":""}" onclick="toggleCmp()">${cmpMode?"&#10005; Close":"&#9145; Compare"}</button></div></div>${budgetManageOpen?`<div class="card">${budgetsManageHTML()}</div>`:""}`;
   const lA=getLabelFor(pMode,pDate),lB=getLabelFor(pModeB,pDateB);
   if(cmpMode){
-    $("main").innerHTML=hdr+cmpPickerHdr()+budgets.map(b=>{const subTotal=(b.subs||[]).reduce((s,x)=>s+(x.limit||0),0);const hasCatLimit=b.limit>0;const effLimit=hasCatLimit?b.limit:subTotal;const spA=getSpent(pMode,pDate,b.cat),spB=getSpent(pModeB,pDateB,b.cat);const pA=effLimit>0?Math.min((spA/effLimit)*100,100):0,pB=effLimit>0?Math.min((spB/effLimit)*100,100):0;const cA=effLimit>0&&spA>effLimit?"var(--red)":pA>80?"var(--warn)":"var(--accent)";const cB=effLimit>0&&spB>effLimit?"var(--red)":pB>80?"var(--warn)":"var(--green)";const isE=exCats["b_"+b.id];const hs=b.subs&&b.subs.length>0;return`<div class="card" style="padding:12px;margin-bottom:10px"><div class="flex-b mb6" style="cursor:pointer" onclick="toggleCat('b_${b.id}')"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw7 fz12">${esc(b.cat)}</span>${hs?`<span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span>`:""}</div><span class="fz10 muted">${effLimit>0?"Limit: "+fmtK(effLimit)+(hasCatLimit?"":" (subs total)"):"No limit set"}</span></div><table class="cmp-tbl mb8"><thead><tr><th>Period</th><th>Spent</th><th>%</th><th>&#916;</th></tr></thead><tbody><tr><td style="color:var(--accent);font-size:10px">${lA}</td><td class="fw7" style="color:${cA}">${fmtK(spA)}</td><td class="fz10 muted">${pA.toFixed(0)}%</td><td>${chgBadge(spA,spB,true)}</td></tr><tr><td class="muted fz10">${lB}</td><td class="fw7" style="color:${cB}">${fmtK(spB)}</td><td class="fz10 muted">${pB.toFixed(0)}%</td><td></td></tr></tbody></table><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:3px"><div style="height:100%;width:${pA}%;background:${cA};border-radius:4px"></div></div><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden"><div style="height:100%;width:${pB}%;background:${cB};border-radius:4px"></div></div><div class="flex-b fz9 mt4"><span style="color:var(--accent)">&#9632; ${lA}</span><span class="muted">&#9632; ${lB}</span></div>${isE&&hs?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">${b.subs.map(s=>{const ssA=getSpent(pMode,pDate,b.cat,s.name),ssB=getSpent(pModeB,pDateB,b.cat,s.name);const spA2=s.limit>0?Math.min((ssA/s.limit)*100,100):0,spB2=s.limit>0?Math.min((ssB/s.limit)*100,100):0;return`<div class="mb8"><div class="flex-b fz10 mb3"><span class="muted">${esc(s.name)}</span>${chgBadge(ssA,ssB,true)}</div><div class="flex-b fz9 mb2"><span style="color:var(--accent)">${fmtK(ssA)}</span><span class="muted">${fmtK(ssB)}</span></div><div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:2px"><div style="height:100%;width:${spA2}%;background:var(--accent);border-radius:3px"></div></div><div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${spB2}%;background:var(--green);border-radius:3px"></div></div></div>`;}).join("")}</div>`:""}`;}).join("")||`<div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#127919;</div><div class="fz13 fw6 mb4">No budgets yet</div><button class="btn btn-p btn-sm" onclick="openSettings('budgets')">+ Create Budget</button></div>`;
+    $("main").innerHTML=hdr+cmpPickerHdr()+budgets.map(b=>{const subTotal=(b.subs||[]).reduce((s,x)=>s+(x.limit||0),0);const hasCatLimit=b.limit>0;const effLimit=hasCatLimit?b.limit:subTotal;const spA=getSpent(pMode,pDate,b.cat),spB=getSpent(pModeB,pDateB,b.cat);const pA=effLimit>0?Math.min((spA/effLimit)*100,100):0,pB=effLimit>0?Math.min((spB/effLimit)*100,100):0;const cA=effLimit>0&&spA>effLimit?"var(--red)":pA>80?"var(--warn)":"var(--accent)";const cB=effLimit>0&&spB>effLimit?"var(--red)":pB>80?"var(--warn)":"var(--green)";const isE=exCats["b_"+b.id];const hs=b.subs&&b.subs.length>0;return`<div class="card" style="padding:12px;margin-bottom:10px"><div class="flex-b mb6" style="cursor:pointer" onclick="toggleCat('b_${b.id}')"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw7 fz12">${esc(b.cat)}</span>${hs?`<span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span>`:""}</div><span class="fz10 muted">${effLimit>0?"Limit: "+fmtK(effLimit)+(hasCatLimit?"":" (subs total)"):"No limit set"}</span></div><table class="cmp-tbl mb8"><thead><tr><th>Period</th><th>Spent</th><th>%</th><th>&#916;</th></tr></thead><tbody><tr><td style="color:var(--accent);font-size:10px">${lA}</td><td class="fw7" style="color:${cA}">${fmtK(spA)}</td><td class="fz10 muted">${pA.toFixed(0)}%</td><td>${chgBadge(spA,spB,true)}</td></tr><tr><td class="muted fz10">${lB}</td><td class="fw7" style="color:${cB}">${fmtK(spB)}</td><td class="fz10 muted">${pB.toFixed(0)}%</td><td></td></tr></tbody></table><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:3px"><div style="height:100%;width:${pA}%;background:${cA};border-radius:4px"></div></div><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden"><div style="height:100%;width:${pB}%;background:${cB};border-radius:4px"></div></div><div class="flex-b fz9 mt4"><span style="color:var(--accent)">&#9632; ${lA}</span><span class="muted">&#9632; ${lB}</span></div>${isE&&hs?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">${b.subs.map(s=>{const ssA=getSpent(pMode,pDate,b.cat,s.name),ssB=getSpent(pModeB,pDateB,b.cat,s.name);const spA2=s.limit>0?Math.min((ssA/s.limit)*100,100):0,spB2=s.limit>0?Math.min((ssB/s.limit)*100,100):0;return`<div class="mb8"><div class="flex-b fz10 mb3"><span class="muted">${esc(s.name)}</span>${chgBadge(ssA,ssB,true)}</div><div class="flex-b fz9 mb2"><span style="color:var(--accent)">${fmtK(ssA)}</span><span class="muted">${fmtK(ssB)}</span></div><div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:2px"><div style="height:100%;width:${spA2}%;background:var(--accent);border-radius:3px"></div></div><div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${spB2}%;background:var(--green);border-radius:3px"></div></div></div>`;}).join("")}</div>`:""}`;}).join("")||`<div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#127919;</div><div class="fz13 fw6 mb4">No budgets yet</div><button class="btn btn-p btn-sm" onclick="toggleBudgetManage()">+ Create Budget</button></div>`;
   }else{
-    $("main").innerHTML=ppHTML()+hdr+(budgets.length?budgets.map(b=>{const spent=f.filter(t=>t.type==="expense"&&t.category===b.cat).reduce((s,t)=>s+t.amount,0);const subTotal=(b.subs||[]).reduce((s,x)=>s+(x.limit||0),0);const hasCatLimit=b.limit>0;const isRollup=!hasCatLimit&&subTotal>0;const effLimit=hasCatLimit?b.limit:subTotal;const pct=effLimit>0?Math.min((spent/effLimit)*100,100):0;const over=effLimit>0&&spent>effLimit;const c=over?"var(--red)":pct>80?"var(--warn)":"var(--green)";const isE=exCats["b_"+b.id];const hs=b.subs&&b.subs.length>0;return`<div class="card" style="border-color:${over?"rgba(239,68,68,.25)":"var(--border)"}"><div class="flex-b" style="cursor:pointer" onclick="toggleCat('b_${b.id}')"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw7 fz13">${esc(b.cat)} ${hs?isE?"&#9650;":"&#9660;":""}</span></div><div class="flex g8"><span class="fz12 fw7">${effLimit>0?fmt(effLimit):"—"}</span></div></div>${effLimit>0?`<div class="flex-b fz10 muted mt4 mb4"><span style="color:${c}">${fmt(spent)} spent</span><span>${pct.toFixed(0)}% · ${over?"Over "+fmtK(spent-effLimit):fmtK(effLimit-spent)+" left"}</span></div><div class="bar-track" style="height:8px"><div class="bar-fill" style="width:${pct}%;background:${c};height:100%"></div></div>${isRollup?`<div class="fz9 muted mt4">Total of ${b.subs.length} subcategory limit${b.subs.length>1?"s":""} below</div>`:""}`:`<div class="fz10 muted mt4 mb4">${fmt(spent)} spent · no limit set</div>`}${isE&&hs?`<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">${b.subs.map(s=>{const ss=f.filter(t=>t.type==="expense"&&t.category===b.cat&&t.subcategory===s.name).reduce((sm,t)=>sm+t.amount,0);const sp=s.limit>0?Math.min((ss/s.limit)*100,100):0;const so=s.limit>0&&ss>s.limit;const sc=so?"var(--red)":sp>80?"var(--warn)":"var(--green)";return`<div class="mb8"><div class="flex-b fz10"><span class="muted">${esc(s.name)}</span><span><span style="color:${sc}">${fmtK(ss)}</span> / ${fmtK(s.limit)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${sp}%;background:${sc}"></div></div></div>`;}).join("")}</div>`:""}`;}).join(""):`<div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#127919;</div><div class="fz13 fw6 mb4">No budgets yet</div><div class="fz11 muted mb12">Set spending limits to stay on track</div><button class="btn btn-p btn-sm" onclick="openSettings('budgets')">+ Create Budget</button></div>`);
+    $("main").innerHTML=ppHTML()+hdr+(budgets.length?budgets.map(b=>{const spent=f.filter(t=>t.type==="expense"&&t.category===b.cat).reduce((s,t)=>s+t.amount,0);const subTotal=(b.subs||[]).reduce((s,x)=>s+(x.limit||0),0);const hasCatLimit=b.limit>0;const isRollup=!hasCatLimit&&subTotal>0;const effLimit=hasCatLimit?b.limit:subTotal;const pct=effLimit>0?Math.min((spent/effLimit)*100,100):0;const over=effLimit>0&&spent>effLimit;const c=over?"var(--red)":pct>80?"var(--warn)":"var(--green)";const isE=exCats["b_"+b.id];const hs=b.subs&&b.subs.length>0;return`<div class="card" style="border-color:${over?"rgba(239,68,68,.25)":"var(--border)"}"><div class="flex-b" style="cursor:pointer" onclick="toggleCat('b_${b.id}')"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw7 fz13">${esc(b.cat)} ${hs?isE?"&#9650;":"&#9660;":""}</span></div><div class="flex g8"><span class="fz12 fw7">${effLimit>0?fmt(effLimit):"—"}</span></div></div>${effLimit>0?`<div class="flex-b fz10 muted mt4 mb4"><span style="color:${c}">${fmt(spent)} spent</span><span>${pct.toFixed(0)}% · ${over?"Over "+fmtK(spent-effLimit):fmtK(effLimit-spent)+" left"}</span></div><div class="bar-track" style="height:8px"><div class="bar-fill" style="width:${pct}%;background:${c};height:100%"></div></div>${isRollup?`<div class="fz9 muted mt4">Total of ${b.subs.length} subcategory limit${b.subs.length>1?"s":""} below</div>`:""}`:`<div class="fz10 muted mt4 mb4">${fmt(spent)} spent · no limit set</div>`}${isE&&hs?`<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">${b.subs.map(s=>{const ss=f.filter(t=>t.type==="expense"&&t.category===b.cat&&t.subcategory===s.name).reduce((sm,t)=>sm+t.amount,0);const sp=s.limit>0?Math.min((ss/s.limit)*100,100):0;const so=s.limit>0&&ss>s.limit;const sc=so?"var(--red)":sp>80?"var(--warn)":"var(--green)";return`<div class="mb8"><div class="flex-b fz10"><span class="muted">${esc(s.name)}</span><span><span style="color:${sc}">${fmtK(ss)}</span> / ${fmtK(s.limit)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${sp}%;background:${sc}"></div></div></div>`;}).join("")}</div>`:""}</div>`;}).join(""):`<div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#127919;</div><div class="fz13 fw6 mb4">No budgets yet</div><div class="fz11 muted mb12">Set spending limits to stay on track</div><button class="btn btn-p btn-sm" onclick="toggleBudgetManage()">+ Create Budget</button></div>`);
   }
 }
 
@@ -680,31 +819,20 @@ function renderSettings(){
     </div>`;
   }
   if(settingsTab==="budgets"){
-    const ec=getEC();
-    const catList=Object.keys(ec);
-    if(!nbCat||!catList.includes(nbCat))nbCat=catList[0];
-    body=`<div class="st-section"><span class="st-label">Budgets</span>
-      ${budgets.length?budgets.map(b=>{const isE=expandedBudget===b.id;const subTotal=(b.subs||[]).reduce((s,x)=>s+(x.limit||0),0);const effLimit=b.limit>0?b.limit:subTotal;return`<div class="bud-item"><div class="flex-b" onclick="expandedBudget=expandedBudget==='${b.id}'?null:'${b.id}';render()" style="cursor:pointer"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw6 fz12">${esc(b.cat)}</span>${b.subs.length?`<span class="rec-badge">${b.subs.length} sub</span>`:""}</div><div class="flex g6"><span class="fz11 fw7">${effLimit>0?fmtK(effLimit):"—"}</span><span class="fz11 muted">${isE?"&#9650;":"&#9660;"}</span></div></div>
-      ${isE?`<div class="mt8"><div class="flex g6 mb6"><span class="st-label" style="margin:0;flex:1">Category</span><select class="inp" style="width:155px;font-size:11px" id="bCat_${b.id}">${Object.keys(ec).map(c=>`<option value="${esc(c)}" ${c===b.cat?"selected":""}>${esc(c)}</option>`).join("")}</select></div><div class="flex g6 mb8"><span class="st-label" style="margin:0;flex:1">Limit (${esc(currency.symbol)})</span><input class="inp" style="width:120px;font-size:11px" type="number" id="bLim_${b.id}" value="${b.limit}"></div><span class="st-label">Subcategory Limits</span>${b.subs.length?b.subs.map((s,si)=>`<div class="bud-sub-item"><span class="fz11 muted" style="flex:1">${esc(s.name)}</span><input class="inp" style="width:90px;font-size:11px;padding:4px 8px" type="number" id="bSub_${b.id}_${si}" value="${s.limit}"><button class="btn btn-sm btn-rd" style="padding:3px 6px" onclick="rmBudSub('${b.id}',${si})">&#10005;</button></div>`).join(""):`<div class="fz10 muted mb6">None yet — add one below.</div>`}<div class="flex g6 mt6"><select class="inp" style="flex:1;font-size:11px" id="nsc_${b.id}"><option value="">+ Sub limit</option>${(ec[b.cat]||[]).map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select><input class="inp" style="width:90px;font-size:11px;padding:4px 8px" type="number" id="nsl_${b.id}" placeholder="${esc(currency.symbol)}"></div><div class="flex g6 mt8"><button class="btn btn-p btn-sm" style="flex:1;justify-content:center" onclick="saveBudget('${b.id}')">&#10003; Save</button><button class="btn btn-sm btn-rd" onclick="deleteBudget('${b.id}')">&#128465; Delete</button></div></div>`:""}
-      </div>`;}).join(""):`<div class="fz11 muted tac" style="padding:12px">No budgets yet.</div>`}
-      <div class="divider"></div>
-      <span class="st-label">New Budget</span>
-      <div class="tab-row mb8"><button class="tab-btn ${nbMode==="cat"?"active":""}" onclick="setNbMode('cat')">Whole Category</button><button class="tab-btn ${nbMode==="sub"?"active":""}" onclick="setNbMode('sub')">Subcategory</button></div>
-      <select class="inp mb6" id="nbc" onchange="setNbCat(this.value)">${catList.map(c=>`<option value="${esc(c)}" ${c===nbCat?"selected":""}>${esc(c)}</option>`).join("")}</select>
-      ${nbMode==="sub"?((ec[nbCat]||[]).length?`<select class="inp mb6" id="nbSubSel">${(ec[nbCat]||[]).map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select><input class="inp mb6" type="number" id="nbl" placeholder="Subcategory limit (${esc(currency.symbol)})"><button class="btn btn-p w100" style="justify-content:center" onclick="addBudget()">+ Add Budget</button><div class="fz9 muted mt6">Sets a limit for just this subcategory — it still rolls up under ${esc(nbCat)} in your budget report.</div>`:`<div class="fz10 muted" style="padding:8px 0">${esc(nbCat)} has no subcategories yet. Add one from the Categories tab first.</div>`):`<input class="inp mb6" type="number" id="nbl" placeholder="Monthly limit (${esc(currency.symbol)})"><button class="btn btn-p w100" style="justify-content:center" onclick="addBudget()">+ Add Budget</button>`}
-    </div>`;
+    body=`<div class="st-section">${budgetsManageHTML()}</div>`;
   }
   if(settingsTab==="categories"){
     const ecRef=getEC(),icRef=getIC();const catRef=settingsSubTab==="expense"?ecRef:icRef;
     const catNames=Object.keys(catRef);
+    const orderedNames=orderedCatNames(settingsSubTab);
     body=`<div class="st-section"><div class="tab-row mb10"><button class="tab-btn ${settingsSubTab==="expense"?"active":""}" onclick="settingsSubTab='expense';editingSub=null;editingCat=null;render()">Expense</button><button class="tab-btn ${settingsSubTab==="income"?"active":""}" onclick="settingsSubTab='income';editingSub=null;editingCat=null;render()">Income</button></div>
-      ${Object.entries(catRef).map(([cat,subs])=>{const isE=expandedCatSet===cat;const c=clr(cat);const catEditing=editingCat===cat;return`<div class="cat-item" onclick="expandedCatSet=expandedCatSet==='${esc(cat)}'?null:'${esc(cat)}';editingSub=null;editingCat=null;render()"><div class="cat-dot" style="background:${c}"></div><span class="fz12 fw6" style="flex:1;color:${c}">${esc(cat)}</span><button onclick="event.stopPropagation();editingCat=editingCat==='${esc(cat)}'?null:'${esc(cat)}';expandedCatSet='${esc(cat)}';editingSub=null;render()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 4px" title="Rename category">&#9998;</button><span class="fz10 muted">${subs.length} subs</span><span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span></div>${isE?`<div style="padding:8px 0 10px 20px;background:var(--bg);border-radius:6px;margin-bottom:4px">
+      ${orderedNames.map((cat,catIdx)=>{const subs=catRef[cat];const isE=expandedCatSet===cat;const c=clr(cat);const catEditing=editingCat===cat;return`<div class="cat-item" onclick="expandedCatSet=expandedCatSet==='${esc(cat)}'?null:'${esc(cat)}';editingSub=null;editingCat=null;render()"><div class="cat-dot" style="background:${c}"></div><span class="fz12 fw6" style="flex:1;color:${c}">${esc(cat)}</span><div class="reorder-btns" onclick="event.stopPropagation()"><button onclick="moveCat('${settingsSubTab}','${esc(cat)}',-1)" ${catIdx===0?"disabled":""} title="Move up">&#8593;</button><button onclick="moveCat('${settingsSubTab}','${esc(cat)}',1)" ${catIdx===orderedNames.length-1?"disabled":""} title="Move down">&#8595;</button></div><button onclick="event.stopPropagation();editingCat=editingCat==='${esc(cat)}'?null:'${esc(cat)}';expandedCatSet='${esc(cat)}';editingSub=null;render()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 4px" title="Rename category">&#9998;</button><span class="fz10 muted">${subs.length} subs</span><span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span></div>${isE?`<div style="padding:8px 0 10px 20px;background:var(--bg);border-radius:6px;margin-bottom:4px">
       ${catEditing?`<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px" onclick="event.stopPropagation()">
         <span class="edit-label">Rename Category</span>
         <input class="inp mb8" id="catRenameInput" value="${esc(cat)}" style="font-size:12px">
         <div class="flex g6"><button class="btn btn-p btn-sm" style="flex:1;justify-content:center" onclick="applyCatEdit('${esc(cat)}')">&#10003; Save</button><button class="btn btn-g btn-sm" onclick="editingCat=null;render()">Cancel</button></div>
       </div>`:""}
-      <div class="flex-w mb6">${subs.map(s=>{const key=cat+"|||"+s;const editing=editingSub===key;return`<span class="sub-pill ${editing?"sel":""}" style="cursor:pointer" onclick="event.stopPropagation();editingSub=editingSub==='${esc(key)}'?null:'${esc(key)}';render()">&#9998; ${esc(s)} <button onclick="event.stopPropagation();rmSub('${esc(cat)}','${esc(s)}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px">&#10005;</button></span>`;}).join("")}${!subs.length?`<span class="fz10 muted">No subcategories</span>`:""}</div>
+      <div class="mb6">${subs.map((s,subIdx)=>{const key=cat+"|||"+s;const editing=editingSub===key;return`<div class="sub-row-item"><button class="sub-move" onclick="event.stopPropagation();moveSub('${settingsSubTab}','${esc(cat)}','${esc(s)}',-1)" ${subIdx===0?"disabled":""}>&#8593;</button><button class="sub-move" onclick="event.stopPropagation();moveSub('${settingsSubTab}','${esc(cat)}','${esc(s)}',1)" ${subIdx===subs.length-1?"disabled":""}>&#8595;</button><span class="sub-pill ${editing?"sel":""}" style="cursor:pointer" onclick="event.stopPropagation();editingSub=editingSub==='${esc(key)}'?null:'${esc(key)}';render()">&#9998; ${esc(s)} <button onclick="event.stopPropagation();rmSub('${esc(cat)}','${esc(s)}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px">&#10005;</button></span></div>`;}).join("")}${!subs.length?`<span class="fz10 muted">No subcategories</span>`:""}</div>
       ${editingSub&&editingSub.startsWith(cat+"|||")?(()=>{const oldSub=editingSub.split("|||")[1];return`<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px" onclick="event.stopPropagation()">
         <span class="edit-label">Rename</span>
         <input class="inp mb6" id="subRenameInput" value="${esc(oldSub)}" style="font-size:12px">
@@ -761,7 +889,7 @@ function saveProfile(){
 function setNbMode(m){nbMode=m;render();}
 function setNbCat(c){nbCat=c;render();}
 function addBudget(){
-  const cat=$("nbc")?.value||nbCat,lim=parseFloat($("nbl")?.value);
+  const cat=$("nbc")?.value||nbCat,lim=parseAmount($("nbl")?.value);
   if(!cat||!lim)return alert("Select a category and enter a limit");
   if(nbMode==="sub"){
     const sub=$("nbSubSel")?.value;
@@ -777,7 +905,7 @@ function addBudget(){
   if(budgets.find(b=>b.cat===cat))return alert("Budget for this category already exists");
   const nb={id:uid(),cat,limit:lim,subs:[]};budgets.push(nb);expandedBudget=nb.id;save();render();showToast("🎯 Budget added — set subcategory limits below","green");
 }
-function saveBudget(id){const b=budgets.find(x=>x.id===id);if(!b)return;b.cat=$(`bCat_${id}`)?.value||b.cat;b.limit=parseFloat($(`bLim_${id}`)?.value)||b.limit;b.subs.forEach((s,i)=>{const v=parseFloat($(`bSub_${id}_${i}`)?.value);if(!isNaN(v))s.limit=v;});const nc=$(`nsc_${id}`)?.value,nl=parseFloat($(`nsl_${id}`)?.value);if(nc&&nl){if(!b.subs.find(s=>s.name===nc))b.subs.push({name:nc,limit:nl});}save();expandedBudget=null;render();}
+function saveBudget(id){const b=budgets.find(x=>x.id===id);if(!b)return;b.cat=$(`bCat_${id}`)?.value||b.cat;b.limit=parseAmount($(`bLim_${id}`)?.value)||b.limit;b.subs.forEach((s,i)=>{const v=parseAmount($(`bSub_${id}_${i}`)?.value);if(!isNaN(v))s.limit=v;});const nc=$(`nsc_${id}`)?.value,nl=parseAmount($(`nsl_${id}`)?.value);if(nc&&nl){if(!b.subs.find(s=>s.name===nc))b.subs.push({name:nc,limit:nl});}save();expandedBudget=null;render();}
 function deleteBudget(id){if(!confirm("Delete this budget?"))return;budgets=budgets.filter(b=>b.id!==id);save();expandedBudget=null;render();}
 function rmBudSub(id,si){const b=budgets.find(x=>x.id===id);if(b){b.subs.splice(si,1);save();render();}}
 function addCategory(){const n=$("nCatN")?.value.trim();if(!n)return alert("Enter a category name");if(settingsSubTab==="expense"){if(getEC()[n])return alert("Category already exists");userEC[n]=[];}else{if(getIC()[n])return alert("Category already exists");userIC[n]=[];}save();render();}
@@ -964,7 +1092,7 @@ function exportData(){
 }
 
 // ── DATA ACTIONS ──
-function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts"].forEach(k=>localStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];userEC={};userIC={};profile={name:""};recurring=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;save();closeSettings();}}
+function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts","ffd_homelayout","ffd_catorder"].forEach(k=>localStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];userEC={};userIC={};profile={name:""};recurring=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;homeLayout=["stats","chart","trend","insights","budget","recent"];catOrder={expense:[],income:[]};save();closeSettings();}}
 function importData(file){if(!file)return;file.text().then(t=>{const d=JSON.parse(t);txns=d.txns||[];budgets=d.budgets||[];accounts=d.accounts||[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];userEC=d.userEC||{};userIC=d.userIC||{};profile=d.profile||{};recurring=d.recurring||[];save();render();showToast("✅ Imported successfully","green");}).catch(e=>showToast("⚠️ Import failed: "+e.message,"red"));}
 function deleteTx(id){if(confirm("Delete this transaction?")){txns=txns.filter(t=>t.id!==id);save();render();}}
 
@@ -976,6 +1104,7 @@ function showModal(type,id){
   if(type==="edit"&&id){const t=txns.find(x=>x.id===id);if(t&&t.type==="transfer"){
     window._tfFrom=t.fromAccountId;window._tfTo=t.toAccountId;
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">&#8646; Edit Transfer</span><div class="flex g6"><button class="btn btn-sm btn-rd" onclick="deleteTx('${t.id}');showModal('close')">&#128465;</button><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div></div>
+    <div class="flex g4 mb14"><button class="btn w100 btn-g btn-sm" onclick="convertFromTransfer('${t.id}','expense')">Make Expense</button><button class="btn w100 btn-g btn-sm" onclick="convertFromTransfer('${t.id}','income')">Make Income</button></div>
     <div style="display:grid;gap:12px">
       <div><span class="edit-label">Date</span><input class="inp" type="date" id="tfDate" value="${t.date}"></div>
       <div><span class="edit-label">Description</span><input class="inp" id="tfDesc" value="${esc(t.description)}" placeholder="e.g. Move to savings"></div>
@@ -990,7 +1119,7 @@ function showModal(type,id){
   if(type==="edit"){const t=txns.find(x=>x.id===id);if(!t)return;
     window._eType=t.type;window._eCat=t.category;window._eSub=t.subcategory||"";window._eAcc=t.accountId;
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Edit Transaction</span><div class="flex g6"><button class="btn btn-sm btn-rd" onclick="deleteTx('${t.id}');showModal('close')">&#128465;</button><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div></div>
-    <div style="display:grid;gap:12px"><div><span class="edit-label">Type</span><div class="flex g4"><button class="btn w100" id="eExp" style="border:1px solid ${t.type==="expense"?"var(--red)":"var(--border)"};background:${t.type==="expense"?"rgba(239,68,68,.1)":"transparent"};color:${t.type==="expense"?"var(--red)":"var(--muted)"};padding:11px" onclick="eSetType('expense')">Expense</button><button class="btn w100" id="eInc" style="border:1px solid ${t.type==="income"?"var(--green)":"var(--border)"};background:${t.type==="income"?"rgba(34,197,94,.1)":"transparent"};color:${t.type==="income"?"var(--green)":"var(--muted)"};padding:11px" onclick="eSetType('income')">Income</button></div></div>
+    <div style="display:grid;gap:12px"><div><span class="edit-label">Type</span><div class="flex g4"><button class="btn w100" id="eExp" style="border:1px solid ${t.type==="expense"?"var(--red)":"var(--border)"};background:${t.type==="expense"?"rgba(239,68,68,.1)":"transparent"};color:${t.type==="expense"?"var(--red)":"var(--muted)"};padding:11px" onclick="eSetType('expense')">Expense</button><button class="btn w100" id="eInc" style="border:1px solid ${t.type==="income"?"var(--green)":"var(--border)"};background:${t.type==="income"?"rgba(34,197,94,.1)":"transparent"};color:${t.type==="income"?"var(--green)":"var(--muted)"};padding:11px" onclick="eSetType('income')">Income</button><button class="btn w100 btn-g" style="padding:11px" onclick="convertToTransfer('${t.id}')">&#8646; Transfer</button></div></div>
     <div><span class="edit-label">Date</span><input class="inp" type="date" id="eDate" value="${t.date}"></div>
     <div><span class="edit-label">Description</span><input class="inp" id="eDesc" value="${esc(t.description)}"></div>
     <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="eAmt" value="${t.amount.toLocaleString("en-US",{maximumFractionDigits:2})}" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('eAmt')" title="Calculator">&#129518;</button></div></div>
@@ -1055,6 +1184,24 @@ function eSetType(t){
   else{i.style.cssText="border:1px solid var(--green);background:rgba(34,197,94,.1);color:var(--green)";e.style.cssText="border:1px solid var(--border);background:transparent;color:var(--muted)";}
 }
 function saveTx(id){const t=txns.find(x=>x.id===id);if(!t)return;const a=parseAmount($("eAmt")?.value);if(!a)return alert("Enter amount");t.date=$("eDate").value;t.description=$("eDesc").value;t.amount=a;t.type=window._eType||t.type;t.category=window._eCat;t.subcategory=window._eSub||"";t.accountId=window._eAcc;save();showModal("close");render();}
+// Convert between income/expense and transfer while editing, without losing date/amount/description
+function convertToTransfer(id){
+  const t=txns.find(x=>x.id===id);if(!t)return;
+  if(accounts.length<2)return alert("Add a second account first to convert this to a transfer.");
+  const other=accounts.find(a=>a.id!==t.accountId)||accounts[1];
+  t.type="transfer";t.fromAccountId=t.accountId;t.toAccountId=other.id;
+  delete t.category;delete t.subcategory;delete t.accountId;
+  save();showModal("edit",id);
+  showToast("⇄ Converted to a transfer — adjust the accounts below","green");
+}
+function convertFromTransfer(id,newType){
+  const t=txns.find(x=>x.id===id);if(!t)return;
+  const cats=newType==="income"?getIC():getEC();const firstCat=Object.keys(cats)[0]||"";
+  t.type=newType;t.accountId=t.fromAccountId||accounts[0]?.id;
+  t.category=firstCat;t.subcategory=(cats[firstCat]||[])[0]||"";
+  delete t.fromAccountId;delete t.toAccountId;
+  save();showModal("edit",id);
+}
 function setTT(t){
   window._txT=t;
   const EC=getEC(),IC=getIC();const cats=t==="income"?IC:EC;const firstCat=Object.keys(cats)[0]||"";
@@ -1108,13 +1255,97 @@ function handleFile(file){if(!file)return;const accId=window._uploadAcc||"cash";
 function addPend(){const n=pendingTx.length;txns=[...txns,...pendingTx];pendingTx=[];save();$("uMsg").innerHTML=`<div class="msg msg-ok">&#10003; ${n} transactions added!</div>`;$("uPrev").innerHTML="";$("uAct").innerHTML=`<button class="btn btn-p w100 mt8" style="justify-content:center" onclick="showModal('close');goTo('transactions')">View Transactions</button>`;}
 
 function rTx(f,inc,exp){
+  const oldBar=document.getElementById("selectBar");if(oldBar)oldBar.remove();
   const sorted=[...f].sort((a,b)=>b.date.localeCompare(a.date));const groups={};sorted.forEach(t=>{(groups[t.date]=groups[t.date]||[]).push(t);});const dates=Object.keys(groups).sort((a,b)=>b.localeCompare(a));
+  const rowClick=t=>selectMode?`toggleTxSelect('${t.id}')`:`showModal('edit','${t.id}')`;
+  const checkHTML=t=>selectMode?`<div class="sel-check ${selectedTxIds.has(t.id)?"on":""}">${selectedTxIds.has(t.id)?"&#10003;":""}</div>`:"";
   $("main").innerHTML=ppHTML()+`<div class="flex g6 mb8 flex-w"><div style="position:relative;flex:1 1 120px"><span style="position:absolute;left:8px;top:10px;font-size:12px" class="muted">&#128269;</span><input class="inp" id="si" style="padding-left:28px;font-size:12px" placeholder="Search..." value="${esc(search)}" oninput="doS(this.value)"></div><select class="inp" style="width:90px;font-size:12px" onchange="fType=this.value;render()"><option value="all" ${fType==="all"?"selected":""}>All</option><option value="income" ${fType==="income"?"selected":""}>Income</option><option value="expense" ${fType==="expense"?"selected":""}>Expense</option><option value="transfer" ${fType==="transfer"?"selected":""}>Transfer</option></select><select class="inp" style="width:130px;font-size:12px" onchange="fCat=this.value;render()"><option value="all">All Categories</option>${allCats().map(c=>`<option value="${esc(c)}" ${fCat===c?"selected":""}>${esc(c)}</option>`).join("")}</select><select class="inp" style="width:100px;font-size:12px" onchange="fAcc=this.value;render()"><option value="all">All Accts</option>${accounts.map(a=>`<option value="${esc(a.id)}" ${fAcc===a.id?"selected":""}>${esc(a.name)}</option>`).join("")}</select></div>
-  <div class="flex-b fz10 muted mb8"><span>${f.length} transactions</span><div class="flex g6"><span>In: <span class="green">${fmtK(inc)}</span> &middot; Out: <span class="red">${fmtK(exp)}</span></span><button class="btn btn-g btn-sm" onclick="exportCSV()">&#128196; CSV</button></div></div>
+  <div class="flex-b fz10 muted mb8"><span>${f.length} transactions</span><div class="flex g6"><span>In: <span class="green">${fmtK(inc)}</span> &middot; Out: <span class="red">${fmtK(exp)}</span></span><button class="btn btn-g btn-sm" onclick="exportCSV()">&#128196; CSV</button><button class="btn ${selectMode?"btn-p":"btn-g"} btn-sm" onclick="toggleSelectMode()">${selectMode?"Cancel":"Select"}</button></div></div>
   <div class="card" style="padding:0;overflow:hidden">${dates.length?dates.map(d=>{const dayInc=groups[d].filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);const dayExp=groups[d].filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);return`<div class="date-hdr flex-b"><span>${fmtD(d)}</span><span class="date-hdr-tot"><span class="green">${fmtK(dayInc)}</span><span class="red">${fmtK(dayExp)}</span></span></div>${groups[d].map(t=>{
-    if(t.type==="transfer")return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:rgba(59,130,246,.1);color:var(--accent)">&#8646;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Transfer")}</div><div class="fz9 muted">${esc(accName(t.fromAccountId))} &#8594; ${esc(accName(t.toAccountId))}</div></div><span class="cat-badge" style="background:rgba(59,130,246,.15);color:var(--accent)">Transfer</span><div class="fz12 fw7 accent" style="min-width:58px;text-align:right">${fmt(t.amount)}</div></div>`;
-    const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}</div><div class="fz9 muted">${esc(acc?acc.name:"")} ${t.subcategory?"· "+esc(t.subcategory):""}</div></div><span class="cat-badge" style="background:${clr(t.category)}22;color:${clr(t.category)}">${esc(t.category)}</span><div class="fz12 fw7 ${t.type==="income"?"green":"red"}" style="min-width:58px;text-align:right">${t.type==="income"?"+":"-"}${fmt(t.amount)}</div></div>`;}).join("")}`;}).join(""):'<div class="muted fz12 tac" style="padding:40px">No transactions found</div>'}</div>`;
+    if(t.type==="transfer")return`<div class="tx-row" onclick="${rowClick(t)}">${checkHTML(t)}<div class="tx-icon" style="background:rgba(59,130,246,.1);color:var(--accent)">&#8646;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Transfer")}</div><div class="fz9 muted">${esc(accName(t.fromAccountId))} &#8594; ${esc(accName(t.toAccountId))}</div></div><span class="cat-badge" style="background:rgba(59,130,246,.15);color:var(--accent)">Transfer</span><div class="fz12 fw7 accent" style="min-width:58px;text-align:right">${fmt(t.amount)}</div></div>`;
+    const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="${rowClick(t)}">${checkHTML(t)}<div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}</div><div class="fz9 muted">${esc(acc?acc.name:"")} ${t.subcategory?"· "+esc(t.subcategory):""}</div></div><span class="cat-badge" style="background:${clr(t.category)}22;color:${clr(t.category)}">${esc(t.category)}</span><div class="fz12 fw7 ${t.type==="income"?"green":"red"}" style="min-width:58px;text-align:right">${t.type==="income"?"+":"-"}${fmt(t.amount)}</div></div>`;}).join("")}`;}).join(""):'<div class="muted fz12 tac" style="padding:40px">No transactions found</div>'}</div>`;
   const si=$("si");if(si&&search){si.focus();si.setSelectionRange(search.length,search.length);}
+  if(selectMode&&selectedTxIds.size){
+    const bar=document.createElement("div");bar.id="selectBar";bar.className="select-bar";
+    bar.innerHTML=`<span class="fz11 fw7">${selectedTxIds.size} selected</span><div class="flex g6"><button class="btn btn-g btn-sm" onclick="openBulkEdit()">&#9998; Edit</button><button class="btn btn-g btn-sm" onclick="openBulkTransfer()">&#8646; To Transfer</button></div>`;
+    document.body.appendChild(bar);
+  }
+}
+function toggleSelectMode(){selectMode=!selectMode;selectedTxIds=new Set();const b=$("selectBar");if(b)b.remove();render();}
+function toggleTxSelect(id){if(selectedTxIds.has(id))selectedTxIds.delete(id);else selectedTxIds.add(id);const b=$("selectBar");if(b)b.remove();render();}
+
+// ── BULK EDIT / BULK CONVERT-TO-TRANSFER (multi-select in Transactions) ──
+function openBulkEdit(){
+  if(!selectedTxIds.size)return;
+  const ids=[...selectedTxIds];
+  const firstTx=txns.find(x=>x.id===ids[0]);
+  window._bulkCatType=firstTx&&firstTx.type==="income"?"income":"expense";
+  window._bulkAcc=accounts[0]?.id||"";
+  window._bulkCat="";window._bulkSub="";
+  const mc=$("modal-container");
+  mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div>
+    <div class="flex-b mb16"><span class="fz16 fw7">Edit ${selectedTxIds.size} Transactions</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div>
+    <div class="fz10 muted mb14">Only fields you turn on below will be changed — everything else stays as it is on each transaction.</div>
+    <div style="display:grid;gap:14px">
+      <div><label class="flex g8 mb8"><input type="checkbox" id="bulkChgDate" onchange="$('bulkDateWrap').style.display=this.checked?'block':'none'"><span class="fz12 fw6">Change Date</span></label><div id="bulkDateWrap" style="display:none"><input class="inp" type="date" id="bulkDate"></div></div>
+      <div><label class="flex g8 mb8"><input type="checkbox" id="bulkChgAcc" onchange="$('bulkAccWrap').style.display=this.checked?'block':'none'"><span class="fz12 fw6">Change Account</span></label><div id="bulkAccWrap" style="display:none"><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_bulkAcc','bulkAccLabel')"><span id="bulkAccLabel"></span><span class="muted">&#8250;</span></button></div></div>
+      <div><label class="flex g8 mb8"><input type="checkbox" id="bulkChgCat" onchange="$('bulkCatWrap').style.display=this.checked?'block':'none'"><span class="fz12 fw6">Change Category / Subcategory</span></label><div id="bulkCatWrap" style="display:none"><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openCatPicker('_bulkCatType','_bulkCat','_bulkSub','bulkCatLabel')"><span id="bulkCatLabel"></span><span class="muted">&#8250;</span></button><div class="fz9 muted mt6">Doesn't apply to any transfers in the selection.</div></div></div>
+    </div>
+    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px" onclick="applyBulkEdit()">Apply to ${selectedTxIds.size} Transactions</button>
+  </div></div>`;
+  $("bulkAccLabel").textContent=accName(window._bulkAcc);
+}
+function applyBulkEdit(){
+  const chgDate=$("bulkChgDate")?.checked,chgAcc=$("bulkChgAcc")?.checked,chgCat=$("bulkChgCat")?.checked;
+  const newDate=$("bulkDate")?.value;
+  let count=0;
+  selectedTxIds.forEach(id=>{
+    const t=txns.find(x=>x.id===id);if(!t)return;
+    let touched=false;
+    if(chgDate&&newDate){t.date=newDate;touched=true;}
+    if(t.type!=="transfer"){
+      if(chgAcc&&window._bulkAcc){t.accountId=window._bulkAcc;touched=true;}
+      if(chgCat&&window._bulkCat){t.category=window._bulkCat;t.subcategory=window._bulkSub||"";touched=true;}
+    }
+    if(touched)count++;
+  });
+  save();showModal("close");
+  selectMode=false;selectedTxIds=new Set();
+  render();
+  showToast("✅ Updated "+count+" transaction"+(count!==1?"s":""),"green");
+}
+function openBulkTransfer(){
+  if(!selectedTxIds.size)return;
+  if(accounts.length<2)return alert("Add a second account first to convert to transfers.");
+  window._bulkTfFrom=accounts[0].id;window._bulkTfTo=accounts[1].id;
+  const mc=$("modal-container");
+  mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal" onclick="event.stopPropagation()"><div class="modal-handle"></div>
+    <div class="flex-b mb12"><span class="fz14 fw7">&#8646; Convert ${selectedTxIds.size} to Transfers</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div>
+    <div class="fz10 muted mb12">Each transaction keeps its own amount, date, and description — only its type and accounts change.</div>
+    <div style="display:grid;gap:12px">
+      <div><span class="edit-label">From Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_bulkTfFrom','bulkTfFromLabel')"><span id="bulkTfFromLabel"></span><span class="muted">&#8250;</span></button></div>
+      <div><span class="edit-label">To Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_bulkTfTo','bulkTfToLabel')"><span id="bulkTfToLabel"></span><span class="muted">&#8250;</span></button></div>
+    </div>
+    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px" onclick="applyBulkTransfer()">&#8646; Convert</button>
+  </div></div>`;
+  $("bulkTfFromLabel").textContent=accName(window._bulkTfFrom);
+  $("bulkTfToLabel").textContent=accName(window._bulkTfTo);
+}
+function applyBulkTransfer(){
+  const from=window._bulkTfFrom,to=window._bulkTfTo;
+  if(!from||!to)return alert("Select both accounts");
+  if(from===to)return alert("From and To accounts must be different");
+  let count=0;
+  selectedTxIds.forEach(id=>{
+    const t=txns.find(x=>x.id===id);if(!t)return;
+    t.type="transfer";t.fromAccountId=from;t.toAccountId=to;
+    delete t.category;delete t.subcategory;delete t.accountId;
+    count++;
+  });
+  save();showModal("close");
+  selectMode=false;selectedTxIds=new Set();
+  render();
+  showToast("⇄ Converted "+count+" to transfers","green");
 }
 function fmtD(d){const dt=new Date(d),td=new Date(),df=Math.floor((td-dt)/864e5);if(df===0)return"Today";if(df===1)return"Yesterday";return dt.toLocaleDateString("en-NG",{weekday:"short",day:"numeric",month:"short"});}
 let _st;function doS(v){clearTimeout(_st);_st=setTimeout(()=>{search=v;render();},250);}
