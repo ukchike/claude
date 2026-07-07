@@ -579,10 +579,13 @@ function needsOnboarding(){return !profile.name;}
 function dailyTrendData(mode){
   const days=mode==="week"?7:30;
   const arr=[];
-  // Anchored to the currently selected period (pDate), not the device's real "now" — this is
-  // what makes the chart track the period picker at the top of the dashboard and immediately
-  // reflect newly added transactions dated anywhere in that window.
-  const anchor=new Date(pDate);
+  // Anchor: real "now" while browsing the current month (so the chart always ends at today and
+  // never goes stale even if the app has been open since before midnight), but the selected
+  // period (pDate) once the user navigates the period picker to a different month — so it
+  // still tracks period navigation instead of always snapping back to today.
+  const now=new Date();
+  const viewingCurrentPeriod=pDate.getFullYear()===now.getFullYear()&&pDate.getMonth()===now.getMonth();
+  const anchor=viewingCurrentPeriod?now:new Date(pDate.getFullYear(),pDate.getMonth()+1,0);
   for(let i=days-1;i>=0;i--){
     const d=new Date(anchor);d.setDate(d.getDate()-i);
     const ds=toLocalISODate(d);
@@ -779,6 +782,7 @@ const SETTINGS_ITEMS=[
   {id:"notifications",icon:"&#128276;",label:"Bank Alerts"},
   {id:"recurring",icon:"&#128257;",label:"Recurring"},
   {id:"backup",icon:"&#9729;&#65039;",label:"Backup & Restore"},
+  {id:"about",icon:"&#8505;&#65039;",label:"About"},
 ];
 function settingsItemSub(id){
   if(id==="profile")return esc(profile.name)||"Set your name";
@@ -790,6 +794,7 @@ function settingsItemSub(id){
   if(id==="notifications")return bankAlertsEnabled?"Auto-detect on":"Auto-detect off";
   if(id==="recurring")return recurring.length+" scheduled";
   if(id==="backup")return"Export, import, reset";
+  if(id==="about")return"App & developer info";
   return"";
 }
 function settingsTitle(){const it=SETTINGS_ITEMS.find(x=>x.id===settingsTab);return it?it.label:"Settings";}
@@ -833,6 +838,22 @@ function renderSettings(){
         <button class="btn btn-sm btn-rd" onclick="resetAll()">&#128465; Reset All</button>
       </div>
       <div class="fz9 muted mt6">Tip: in the save dialog, choose Google Drive (or any cloud app installed on your phone) to back up off-device — or pick device storage for a local copy.</div>
+    </div>`;
+  }
+  if(settingsTab==="about"){
+    body=`<div class="st-section">
+      <div class="profile-avatar" style="font-size:20px">FF</div>
+      <div class="tac mb4"><div class="fz14 fw7">FinanceFlow</div><div class="fz10 muted">Version 1.0</div></div>
+      <div class="fz11 muted tac mb16" style="line-height:1.5">A personal finance tracker for everyday budgeting — log income and expenses, set category budgets, track accounts and transfers, and see where your money actually goes. Everything is stored on your device; nothing is sent anywhere.</div>
+      <div class="divider"></div>
+      <span class="st-label">Developer</span>
+      <div class="bud-item">
+        <div class="fz12 fw7 mb8">Chike</div>
+        <div class="flex g8 flex-w">
+          <button class="btn btn-g btn-sm" onclick="openExternalLink('https://www.linkedin.com/in/ukchike')">&#128279; LinkedIn</button>
+          <button class="btn btn-g btn-sm" onclick="openExternalLink('https://x.com/uk_chike')">𝕏 @uk_chike</button>
+        </div>
+      </div>
     </div>`;
   }
   if(settingsTab==="recurring"){
@@ -1001,6 +1022,12 @@ function moveOrRenameSub(type,oldCat,oldSub,newCat,newName){
 // ── FEATURE 4: BIOMETRIC ──
 function toggleBiometric(on){biometricEnabled=on;save();render();}
 function requestNotifPerm(){if(window.Android&&window.Android.requestNotificationPermission){window.Android.requestNotificationPermission();setTimeout(render,600);}}
+// Opens a URL in the system browser via a native intent — a plain <a href> would try to
+// navigate the WebView itself to it, which fails (and isn't the right UX anyway).
+function openExternalLink(url){
+  if(window.Android&&window.Android.openExternalLink)window.Android.openExternalLink(url);
+  else window.open(url,"_blank");
+}
 
 // ── BANK ALERT AUTO-DETECTION (reads notification text natively, nothing leaves the device) ──
 function toggleBankAlerts(on){

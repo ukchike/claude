@@ -317,6 +317,18 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
+        // Hands off to the system browser via an intent — this does NOT need the app's own
+        // INTERNET permission (the browser app does its own networking, not this WebView).
+        @JavascriptInterface
+        public void openExternalLink(String url) {
+            runOnUiThread(() -> {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                } catch (Exception ignored) {
+                }
+            });
+        }
+
         @JavascriptInterface
         public void setBankAlertsEnabled(boolean enabled) {
             getSharedPreferences(BankAlertListenerService.PREFS, Context.MODE_PRIVATE)
