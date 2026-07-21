@@ -544,7 +544,18 @@ function toggleTheme(t){theme=t;applyTheme();save();render();}
 function setCurrency(code){const found=CURRENCIES.find(c=>c.code===code);if(found){currency=found;save();render();showToast("💱 Currency set to "+found.code,"green");}}
 
 // ── PERIOD ──
-function getRangeFor(mode,date){const d=new Date(date);if(mode==="week"){const day=d.getDay()||7;const mon=new Date(d);mon.setDate(d.getDate()-(day-1));const sun=new Date(mon);sun.setDate(mon.getDate()+6);return{start:mon,end:sun};}if(mode==="month")return{start:new Date(d.getFullYear(),d.getMonth(),1),end:new Date(d.getFullYear(),d.getMonth()+1,0)};if(mode==="quarter"){const q=Math.floor(d.getMonth()/3);return{start:new Date(d.getFullYear(),q*3,1),end:new Date(d.getFullYear(),q*3+3,0)};}return{start:new Date(d.getFullYear(),0,1),end:new Date(d.getFullYear(),11,31)};}
+function getRangeFor(mode,date){
+  const d=new Date(date);let start,end;
+  if(mode==="week"){const day=d.getDay()||7;const mon=new Date(d.getFullYear(),d.getMonth(),d.getDate()-(day-1));const sun=new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+6);start=mon;end=sun;}
+  else if(mode==="month"){start=new Date(d.getFullYear(),d.getMonth(),1);end=new Date(d.getFullYear(),d.getMonth()+1,0);}
+  else if(mode==="quarter"){const q=Math.floor(d.getMonth()/3);start=new Date(d.getFullYear(),q*3,1);end=new Date(d.getFullYear(),q*3+3,0);}
+  else{start=new Date(d.getFullYear(),0,1);end=new Date(d.getFullYear(),11,31);}
+  // startStr/endStr let callers compare against t.date (a "YYYY-MM-DD" string) directly instead
+  // of building a Date from it — new Date("YYYY-MM-DD") parses as UTC midnight, which combined
+  // with these locally-constructed start/end instants silently drops transactions dated on the
+  // last day of the range in any timezone ahead of UTC. Plain string comparison sidesteps that.
+  return{start,end,startStr:toLocalISODate(start),endStr:toLocalISODate(end)};
+}
 function getLabelFor(mode,date){const d=new Date(date);if(mode==="week"){const r=getRangeFor(mode,d);const o={day:"numeric",month:"short"};return r.start.toLocaleDateString("en-NG",o)+" – "+r.end.toLocaleDateString("en-NG",o);}if(mode==="month")return MO[d.getMonth()]+" "+d.getFullYear();if(mode==="quarter")return"Q"+(Math.floor(d.getMonth()/3)+1)+" "+d.getFullYear();return""+d.getFullYear();}
 function navPeriod(dir,e){if(e)e.stopPropagation();const d=new Date(pDate);if(pMode==="week")d.setDate(d.getDate()+dir*7);else if(pMode==="month")d.setMonth(d.getMonth()+dir);else if(pMode==="quarter")d.setMonth(d.getMonth()+dir*3);else d.setFullYear(d.getFullYear()+dir);pDate=d;ppOpen=false;render();}
 function setPMode(m){pMode=m;ppOpen=false;render();}
@@ -556,9 +567,9 @@ function closePP(){ppOpen=false;ppBOpen=false;}
 function toggleCmp(){cmpMode=!cmpMode;ppOpen=false;ppBOpen=false;render();}
 function toggleCat(n){exCats[n]=!exCats[n];render();}
 
-function getCatMap(mode,date,type){const range=getRangeFor(mode,date);const cat={},sub={};txns.filter(t=>{const d=new Date(t.date);return d>=range.start&&d<=range.end&&t.type===type;}).forEach(t=>{cat[t.category]=(cat[t.category]||0)+t.amount;if(t.subcategory){const k=t.category+"|||"+t.subcategory;sub[k]=(sub[k]||0)+t.amount;}});return{cat,sub};}
-function getSpent(mode,date,catName,subName){const range=getRangeFor(mode,date);return txns.filter(t=>{const d=new Date(t.date);return d>=range.start&&d<=range.end&&t.type==="expense"&&t.category===catName&&(!subName||t.subcategory===subName);}).reduce((s,t)=>s+t.amount,0);}
-function getF(){const range=getRangeFor(pMode,pDate);return txns.filter(t=>{const d=new Date(t.date);if(d<range.start||d>range.end)return false;if(fType!=="all"&&t.type!==fType)return false;if(fCat!=="all"&&t.category!==fCat)return false;if(fAcc!=="all"){const touches=t.type==="transfer"?(t.fromAccountId===fAcc||t.toAccountId===fAcc):t.accountId===fAcc;if(!touches)return false;}if(search){const s=search.toLowerCase();if(!(t.description||"").toLowerCase().includes(s)&&!(t.category||"").toLowerCase().includes(s)&&!(t.subcategory||"").toLowerCase().includes(s))return false;}return true;});}
+function getCatMap(mode,date,type){const range=getRangeFor(mode,date);const cat={},sub={};txns.filter(t=>t.date>=range.startStr&&t.date<=range.endStr&&t.type===type).forEach(t=>{cat[t.category]=(cat[t.category]||0)+t.amount;if(t.subcategory){const k=t.category+"|||"+t.subcategory;sub[k]=(sub[k]||0)+t.amount;}});return{cat,sub};}
+function getSpent(mode,date,catName,subName){const range=getRangeFor(mode,date);return txns.filter(t=>t.date>=range.startStr&&t.date<=range.endStr&&t.type==="expense"&&t.category===catName&&(!subName||t.subcategory===subName)).reduce((s,t)=>s+t.amount,0);}
+function getF(){const range=getRangeFor(pMode,pDate);return txns.filter(t=>{if(t.date<range.startStr||t.date>range.endStr)return false;if(fType!=="all"&&t.type!==fType)return false;if(fCat!=="all"&&t.category!==fCat)return false;if(fAcc!=="all"){const touches=t.type==="transfer"?(t.fromAccountId===fAcc||t.toAccountId===fAcc):t.accountId===fAcc;if(!touches)return false;}if(search){const s=search.toLowerCase();if(!(t.description||"").toLowerCase().includes(s)&&!(t.category||"").toLowerCase().includes(s)&&!(t.subcategory||"").toLowerCase().includes(s))return false;}return true;});}
 
 // ── ACCOUNT BALANCE HELPERS (income/expense affect one account; transfers move between two) ──
 function getAccountBalance(accId){
@@ -699,7 +710,7 @@ function buildInsights(f,inc,exp){
   else if(pMode==="quarter")prevDate.setMonth(prevDate.getMonth()-3);
   else prevDate.setFullYear(prevDate.getFullYear()-1);
   const prevRange=getRangeFor(pMode,prevDate);
-  const prevExp=txns.filter(t=>t.type==="expense"&&new Date(t.date)>=prevRange.start&&new Date(t.date)<=prevRange.end).reduce((s,t)=>s+t.amount,0);
+  const prevExp=txns.filter(t=>t.type==="expense"&&t.date>=prevRange.startStr&&t.date<=prevRange.endStr).reduce((s,t)=>s+t.amount,0);
   if(prevExp>0&&exp>0){
     const diffPct=(exp-prevExp)/prevExp*100;
     if(Math.abs(diffPct)>=5)insights.push({icon:diffPct>0?"&#128200;":"&#128201;",color:diffPct>0?"#ef4444":"#22c55e",text:`Spending is ${Math.abs(diffPct).toFixed(0)}% ${diffPct>0?"higher":"lower"} than the previous period (${fmt(prevExp)} &#8594; ${fmt(exp)}).`});
@@ -715,19 +726,15 @@ function rDash(f,inc,exp){
   const catMap={};f.filter(t=>t.type==="expense").forEach(t=>{catMap[t.category]=(catMap[t.category]||0)+t.amount;});const catArr=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);const tot=catArr.reduce((s,c)=>s+c[1],0);
   const trend=[];for(let i=5;i>=0;i--){let m=pDate.getMonth()-i,y=pDate.getFullYear();if(m<0){m+=12;y--;}const mt=txns.filter(t=>{const d=new Date(t.date);return d.getMonth()===m&&d.getFullYear()===y;});trend.push({month:MO[m],inc:mt.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0),exp:mt.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0)});}
   const tMax=Math.max(...trend.map(t=>Math.max(t.inc,t.exp)),1);
-  const today=toLocalISODate(new Date());
-  const pRange=getRangeFor(pMode,pDate);
-  const viewingCurrent=new Date()>=pRange.start&&new Date()<=pRange.end;
-  const daysTotal=Math.max(1,Math.round((pRange.end-pRange.start)/86400000)+1);
-  const daysElapsed=viewingCurrent?Math.max(1,Math.round((new Date(new Date().toDateString())-pRange.start)/86400000)+1):daysTotal;
+  const budgetedTotal=budgets.filter(b=>b.limit>0).reduce((s,b)=>s+b.limit,0);
+  const budgetedSpent=budgets.filter(b=>b.limit>0).reduce((s,b)=>s+f.filter(t=>t.type==="expense"&&t.category===b.cat).reduce((s2,t)=>s2+t.amount,0),0);
+  const budgetedPct=budgetedTotal>0?Math.min((budgetedSpent/budgetedTotal)*100,100):0;
+  const budgetedOver=budgetedTotal>0&&budgetedSpent>budgetedTotal;
+  const budgetSummary=budgetedTotal>0?`<div class="mb10" style="padding-bottom:10px;border-bottom:1px solid var(--border)"><div class="flex-b fz10"><span class="fw7">Total this period</span><span style="color:${budgetedOver?"var(--red)":"var(--muted)"}">${fmtK(budgetedSpent)} / ${fmtK(budgetedTotal)}</span></div><div class="bar-track" style="height:8px;margin-top:4px"><div class="bar-fill" style="width:${budgetedPct}%;background:${budgetBarColor(budgetedPct,budgetedOver)};height:100%"></div></div><div class="fz9 muted mt2">${budgetedPct.toFixed(0)}% of combined budget used${budgetedOver?" — over":""}</div></div>`:"";
   const budH=budgets.filter(b=>b.limit>0).slice(0,4).map(b=>{
     const sp=f.filter(t=>t.type==="expense"&&t.category===b.cat).reduce((s,t)=>s+t.amount,0);
     const pct=Math.min((sp/b.limit)*100,100);const c=budgetBarColor(pct,sp>b.limit);
-    const todaySp=viewingCurrent?f.filter(t=>t.type==="expense"&&t.category===b.cat&&t.date===today).reduce((s,t)=>s+t.amount,0):0;
-    const paceTarget=b.limit*(daysElapsed/daysTotal);
-    const paceOver=sp>paceTarget;
-    const todayLine=viewingCurrent?`<div class="flex-b fz9 mt2" style="color:var(--muted)"><span>Today: ${fmtK(todaySp)}</span><span style="color:${paceOver?"var(--warn)":"var(--green)"}">${paceOver?"&#9650; Ahead of pace":"&#10003; On track"}</span></div>`:"";
-    return`<div class="mb8"><div class="flex-b fz10"><span class="fw6">${esc(b.cat)}</span><span style="color:${sp>b.limit?"var(--red)":"var(--muted)"}">${fmtK(sp)}/${fmtK(b.limit)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${c}"></div></div>${todayLine}</div>`;}).join("");
+    return`<div class="mb8"><div class="flex-b fz10"><span class="fw6">${esc(b.cat)}</span><span style="color:${sp>b.limit?"var(--red)":"var(--muted)"}">${fmtK(sp)}/${fmtK(b.limit)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${c}"></div></div></div>`;}).join("");
   const recent=[...f].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
   const insights=buildInsights(f,inc,exp);
   const savColor=savRate<0?"var(--red)":savRate<20?"var(--warn)":"var(--green)";
@@ -756,7 +763,7 @@ function rDash(f,inc,exp){
       <div class="card" style="margin:0"><div class="fz11 fw7 mb6">Top Spending</div>${catArr.slice(0,5).map(([n,v])=>`<div class="cat-row"><div class="cat-dot" style="background:${clr(n)}"></div><span class="fz10 muted ellip" style="flex:1">${esc(n)}</span><span class="fz10 fw6">${fmtK(v)}</span><span class="fz9 muted tar" style="width:26px">${tot?(v/tot*100).toFixed(0):0}%</span></div>`).join("")||'<div class="muted fz11 tac" style="padding:12px">No data</div>'}</div>
     </div>`,
     insights:insights.length?`<div class="card"><div class="fz11 fw7 mb8">&#128161; Insights</div>${insights.map(i=>`<div class="insight-row"><div class="insight-icon" style="background:${i.color}20">${i.icon}</div><div class="fz11" style="flex:1">${i.text}</div></div>`).join("")}</div>`:"",
-    budget:budH?`<div class="card"><div class="flex-b mb8"><span class="fz12 fw7">Budget</span><button class="btn btn-g btn-sm" onclick="goTo('budgets')">Details</button></div>${budH}</div>`:"",
+    budget:budH?`<div class="card"><div class="flex-b mb8"><span class="fz12 fw7">Budget</span><button class="btn btn-g btn-sm" onclick="goTo('budgets')">Details</button></div>${budgetSummary}${budH}</div>`:"",
     recent:`<div class="card"><div class="flex-b mb8"><span class="fz12 fw7">Recent</span><button class="btn btn-g btn-sm" onclick="goTo('transactions')">All</button></div>${recent.map(txRow).join("")}</div>`,
   };
 
@@ -791,7 +798,7 @@ function rStats(inc,exp){
     $("main").innerHTML=tabs+cmpPickerHdr()+`<div class="card" style="padding:12px"><div class="flex-b mb6"><span class="fz11 fw7">Category Comparison</span><span class="fz9 muted">${lA} vs ${lB}</span></div><div class="flex-b fz10 mb6" style="padding:0 6px;border-bottom:1px solid var(--border);padding-bottom:6px"><span class="muted fw6">TOTAL</span><span style="color:var(--accent);font-weight:700">${fmt(totalA)}</span><span class="muted">${fmt(totalB)}</span><span>${chgBadge(totalA,totalB,isExp)}</span></div><table class="cmp-tbl"><thead><tr><th>Category</th><th style="color:var(--accent)">${lA}</th><th class="muted">${lB}</th><th>&#916;</th></tr></thead><tbody>${names.map(name=>{const vA=mA.cat[name]||0,vB=mB.cat[name]||0;const c=clr(name);const pct=totalA&&vA?(vA/totalA*100).toFixed(0):0;const isE=exCats[name];const subNames=[...new Set([...Object.keys(mA.sub).filter(k=>k.startsWith(name+"|||")),...Object.keys(mB.sub).filter(k=>k.startsWith(name+"|||"))].map(k=>k.split("|||")[1]))];return`<tr style="cursor:${subNames.length?"pointer":"default"}" onclick="${subNames.length?`toggleCat('${esc(name)}')`:""}""><td><div class="flex g6"><div class="cat-dot" style="background:${c}"></div><span style="color:${c};font-size:11px">${esc(name)}</span><span class="fz9 muted">${pct}%</span>${subNames.length?`<span class="fz9 muted">${isE?"&#9650;":"&#9660;"}</span>`:""}</div></td><td class="fw7" style="color:var(--accent)">${fmtK(vA)}</td><td class="muted">${fmtK(vB)}</td><td>${chgBadge(vA,vB,isExp)}</td></tr>${isE?subNames.map(sn=>{const sA=mA.sub[name+"|||"+sn]||0,sB=mB.sub[name+"|||"+sn]||0;return`<tr style="background:var(--bg);cursor:pointer" onclick="viewSubTx('${esc(name)}','${esc(sn)}')"><td style="padding-left:22px;color:var(--muted);font-size:10px">${esc(sn)}</td><td class="fz10" style="color:var(--accent)">${fmtK(sA)}</td><td class="fz10 muted">${fmtK(sB)}</td><td>${chgBadge(sA,sB,isExp)}</td></tr>`;}).join(""):""}`;}).join("")}</tbody></table></div>`;
   }else{
     const catArr=Object.entries(mA.cat).sort((a,b)=>b[1]-a[1]);let gp=[],cum=0;catArr.forEach(([n,v])=>{const p=(v/totalA)*100;gp.push(`${clr(n)} ${cum}% ${cum+p}%`);cum+=p;});const pie=gp.length?`conic-gradient(${gp.join(",")})`: "conic-gradient(var(--border) 0% 100%)";
-    $("main").innerHTML=ppHTML()+tabs+`<div class="card anim-card"><div class="pie-wrap anim-pop" style="background:${pie}"><div class="pie-hole"><div class="fz9 muted">${isExp?"Expenses":"Income"}</div><div class="fz13 fw8">${fmt(totalA)}</div></div></div>${catArr.length?catArr.map(([name,val],ci)=>{const pct=totalA?(val/totalA*100).toFixed(1):0;const c=clr(name);const isE=exCats[name];const subs=Object.entries(mA.sub).filter(([k])=>k.startsWith(name+"|||")).map(([k,v])=>({name:k.split("|||")[1],val:v})).sort((a,b)=>b.val-a.val);return`<div class="exp-cat anim-card" style="animation-delay:${ci*40}ms"><div class="exp-cat-hdr" onclick="toggleCat('${esc(name)}')"><div class="cat-dot" style="background:${c}"></div><span class="pct-badge" style="background:${c}33;color:${c}">${Math.round(pct)}%</span><span class="fz12 fw6" style="flex:1">${esc(name)}</span><span class="fz12 fw7">${fmt(val)}</span><span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span></div>${isE?`<div class="exp-cat-subs"><div class="fz9 muted mb4">Last 8 months</div>${catMonthlyTrendSVG(name)}${subs.length?subs.map(s=>`<div class="exp-sub-row" style="cursor:pointer" onclick="event.stopPropagation();viewSubTx('${esc(name)}','${esc(s.name)}')"><span class="muted">${esc(s.name)}</span><span class="fw6">${fmt(s.val)}</span></div>`).join(""):""}</div>`:""}</div>`;}).join(""):'<div class="muted fz12 tac" style="padding:20px">No data this period</div>'}</div>`;
+    $("main").innerHTML=ppHTML()+tabs+`<div class="card anim-card"><div class="pie-wrap anim-pop" style="background:${pie}"><div class="pie-hole"><div class="fz9 muted">${isExp?"Expenses":"Income"}</div><div class="fz13 fw8">${fmt(totalA)}</div></div></div>${catArr.length?catArr.map(([name,val],ci)=>{const pct=totalA?(val/totalA*100).toFixed(1):0;const c=clr(name);const isE=exCats[name];const subs=Object.entries(mA.sub).filter(([k])=>k.startsWith(name+"|||")).map(([k,v])=>({name:k.split("|||")[1],val:v})).sort((a,b)=>b.val-a.val);return`<div class="exp-cat anim-card" style="animation-delay:${ci*40}ms"><div class="exp-cat-hdr" onclick="toggleCat('${esc(name)}')"><div class="cat-dot" style="background:${c}"></div><span class="pct-badge" style="background:${c}33;color:${c}">${Math.round(pct)}%</span><span class="fz12 fw6" style="flex:1">${esc(name)}</span><span class="fz12 fw7">${fmt(val)}</span><span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span></div>${isE?`<div class="exp-cat-subs"><div class="fz9 muted mb4">Last 8 months</div>${catMonthlyTrendSVG(name)}${subs.length?subs.map(s=>{const subKey=name+"|||"+s.name;const subOpen=exCats[subKey];return`<div><div class="exp-sub-row" style="cursor:pointer" onclick="event.stopPropagation();toggleCat('${esc(subKey)}')"><span class="muted">${esc(s.name)} ${subOpen?"&#9650;":"&#9660;"}</span><span class="flex g6"><span class="fw6">${fmt(s.val)}</span><span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();viewSubTx('${esc(name)}','${esc(s.name)}')" title="View transactions">&#8250;</span></span></div>${subOpen?`<div style="padding:0 0 8px 12px"><div class="fz9 muted mb4">${esc(s.name)} — last 8 months</div>${catMonthlyTrendSVG(name,s.name)}</div>`:""}</div>`;}).join(""):""}</div>`:""}</div>`;}).join(""):'<div class="muted fz12 tac" style="padding:20px">No data this period</div>'}</div>`;
   }
 }
 
@@ -1182,7 +1189,7 @@ function checkBudgetAlerts(tx){
   const range=getRangeFor(pMode,pDate);
   budgets.forEach(b=>{
     if(b.cat!==tx.category||b.limit<=0)return;
-    const spent=txns.filter(t=>t.type==="expense"&&t.category===b.cat&&new Date(t.date)>=range.start&&new Date(t.date)<=range.end).reduce((s,t)=>s+t.amount,0);
+    const spent=txns.filter(t=>t.type==="expense"&&t.category===b.cat&&t.date>=range.startStr&&t.date<=range.endStr).reduce((s,t)=>s+t.amount,0);
     const pct=spent/b.limit*100;
     if(pct>=100){
       const title="Budget Exceeded: "+b.cat;
