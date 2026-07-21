@@ -54,6 +54,12 @@ android {
         }
     }
 
+    // AGP 8+ no longer generates BuildConfig by default; MainActivity.getFlavor() reads
+    // BuildConfig.FLAVOR to tell the JS side which product flavor (standard/full) it's running.
+    buildFeatures {
+        buildConfig true
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
