@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Merged into the main manifest only for the "full" product flavor. Adds the Bank Alerts
+     notification-listener service, which is what triggers Google Play Protect's "can request
+     access to sensitive data" block on sideloaded apps. Kept out of the "standard" flavor so
+     the default build installs cleanly. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <service
+            android:name="com.financeflow.app.BankAlertListenerService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

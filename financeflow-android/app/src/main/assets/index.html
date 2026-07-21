@@ -267,6 +267,7 @@ let editingCat=null; // category name currently open for rename in Categories ta
 let expandedBudget=null,expandedCatSet=null;
 let hiddenDefaultCats={expense:[],income:[]}; // default category names hidden after being renamed
 let bankAlertsEnabled=false; // Feature: auto-detect bank transactions from notifications
+let appFlavor="full"; // "full" (Bank Alerts available) or "standard" (no notification access at all); detected from the native bridge
 let selectMode=false,selectedTxIds=new Set(); // Transactions multi-select for bulk edit
 let homeChartMode="week"; // Daily income/expense trend card: week or month view
 let homeLayout=["networth","stats","chart","trend","insights","budget","recent"]; // Home section order
@@ -533,7 +534,8 @@ function load(){
   try{const co=localStorage.getItem("ffd_catorder");if(co)catOrder=JSON.parse(co);}catch(e){}
   if(!accounts.length)accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];
   applyTheme();
-  if(window.Android&&window.Android.setBankAlertsEnabled)window.Android.setBankAlertsEnabled(bankAlertsEnabled);
+  try{if(window.Android&&window.Android.getFlavor)appFlavor=window.Android.getFlavor()||"full";}catch(e){}
+  if(appFlavor==="full"&&window.Android&&window.Android.setBankAlertsEnabled)window.Android.setBankAlertsEnabled(bankAlertsEnabled);
 }
 function applyTheme(){document.documentElement.setAttribute("data-theme",theme);const mc=document.querySelector('meta[name="theme-color"]');if(mc)mc.setAttribute("content",theme==="light"?"#e9ebef":"#000000");applyAccent();}
 function applyAccent(){document.documentElement.style.setProperty("--accent",accentColor.h);document.documentElement.style.setProperty("--accent-rgb",accentColor.rgb);}
@@ -644,6 +646,43 @@ function dailyTrendSVG(mode){
 }
 function setHomeChartMode(m){homeChartMode=m;render();}
 
+// Month-over-month comparison for a single category (or subcategory) — shown when a category
+// is expanded in Stats, mirroring the "select a category to see its trend across months" view.
+function catMonthlyTrendData(catName,subName,months){
+  const n=months||8;const arr=[];const anchor=pDate;
+  for(let i=n-1;i>=0;i--){
+    let m=anchor.getMonth()-i,y=anchor.getFullYear();
+    while(m<0){m+=12;y--;}
+    const val=txns.filter(t=>{const d=new Date(t.date);return t.type==="expense"&&t.category===catName&&(!subName||t.subcategory===subName)&&d.getMonth()===m&&d.getFullYear()===y;}).reduce((s,t)=>s+t.amount,0);
+    arr.push({label:MO[m],val});
+  }
+  return arr;
+}
+function catMonthlyTrendSVG(catName,subName){
+  const data=catMonthlyTrendData(catName,subName,8);
+  const color=clr(catName);
+  const padL=34,padR=6,padB=14,padT=6,w=300,h=90;
+  const plotW=w-padL-padR;
+  const max=Math.max(...data.map(d=>d.val),1);
+  const stepX=data.length>1?plotW/(data.length-1):plotW;
+  const yOf=v=>padT+(1-(v/max))*(h-padT-padB);
+  const xOf=i=>padL+i*stepX;
+  const path=data.map((d,i)=>`${i===0?"M":"L"}${xOf(i).toFixed(1)},${yOf(d.val).toFixed(1)}`).join(" ");
+  const dots=data.map((d,i)=>`<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(d.val).toFixed(1)}" r="2.5" style="fill:${color}"/>`).join("");
+  const labels=data.map((d,i)=>`<text x="${xOf(i).toFixed(1)}" y="${h+6}" font-size="8" text-anchor="middle" style="fill:var(--muted)">${esc(d.label)}</text>`).join("");
+  const yTicks=[0,max/2,max];
+  const yLabels=yTicks.map(v=>`
+    <text x="${padL-6}" y="${(yOf(v)+3).toFixed(1)}" font-size="8" text-anchor="end" style="fill:var(--muted)">${esc(fmtK(v))}</text>
+    <line x1="${padL}" y1="${yOf(v).toFixed(1)}" x2="${w-padR}" y2="${yOf(v).toFixed(1)}" style="stroke:var(--border)" stroke-width="1"/>
+  `).join("");
+  return`<svg viewBox="0 0 ${w} ${h+10}" style="width:100%;height:106px;overflow:visible">
+    ${yLabels}
+    <path d="${path}" fill="none" style="stroke:${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}
+    ${labels}
+  </svg>`;
+}
+
 function buildInsights(f,inc,exp){
   const insights=[];
   const savRate=inc>0?((inc-exp)/inc*100):0;
@@ -676,7 +715,19 @@ function rDash(f,inc,exp){
   const catMap={};f.filter(t=>t.type==="expense").forEach(t=>{catMap[t.category]=(catMap[t.category]||0)+t.amount;});const catArr=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);const tot=catArr.reduce((s,c)=>s+c[1],0);
   const trend=[];for(let i=5;i>=0;i--){let m=pDate.getMonth()-i,y=pDate.getFullYear();if(m<0){m+=12;y--;}const mt=txns.filter(t=>{const d=new Date(t.date);return d.getMonth()===m&&d.getFullYear()===y;});trend.push({month:MO[m],inc:mt.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0),exp:mt.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0)});}
   const tMax=Math.max(...trend.map(t=>Math.max(t.inc,t.exp)),1);
-  const budH=budgets.filter(b=>b.limit>0).slice(0,4).map(b=>{const sp=f.filter(t=>t.type==="expense"&&t.category===b.cat).reduce((s,t)=>s+t.amount,0);const pct=Math.min((sp/b.limit)*100,100);const c=budgetBarColor(pct,sp>b.limit);return`<div class="mb8"><div class="flex-b fz10"><span class="fw6">${esc(b.cat)}</span><span style="color:${sp>b.limit?"var(--red)":"var(--muted)"}">${fmtK(sp)}/${fmtK(b.limit)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${c}"></div></div></div>`;}).join("");
+  const today=toLocalISODate(new Date());
+  const pRange=getRangeFor(pMode,pDate);
+  const viewingCurrent=new Date()>=pRange.start&&new Date()<=pRange.end;
+  const daysTotal=Math.max(1,Math.round((pRange.end-pRange.start)/86400000)+1);
+  const daysElapsed=viewingCurrent?Math.max(1,Math.round((new Date(new Date().toDateString())-pRange.start)/86400000)+1):daysTotal;
+  const budH=budgets.filter(b=>b.limit>0).slice(0,4).map(b=>{
+    const sp=f.filter(t=>t.type==="expense"&&t.category===b.cat).reduce((s,t)=>s+t.amount,0);
+    const pct=Math.min((sp/b.limit)*100,100);const c=budgetBarColor(pct,sp>b.limit);
+    const todaySp=viewingCurrent?f.filter(t=>t.type==="expense"&&t.category===b.cat&&t.date===today).reduce((s,t)=>s+t.amount,0):0;
+    const paceTarget=b.limit*(daysElapsed/daysTotal);
+    const paceOver=sp>paceTarget;
+    const todayLine=viewingCurrent?`<div class="flex-b fz9 mt2" style="color:var(--muted)"><span>Today: ${fmtK(todaySp)}</span><span style="color:${paceOver?"var(--warn)":"var(--green)"}">${paceOver?"&#9650; Ahead of pace":"&#10003; On track"}</span></div>`:"";
+    return`<div class="mb8"><div class="flex-b fz10"><span class="fw6">${esc(b.cat)}</span><span style="color:${sp>b.limit?"var(--red)":"var(--muted)"}">${fmtK(sp)}/${fmtK(b.limit)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${c}"></div></div>${todayLine}</div>`;}).join("");
   const recent=[...f].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
   const insights=buildInsights(f,inc,exp);
   const savColor=savRate<0?"var(--red)":savRate<20?"var(--warn)":"var(--green)";
@@ -740,7 +791,7 @@ function rStats(inc,exp){
     $("main").innerHTML=tabs+cmpPickerHdr()+`<div class="card" style="padding:12px"><div class="flex-b mb6"><span class="fz11 fw7">Category Comparison</span><span class="fz9 muted">${lA} vs ${lB}</span></div><div class="flex-b fz10 mb6" style="padding:0 6px;border-bottom:1px solid var(--border);padding-bottom:6px"><span class="muted fw6">TOTAL</span><span style="color:var(--accent);font-weight:700">${fmt(totalA)}</span><span class="muted">${fmt(totalB)}</span><span>${chgBadge(totalA,totalB,isExp)}</span></div><table class="cmp-tbl"><thead><tr><th>Category</th><th style="color:var(--accent)">${lA}</th><th class="muted">${lB}</th><th>&#916;</th></tr></thead><tbody>${names.map(name=>{const vA=mA.cat[name]||0,vB=mB.cat[name]||0;const c=clr(name);const pct=totalA&&vA?(vA/totalA*100).toFixed(0):0;const isE=exCats[name];const subNames=[...new Set([...Object.keys(mA.sub).filter(k=>k.startsWith(name+"|||")),...Object.keys(mB.sub).filter(k=>k.startsWith(name+"|||"))].map(k=>k.split("|||")[1]))];return`<tr style="cursor:${subNames.length?"pointer":"default"}" onclick="${subNames.length?`toggleCat('${esc(name)}')`:""}""><td><div class="flex g6"><div class="cat-dot" style="background:${c}"></div><span style="color:${c};font-size:11px">${esc(name)}</span><span class="fz9 muted">${pct}%</span>${subNames.length?`<span class="fz9 muted">${isE?"&#9650;":"&#9660;"}</span>`:""}</div></td><td class="fw7" style="color:var(--accent)">${fmtK(vA)}</td><td class="muted">${fmtK(vB)}</td><td>${chgBadge(vA,vB,isExp)}</td></tr>${isE?subNames.map(sn=>{const sA=mA.sub[name+"|||"+sn]||0,sB=mB.sub[name+"|||"+sn]||0;return`<tr style="background:var(--bg);cursor:pointer" onclick="viewSubTx('${esc(name)}','${esc(sn)}')"><td style="padding-left:22px;color:var(--muted);font-size:10px">${esc(sn)}</td><td class="fz10" style="color:var(--accent)">${fmtK(sA)}</td><td class="fz10 muted">${fmtK(sB)}</td><td>${chgBadge(sA,sB,isExp)}</td></tr>`;}).join(""):""}`;}).join("")}</tbody></table></div>`;
   }else{
     const catArr=Object.entries(mA.cat).sort((a,b)=>b[1]-a[1]);let gp=[],cum=0;catArr.forEach(([n,v])=>{const p=(v/totalA)*100;gp.push(`${clr(n)} ${cum}% ${cum+p}%`);cum+=p;});const pie=gp.length?`conic-gradient(${gp.join(",")})`: "conic-gradient(var(--border) 0% 100%)";
-    $("main").innerHTML=ppHTML()+tabs+`<div class="card anim-card"><div class="pie-wrap anim-pop" style="background:${pie}"><div class="pie-hole"><div class="fz9 muted">${isExp?"Expenses":"Income"}</div><div class="fz13 fw8">${fmt(totalA)}</div></div></div>${catArr.length?catArr.map(([name,val],ci)=>{const pct=totalA?(val/totalA*100).toFixed(1):0;const c=clr(name);const isE=exCats[name];const subs=Object.entries(mA.sub).filter(([k])=>k.startsWith(name+"|||")).map(([k,v])=>({name:k.split("|||")[1],val:v})).sort((a,b)=>b.val-a.val);return`<div class="exp-cat anim-card" style="animation-delay:${ci*40}ms"><div class="exp-cat-hdr" onclick="toggleCat('${esc(name)}')"><div class="cat-dot" style="background:${c}"></div><span class="pct-badge" style="background:${c}33;color:${c}">${Math.round(pct)}%</span><span class="fz12 fw6" style="flex:1">${esc(name)}</span><span class="fz12 fw7">${fmt(val)}</span>${subs.length?`<span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span>`:""}</div>${isE&&subs.length?`<div class="exp-cat-subs">${subs.map(s=>`<div class="exp-sub-row" style="cursor:pointer" onclick="event.stopPropagation();viewSubTx('${esc(name)}','${esc(s.name)}')"><span class="muted">${esc(s.name)}</span><span class="fw6">${fmt(s.val)}</span></div>`).join("")}</div>`:""}</div>`;}).join(""):'<div class="muted fz12 tac" style="padding:20px">No data this period</div>'}</div>`;
+    $("main").innerHTML=ppHTML()+tabs+`<div class="card anim-card"><div class="pie-wrap anim-pop" style="background:${pie}"><div class="pie-hole"><div class="fz9 muted">${isExp?"Expenses":"Income"}</div><div class="fz13 fw8">${fmt(totalA)}</div></div></div>${catArr.length?catArr.map(([name,val],ci)=>{const pct=totalA?(val/totalA*100).toFixed(1):0;const c=clr(name);const isE=exCats[name];const subs=Object.entries(mA.sub).filter(([k])=>k.startsWith(name+"|||")).map(([k,v])=>({name:k.split("|||")[1],val:v})).sort((a,b)=>b.val-a.val);return`<div class="exp-cat anim-card" style="animation-delay:${ci*40}ms"><div class="exp-cat-hdr" onclick="toggleCat('${esc(name)}')"><div class="cat-dot" style="background:${c}"></div><span class="pct-badge" style="background:${c}33;color:${c}">${Math.round(pct)}%</span><span class="fz12 fw6" style="flex:1">${esc(name)}</span><span class="fz12 fw7">${fmt(val)}</span><span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span></div>${isE?`<div class="exp-cat-subs"><div class="fz9 muted mb4">Last 8 months</div>${catMonthlyTrendSVG(name)}${subs.length?subs.map(s=>`<div class="exp-sub-row" style="cursor:pointer" onclick="event.stopPropagation();viewSubTx('${esc(name)}','${esc(s.name)}')"><span class="muted">${esc(s.name)}</span><span class="fw6">${fmt(s.val)}</span></div>`).join(""):""}</div>`:""}</div>`;}).join(""):'<div class="muted fz12 tac" style="padding:20px">No data this period</div>'}</div>`;
   }
 }
 
@@ -814,7 +865,7 @@ function settingsItemSub(id){
   if(id==="categories")return"Rename, add & organize";
   if(id==="appearance")return(theme==="dark"?"Dark":"Light")+" · "+accentColor.n+" accent";
   if(id==="security")return biometricEnabled?"Lock enabled":"Biometric lock off";
-  if(id==="notifications")return bankAlertsEnabled?"Auto-detect on":"Auto-detect off";
+  if(id==="notifications")return appFlavor!=="full"?"Not in this build":bankAlertsEnabled?"Auto-detect on":"Auto-detect off";
   if(id==="recurring")return recurring.length+" scheduled";
   if(id==="backup")return"Export, import, reset";
   if(id==="about")return"App & developer info";
@@ -888,7 +939,17 @@ function renderSettings(){
       ${recurring.length?recurring.map(r=>`<div class="bud-item"><div class="flex-b"><div><div class="fz12 fw6">${esc(r.description||r.category)}</div><div class="fz10 muted mt4">${r.type==="income"?"+":"-"}${fmt(r.amount)} · ${r.frequency} · Next: ${r.nextDue}</div></div><div class="flex g6"><button class="btn btn-sm ${r.active?"btn-g":"btn-p"}" onclick="toggleRecurring('${r.id}')">${r.active?"Pause":"Resume"}</button><button class="btn btn-sm btn-rd" onclick="deleteRecurring('${r.id}')">&#128465;</button></div></div></div>`).join(""):`<div class="fz11 muted tac" style="padding:12px">No recurring transactions yet.<br>Add one via the + Add button.</div>`}
     </div>`;
   }
-  if(settingsTab==="notifications"){
+  if(settingsTab==="notifications"&&appFlavor!=="full"){
+    body=`<div class="st-section">
+      <span class="st-label">Auto-Detect Bank Transactions</span>
+      <div class="card" style="margin:0">
+        <div class="fz12 fw6 mb6">&#128274; Not included in this build</div>
+        <div class="fz10 muted">This is the <b>Standard</b> build of FinanceFlow — it never requests notification access, so Google Play Protect won't flag it on install.</div>
+        <div class="fz10 muted mt8">If you want auto-detected bank alerts, install the <b>Full</b> build instead (FinanceFlow-Full.apk from the same release) — it adds this one optional permission and may show a one-time Play Protect warning you can dismiss, since it deliberately reads notification text to catch debit/credit alerts.</div>
+      </div>
+    </div>`;
+  }
+  if(settingsTab==="notifications"&&appFlavor==="full"){
     const hasListener=window.Android&&window.Android.hasNotificationListenerAccess&&window.Android.hasNotificationListenerAccess();
     const pending=getPendingBankAlerts();
     body=`<div class="st-section">

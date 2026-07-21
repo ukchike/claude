@@ -14,6 +14,26 @@ android {
         versionName "1.1"
     }
 
+    // Google Play Protect hard-blocks sideloaded apps that combine "unknown developer" with a
+    // NotificationListenerService (used here for Bank Alerts auto-detect) — it's a reputation
+    // heuristic, not something a manifest tweak can silence. Splitting into two flavors lets
+    // most users install a build that never asks for notification access at all (and isn't
+    // flagged), while anyone who wants Bank Alerts can opt into the Full build instead.
+    flavorDimensions "distribution"
+    productFlavors {
+        // No applicationIdSuffix on "full": every FinanceFlow release to date already shipped
+        // with Bank Alerts, so existing installs are on this package id — keeping it here means
+        // updates keep working in place for anyone already using the feature.
+        full {
+            dimension "distribution"
+        }
+        standard {
+            dimension "distribution"
+            applicationIdSuffix ".standard"
+            versionNameSuffix "-standard"
+        }
+    }
+
     signingConfigs {
         release {
             // Fixed keystore checked into the repo so every CI build (fresh runner

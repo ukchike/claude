@@ -30,21 +30,26 @@ jobs:
         run: chmod +x gradlew
         working-directory: financeflow-android
 
-      - name: Build Release APK
-        run: ./gradlew assembleRelease
+      - name: Build Release APKs (standard + full)
+        run: ./gradlew assembleStandardRelease assembleFullRelease
         working-directory: financeflow-android
 
-      - name: Rename APK
+      - name: Rename APKs
         run: |
-          APK=$(find financeflow-android/app/build/outputs/apk/release -maxdepth 1 -name "app-release*.apk" | head -1)
-          echo "Found APK: $APK"
-          mv "$APK" financeflow-android/app/build/outputs/apk/release/FinanceFlow.apk
+          STD=$(find financeflow-android/app/build/outputs/apk/standard/release -maxdepth 1 -name "app-standard-release*.apk" | head -1)
+          FULL=$(find financeflow-android/app/build/outputs/apk/full/release -maxdepth 1 -name "app-full-release*.apk" | head -1)
+          echo "Standard APK: $STD"
+          echo "Full APK: $FULL"
+          mv "$STD" financeflow-android/app/build/outputs/apk/standard/release/FinanceFlow.apk
+          mv "$FULL" financeflow-android/app/build/outputs/apk/full/release/FinanceFlow-Full.apk
 
-      - name: Upload APK artifact
+      - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
           name: FinanceFlow-APK
-          path: financeflow-android/app/build/outputs/apk/release/FinanceFlow.apk
+          path: |
+            financeflow-android/app/build/outputs/apk/standard/release/FinanceFlow.apk
+            financeflow-android/app/build/outputs/apk/full/release/FinanceFlow-Full.apk
           retention-days: 90
 
       - name: Create GitHub Release
@@ -55,10 +60,16 @@ jobs:
           body: |
             FinanceFlow Android APK
 
+            Two builds are provided:
+            - **FinanceFlow.apk** (recommended) — never asks for notification access, so Google Play Protect won't flag it on install.
+            - **FinanceFlow-Full.apk** — adds the optional "Bank Alerts" auto-detect feature (reads notification text for bank debit/credit alerts). Because it requests notification access, Play Protect may show a one-time warning on sideloaded installs — this is expected for that permission and can be dismissed.
+
             **Install instructions:**
-            1. Download `FinanceFlow.apk` below
+            1. Download the APK you want below
             2. On your Android phone: Settings → Security → enable "Install unknown apps"
             3. Open the APK and tap Install
-          files: financeflow-android/app/build/outputs/apk/release/FinanceFlow.apk
+          files: |
+            financeflow-android/app/build/outputs/apk/standard/release/FinanceFlow.apk
+            financeflow-android/app/build/outputs/apk/full/release/FinanceFlow-Full.apk
           draft: false
           prerelease: false

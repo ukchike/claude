@@ -355,6 +355,11 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception ignored) {
             }
         }
+
+        @JavascriptInterface
+        public String getFlavor() {
+            return BuildConfig.FLAVOR;
+        }
     }
 
     @Override
