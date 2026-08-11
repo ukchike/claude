@@ -360,6 +360,26 @@ public class MainActivity extends AppCompatActivity {
         public String getFlavor() {
             return BuildConfig.FLAVOR;
         }
+
+        @JavascriptInterface
+        public void scheduleReminders() {
+            getSharedPreferences(ReminderReceiver.PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(ReminderReceiver.KEY_ENABLED, true).apply();
+            ReminderReceiver.scheduleAll(MainActivity.this);
+        }
+
+        @JavascriptInterface
+        public void cancelReminders() {
+            getSharedPreferences(ReminderReceiver.PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(ReminderReceiver.KEY_ENABLED, false).apply();
+            ReminderReceiver.cancelAll(MainActivity.this);
+        }
+
+        @JavascriptInterface
+        public void syncUpcomingBills(String json) {
+            getSharedPreferences(ReminderReceiver.PREFS, Context.MODE_PRIVATE)
+                .edit().putString(ReminderReceiver.KEY_UPCOMING_BILLS, json).apply();
+        }
     }
 
     @Override
