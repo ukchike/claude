@@ -207,9 +207,18 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
 <div id="lockScreen" style="display:none">
   <div class="lock-logo">FF</div>
   <div class="fz16 fw8 mb4">FinanceFlow</div>
-  <div class="fz12 muted mb16">Tap to unlock with biometrics</div>
-  <button class="btn btn-p" style="padding:12px 32px;font-size:14px" onclick="triggerAuth()">&#128274; Unlock</button>
-  <div id="lockMsg" class="fz11 muted mt10"></div>
+  <div id="lockBio">
+    <div class="fz12 muted mb16">Tap to unlock with biometrics</div>
+    <button class="btn btn-p" style="padding:12px 32px;font-size:14px" onclick="triggerAuth()">&#128274; Unlock</button>
+    <div id="lockMsg" class="fz11 muted mt10"></div>
+    <button id="lockUsePinBtn" class="btn btn-g btn-sm mt10" style="display:none" onclick="showPinEntry()">Use PIN instead</button>
+  </div>
+  <div id="lockPin" style="display:none">
+    <div class="fz12 muted mb12">Enter your PIN</div>
+    <input class="inp tac" id="pinInput" type="password" inputmode="numeric" maxlength="6" style="width:140px;font-size:18px;letter-spacing:6px;text-align:center" autocomplete="off">
+    <button class="btn btn-p mt10" style="padding:10px 28px;font-size:13px" onclick="verifyPin()">Unlock</button>
+    <div id="pinMsg" class="fz11 muted mt10"></div>
+  </div>
 </div>
 <header class="hdr">
   <button class="avatar-btn" id="avatarBtn" onclick="openSettings('home')" title="Settings">&#9881;</button>
@@ -268,14 +277,21 @@ function setNbPeriod(p){nbPeriod=p;render();}
 let editingSub=null; // "cat|||sub" currently open for rename/move in Categories tab
 let editingCat=null; // category name currently open for rename in Categories tab
 let expandedBudget=null,expandedCatSet=null;
+let pinChangeOpen=false;
 let hiddenDefaultCats={expense:[],income:[]}; // default category names hidden after being renamed
 let bankAlertsEnabled=false; // Feature: auto-detect bank transactions from notifications
 let appFlavor="full"; // "full" (Bank Alerts available) or "standard" (no notification access at all); detected from the native bridge
 let selectMode=false,selectedTxIds=new Set(); // Transactions multi-select for bulk edit
 let homeChartMode="week"; // Daily income/expense trend card: week or month view
-let homeLayout=["networth","stats","chart","trend","insights","budget","recent"]; // Home section order
+let homeLayout=["networth","goals","stats","chart","trend","insights","budget","recent"]; // Home section order
 let homeCustomize=false;
 let catOrder={expense:[],income:[]}; // custom display order for categories (falls back to natural order)
+let goals=[]; // Savings goals: {id,name,target,saved,color,accountId,targetDate}
+let pinHash=""; // PIN/passcode fallback lock — SHA-256 hex of the PIN, empty = not set
+let pinLockActive=false; // true while the app is showing the PIN/biometric lock screen this session
+let remindersEnabled=false; // daily 6am/6pm "log your transactions" + upcoming-bill reminders
+const GOAL_COLORS=["#22c55e","#3b82f6","#f97316","#8b5cf6","#ec4899","#06b6d4","#eab308","#10b981"];
+let newGoalColor=GOAL_COLORS[0];
 
 function getEC(){const r={};Object.keys(DEF_EC).forEach(k=>{if(hiddenDefaultCats.expense.includes(k))return;r[k]=[...(userEC[k]||DEF_EC[k])];});Object.keys(userEC).forEach(k=>{if(!DEF_EC[k])r[k]=[...(userEC[k]||[])];});return r;}
 function getIC(){const r={};Object.keys(DEF_IC).forEach(k=>{if(hiddenDefaultCats.income.includes(k))return;r[k]=[...(userIC[k]||DEF_IC[k])];});Object.keys(userIC).forEach(k=>{if(!DEF_IC[k])r[k]=[...(userIC[k]||[])];});return r;}
@@ -335,6 +351,9 @@ function budgetBarColor(pct,over){if(over)return"var(--red)";if(pct>=80)return"v
 
 const fmt=a=>currency.symbol+Number(a||0).toLocaleString(currency.locale,{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtK=a=>{const n=Number(a||0);const s=currency.symbol;return n>=1e6?s+(n/1e6).toFixed(1)+"M":n>=1000?s+(n/1000).toFixed(0)+"k":s+n.toFixed(0);};
+// Format an amount in a SPECIFIC currency code (used for per-account balances) rather than the
+// app's global primary currency — e.g. a USD savings account shown alongside NGN accounts.
+function fmtCur(a,code){const c=CURRENCIES.find(x=>x.code===code)||currency;return c.symbol+Number(a||0).toLocaleString(c.locale,{minimumFractionDigits:2,maximumFractionDigits:2});}
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).substr(2,5);
 // Local-calendar-day formatter — toISOString() converts to UTC first, which silently shifts
 // the date by a day for part of the day in timezones ahead of UTC (e.g. WAT, UTC+1).
@@ -459,6 +478,36 @@ function pickAccountFor(id){
 }
 function closePicker(){const ov=document.getElementById("pickerOverlay");if(ov)ov.innerHTML="";}
 
+// ── RECEIPT PHOTOS (attached to a transaction, stored as a small compressed JPEG data URL) ──
+function receiptBoxHTML(varName,prefix){
+  const data=window[varName];
+  return data?`<div class="flex g8" style="align-items:center"><img src="${data}" onclick="viewReceipt('${varName}')" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer"><span class="fz10 muted" style="flex:1">Receipt attached — tap to view</span><button type="button" class="btn btn-sm btn-rd" onclick="removeReceipt('${varName}','${prefix}')">Remove</button></div>`
+    :`<label class="btn btn-g w100" style="justify-content:center;cursor:pointer"><input type="file" accept="image/*" capture="environment" style="display:none" onchange="attachReceipt(this,'${varName}','${prefix}')">&#128247; Attach Receipt Photo</label>`;
+}
+function attachReceipt(inputEl,varName,prefix){
+  const file=inputEl.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      const maxDim=800;let w=img.width,h=img.height;
+      if(w>maxDim||h>maxDim){if(w>h){h=Math.round(h*maxDim/w);w=maxDim;}else{w=Math.round(w*maxDim/h);h=maxDim;}}
+      const canvas=document.createElement("canvas");canvas.width=w;canvas.height=h;
+      canvas.getContext("2d").drawImage(img,0,0,w,h);
+      window[varName]=canvas.toDataURL("image/jpeg",0.6);
+      const box=$(prefix+"ReceiptBox");if(box)box.innerHTML=receiptBoxHTML(varName,prefix);
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function removeReceipt(varName,prefix){window[varName]=null;const box=$(prefix+"ReceiptBox");if(box)box.innerHTML=receiptBoxHTML(varName,prefix);}
+function viewReceipt(varName){
+  const data=window[varName];if(!data)return;
+  let ov=document.getElementById("pickerOverlay");if(!ov){ov=document.createElement("div");ov.id="pickerOverlay";document.body.appendChild(ov);}
+  ov.innerHTML=`<div class="modal-bg" onclick="closePicker()" style="align-items:center;z-index:260"><div onclick="event.stopPropagation()" style="max-width:92vw;max-height:80vh"><img src="${data}" style="max-width:100%;max-height:80vh;border-radius:12px;display:block"><button class="btn btn-g w100 mt10" style="justify-content:center" onclick="closePicker()">Close</button></div></div>`;
+}
+
 // ── CATEGORY + SUBCATEGORY PICKER (two-column, tap category on the left then a subcategory on the right) ──
 let _catPicker=null; // {typeVar, catVar, subVar, labelId}
 let _catPickerActiveCat=null;
@@ -518,6 +567,10 @@ function save(){
   localStorage.setItem("ffd_bankalerts",JSON.stringify(bankAlertsEnabled));
   localStorage.setItem("ffd_homelayout",JSON.stringify(homeLayout));
   localStorage.setItem("ffd_catorder",JSON.stringify(catOrder));
+  localStorage.setItem("ffd_goals",JSON.stringify(goals));
+  localStorage.setItem("ffd_pin",pinHash);
+  localStorage.setItem("ffd_reminders",JSON.stringify(remindersEnabled));
+  if(remindersEnabled)syncUpcomingBills();
 }
 function load(){
   try{const t=localStorage.getItem("ffd_tx");if(t)txns=JSON.parse(t);}catch(e){}
@@ -534,12 +587,17 @@ function load(){
   try{const cc=localStorage.getItem("ffd_currency");if(cc){const found=CURRENCIES.find(c=>c.code===cc);if(found)currency=found;}}catch(e){}
   try{const hc=localStorage.getItem("ffd_hidecats");if(hc)hiddenDefaultCats=JSON.parse(hc);}catch(e){}
   try{const ba=localStorage.getItem("ffd_bankalerts");if(ba)bankAlertsEnabled=JSON.parse(ba);}catch(e){}
-  try{const hl=localStorage.getItem("ffd_homelayout");if(hl){const arr=JSON.parse(hl);const valid=["networth","stats","chart","trend","insights","budget","recent"];if(Array.isArray(arr)&&arr.every(x=>valid.includes(x))&&arr.length>=6){valid.forEach(k=>{if(!arr.includes(k))arr.unshift(k);});homeLayout=arr;}}}catch(e){}
+  try{const hl=localStorage.getItem("ffd_homelayout");if(hl){const arr=JSON.parse(hl);const valid=["networth","goals","stats","chart","trend","insights","budget","recent"];if(Array.isArray(arr)&&arr.every(x=>valid.includes(x))&&arr.length>=6){valid.forEach(k=>{if(!arr.includes(k))arr.unshift(k);});homeLayout=arr;}}}catch(e){}
   try{const co=localStorage.getItem("ffd_catorder");if(co)catOrder=JSON.parse(co);}catch(e){}
+  try{const g=localStorage.getItem("ffd_goals");if(g)goals=JSON.parse(g);}catch(e){}
+  try{pinHash=localStorage.getItem("ffd_pin")||"";}catch(e){}
+  try{const rm=localStorage.getItem("ffd_reminders");if(rm)remindersEnabled=JSON.parse(rm);}catch(e){}
   if(!accounts.length)accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];
+  accounts.forEach(a=>{if(!a.currency)a.currency=currency.code;}); // pre-per-account-currency accounts inherit the app's global currency
   applyTheme();
   try{if(window.Android&&window.Android.getFlavor)appFlavor=window.Android.getFlavor()||"full";}catch(e){}
   if(appFlavor==="full"&&window.Android&&window.Android.setBankAlertsEnabled)window.Android.setBankAlertsEnabled(bankAlertsEnabled);
+  if(remindersEnabled&&window.Android&&window.Android.scheduleReminders){window.Android.scheduleReminders();syncUpcomingBills();}
 }
 function applyTheme(){document.documentElement.setAttribute("data-theme",theme);const mc=document.querySelector('meta[name="theme-color"]');if(mc)mc.setAttribute("content",theme==="light"?"#e9ebef":"#000000");applyAccent();}
 function applyAccent(){document.documentElement.style.setProperty("--accent",accentColor.h);document.documentElement.style.setProperty("--accent-rgb",accentColor.rgb);}
@@ -726,7 +784,8 @@ function buildInsights(f,inc,exp){
 function rDash(f,inc,exp){
   if(needsOnboarding()){$("main").innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;padding:20px"><div style="font-size:48px;margin-bottom:16px">&#128200;</div><div class="fz16 fw8 mb4">Welcome to FinanceFlow</div><div class="fz12 muted mb16">Your personal money manager.<br>Let's get you set up in seconds.</div><button class="btn btn-p" style="padding:12px 28px;font-size:14px" onclick="openSettings('profile')">&#128100; Set Up Your Account</button></div>`;return;}
   const net=inc-exp;const savRate=inc>0?((inc-exp)/inc*100):0;
-  const tb=accounts.reduce((s,a)=>s+getAccountBalance(a.id),0);
+  const tb=accounts.filter(a=>(a.currency||currency.code)===currency.code).reduce((s,a)=>s+getAccountBalance(a.id),0);
+  const foreignAccCount=accounts.filter(a=>(a.currency||currency.code)!==currency.code).length;
   const catMap={};f.filter(t=>t.type==="expense").forEach(t=>{catMap[t.category]=(catMap[t.category]||0)+t.amount;});const catArr=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);const tot=catArr.reduce((s,c)=>s+c[1],0);
   const trend=[];for(let i=5;i>=0;i--){let m=pDate.getMonth()-i,y=pDate.getFullYear();if(m<0){m+=12;y--;}const mt=txns.filter(t=>{const d=new Date(t.date);return d.getMonth()===m&&d.getFullYear()===y;});trend.push({month:MO[m],inc:mt.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0),exp:mt.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0)});}
   const tMax=Math.max(...trend.map(t=>Math.max(t.inc,t.exp)),1);
@@ -753,7 +812,8 @@ function rDash(f,inc,exp){
 
   const netChange=inc-exp;
   const sections={
-    networth:`<div class="nw-card"><div class="fz10" style="opacity:.85">Total Balance</div><div class="nw-val">${fmt(tb)}</div><div class="nw-chg" style="color:${netChange>=0?"#bbf7d0":"#fecaca"}">${netChange>=0?"&#9650;":"&#9660;"} ${fmt(Math.abs(netChange))} this period</div></div>${accounts.length?`<div class="acc-deck">${accounts.map(a=>{const bal=getAccountBalance(a.id);const pct=tb!==0?Math.min(Math.abs(bal/tb*100),100):0;return`<div class="acc-deck-card" style="border-color:${a.color}44"><div class="flex g6 mb8"><div style="width:26px;height:26px;border-radius:7px;background:${a.color}22;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:13px">${a.type==="cash"?"&#128181;":"&#127981;"}</div><span class="fz11 fw7 ellip" style="flex:1">${esc(a.name)}</span></div><div class="fz14 fw8 mb6">${fmtK(bal)}</div><div class="bar-track" style="height:5px"><div class="bar-fill" style="width:${pct}%;background:${a.color}"></div></div></div>`;}).join("")}</div>`:""}`,
+    networth:`<div class="nw-card"><div class="fz10" style="opacity:.85">Total Balance (${esc(currency.code)})</div><div class="nw-val">${fmt(tb)}</div><div class="nw-chg" style="color:${netChange>=0?"#bbf7d0":"#fecaca"}">${netChange>=0?"&#9650;":"&#9660;"} ${fmt(Math.abs(netChange))} this period</div>${foreignAccCount?`<div class="fz9 mt4" style="opacity:.8">+ ${foreignAccCount} account${foreignAccCount>1?"s":""} in other currencies below</div>`:""}</div>${accounts.length?`<div class="acc-deck">${accounts.map(a=>{const bal=getAccountBalance(a.id);const acCode=a.currency||currency.code;const pct=tb!==0?Math.min(Math.abs(bal/tb*100),100):0;return`<div class="acc-deck-card" style="border-color:${a.color}44"><div class="flex g6 mb8"><div style="width:26px;height:26px;border-radius:7px;background:${a.color}22;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:13px">${a.type==="cash"?"&#128181;":"&#127981;"}</div><span class="fz11 fw7 ellip" style="flex:1">${esc(a.name)}</span></div><div class="fz14 fw8 mb6">${fmtCur(bal,acCode)}</div><div class="bar-track" style="height:5px"><div class="bar-fill" style="width:${acCode===currency.code?pct:100}%;background:${a.color}"></div></div></div>`;}).join("")}</div>`:""}`,
+    goals:goals.length?`<div class="card"><div class="flex-b mb8"><span class="fz12 fw7">&#127942; Goals</span><button class="btn btn-g btn-sm" onclick="openSettings('goals')">Manage</button></div>${goals.slice(0,3).map(g=>{const pct=g.target>0?Math.min((g.saved/g.target)*100,100):0;const reached=g.saved>=g.target;return`<div class="mb8"><div class="flex-b fz10"><span class="fw6">${esc(g.name)}</span><span class="muted">${fmtK(g.saved)}/${fmtK(g.target)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${reached?"var(--green)":g.color}"></div></div></div>`;}).join("")}</div>`:"",
     stats:`<div class="stat-row">
       <div class="stat"><div class="stat-label">Income</div><div class="stat-val green">${fmtK(inc)}</div></div>
       <div class="stat"><div class="stat-label">Expenses</div><div class="stat-val red">${fmtK(exp)}</div></div>
@@ -790,7 +850,7 @@ function moveHomeSection(key,dir){
 }
 function txRow(t){
   if(t.type==="transfer")return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:rgba(var(--accent-rgb),.1);color:var(--accent)">&#8646;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Transfer")}</div><div class="fz9 muted">${esc(accName(t.fromAccountId))} &#8594; ${esc(accName(t.toAccountId))}</div></div><div><div class="fz12 fw7 tar accent">${fmt(t.amount)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
-  const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}</div><div class="fz9 muted">${esc(t.subcategory?t.category+" › "+t.subcategory:t.category)} · ${esc(acc?acc.name:"")}</div></div><div><div class="fz12 fw7 tar ${t.type==="income"?"green":"red"}">${t.type==="income"?"+":"-"}${fmt(t.amount)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
+  const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}${t.receipt?'<span class="rec-badge">&#128247;</span>':""}</div><div class="fz9 muted">${esc(t.subcategory?t.category+" › "+t.subcategory:t.category)} · ${esc(acc?acc.name:"")}</div></div><div><div class="fz12 fw7 tar ${t.type==="income"?"green":"red"}">${t.type==="income"?"+":"-"}${fmt(t.amount)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
 }
 
 // ── STATS ──
@@ -825,6 +885,42 @@ function budgetsManageHTML(){
 }
 let budgetManageOpen=false;
 function toggleBudgetManage(){budgetManageOpen=!budgetManageOpen;render();}
+
+// ── SAVINGS GOALS ──
+let expandedGoal=null;
+function selectGoalColor(c){newGoalColor=c;render();}
+function addGoal(){
+  const name=$("newGoalName")?.value.trim();
+  const target=parseAmount($("newGoalTarget")?.value);
+  if(!name)return alert("Enter a goal name");
+  if(!target)return alert("Enter a target amount");
+  const g={id:uid(),name,target,saved:0,color:newGoalColor,createdDate:toLocalISODate(new Date())};
+  goals.push(g);newGoalColor=GOAL_COLORS[0];save();render();
+  showToast("🏆 Goal \""+name+"\" created","green");
+}
+function addToGoal(id){
+  const g=goals.find(x=>x.id===id);if(!g)return;
+  const amt=parseAmount($(`goalAdd_${id}`)?.value);
+  if(!amt)return alert("Enter an amount");
+  g.saved+=amt;save();render();
+  showToast("💰 Added "+fmt(amt)+" to "+g.name,"green");
+  if(g.saved>=g.target)showToast("🎉 Goal reached: "+g.name+"!","green");
+}
+function editGoal(id){const g=goals.find(x=>x.id===id);if(!g)return;g.name=$(`goalName_${id}`)?.value.trim()||g.name;g.target=parseAmount($(`goalTarget_${id}`)?.value)||g.target;save();expandedGoal=null;render();}
+function deleteGoal(id){if(!confirm("Delete this savings goal? Your saved progress will be lost."))return;goals=goals.filter(g=>g.id!==id);save();render();}
+function goalsManageHTML(){
+  return`<span class="st-label">Your Goals</span>
+      ${goals.length?goals.map(g=>{const isE=expandedGoal===g.id;const pct=g.target>0?Math.min((g.saved/g.target)*100,100):0;const reached=g.saved>=g.target;return`<div class="bud-item"><div class="flex-b" onclick="expandedGoal=expandedGoal==='${g.id}'?null:'${g.id}';render()" style="cursor:pointer"><div class="flex g6"><div class="cat-dot" style="background:${g.color}"></div><span class="fw6 fz12">${esc(g.name)}</span>${reached?`<span class="rec-badge">&#127942; Reached</span>`:""}</div><div class="flex g6"><span class="fz11 fw7">${fmtK(g.saved)} / ${fmtK(g.target)}</span><span class="fz11 muted">${isE?"&#9650;":"&#9660;"}</span></div></div>
+      <div class="bar-track mt6"><div class="bar-fill" style="width:${pct}%;background:${reached?"var(--green)":g.color}"></div></div>
+      ${isE?`<div class="mt8"><div class="flex g6 mb6"><span class="st-label" style="margin:0;flex:1">Name</span><input class="inp" style="width:155px;font-size:11px" id="goalName_${g.id}" value="${esc(g.name)}"></div><div class="flex g6 mb8"><span class="st-label" style="margin:0;flex:1">Target (${esc(currency.symbol)})</span><input class="inp" style="width:120px;font-size:11px" type="text" inputmode="decimal" id="goalTarget_${g.id}" value="${g.target.toLocaleString('en-US',{maximumFractionDigits:2})}" oninput="formatAmountInput(this)"></div><div class="flex g6 mb8"><input class="inp" style="flex:1;font-size:11px" type="text" inputmode="decimal" id="goalAdd_${g.id}" placeholder="Add funds (${esc(currency.symbol)})" oninput="formatAmountInput(this)"><button class="btn btn-p btn-sm" onclick="addToGoal('${g.id}')">+ Add</button></div><div class="flex g6"><button class="btn btn-p btn-sm" style="flex:1;justify-content:center" onclick="editGoal('${g.id}')">&#10003; Save</button><button class="btn btn-sm btn-rd" onclick="deleteGoal('${g.id}')">&#128465; Delete</button></div></div>`:""}
+      </div>`;}).join(""):`<div class="fz11 muted tac" style="padding:12px">No savings goals yet.</div>`}
+      <div class="divider"></div>
+      <span class="st-label">New Goal</span>
+      <input class="inp mb6" id="newGoalName" placeholder="e.g. Emergency Fund, New Laptop">
+      <input class="inp mb6" type="text" inputmode="decimal" id="newGoalTarget" placeholder="Target amount (${esc(currency.symbol)})" oninput="formatAmountInput(this)">
+      <div><span class="edit-label">Color</span><div class="swatch-row mb8">${GOAL_COLORS.map(c=>`<button type="button" class="color-swatch ${newGoalColor===c?"sel":""}" style="background:${c}" onclick="selectGoalColor('${c}')" title="${c}"></button>`).join("")}</div></div>
+      <button class="btn btn-p w100" style="justify-content:center" onclick="addGoal()">+ Create Goal</button>`;
+}
 function rBud(f){
   const hdr=`<div class="flex-b mb10"><span class="fz16 fw7">Budgets</span><div class="flex g6"><button class="btn ${budgetManageOpen?"btn-p":"btn-g"} btn-sm" onclick="toggleBudgetManage()">${budgetManageOpen?"&#10003; Done":"&#43; Add / Edit"}</button><button class="cmp-toggle ${cmpMode?"on":""}" onclick="toggleCmp()">${cmpMode?"&#10005; Close":"&#9145; Compare"}</button></div></div>${budgetManageOpen?`<div class="card">${budgetsManageHTML()}</div>`:""}`;
   const lA=getLabelFor(pMode,pDate),lB=getLabelFor(pModeB,pDateB);
@@ -837,20 +933,24 @@ function rBud(f){
 
 // ── ACCOUNTS ──
 function accountsSectionHTML(){
-  const tb=accounts.reduce((s,a)=>s+getAccountBalance(a.id),0);
-  return`<div class="flex-b mb4"><span class="fz13 fw7">Your Accounts</span>${accounts.length>1?`<button class="btn btn-g btn-sm" onclick="showModal('transfer')">&#8646; Transfer</button>`:""}</div><div class="fz10 muted mb12">Total balance: <span class="fw7 accent fz14">${fmt(tb)}</span></div>
-  <div class="grid2 mb12">${accounts.map(a=>{const bal=getAccountBalance(a.id);const cnt=txnCountForAccount(a.id);const ic=a.type==="cash"?"&#128181;":"&#127981;";return`<div class="acc-card"><div class="flex g8 mb8"><div style="width:34px;height:34px;border-radius:8px;background:${a.color}20;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:16px">${ic}</div><div style="flex:1;min-width:0"><div class="fw7 fz12 ellip">${esc(a.name)}</div><div class="fz9 muted">${cnt} txns</div></div><button onclick="deleteAccount('${a.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">&#10005;</button></div><div class="fw8 fz16">${fmt(bal)}</div></div>`;}).join("")}</div>
+  const primary=accounts.filter(a=>(a.currency||currency.code)===currency.code);
+  const foreign=accounts.filter(a=>(a.currency||currency.code)!==currency.code);
+  const tb=primary.reduce((s,a)=>s+getAccountBalance(a.id),0);
+  return`<div class="flex-b mb4"><span class="fz13 fw7">Your Accounts</span>${accounts.length>1?`<button class="btn btn-g btn-sm" onclick="showModal('transfer')">&#8646; Transfer</button>`:""}</div><div class="fz10 muted mb12">Total balance (${esc(currency.code)}): <span class="fw7 accent fz14">${fmt(tb)}</span>${foreign.length?` <span class="fz9 muted">· ${foreign.length} account${foreign.length>1?"s":""} in other currencies not included</span>`:""}</div>
+  <div class="grid2 mb12">${accounts.map(a=>{const bal=getAccountBalance(a.id);const cnt=txnCountForAccount(a.id);const ic=a.type==="cash"?"&#128181;":"&#127981;";const acCode=a.currency||currency.code;return`<div class="acc-card"><div class="flex g8 mb8"><div style="width:34px;height:34px;border-radius:8px;background:${a.color}20;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:16px">${ic}</div><div style="flex:1;min-width:0"><div class="fw7 fz12 ellip">${esc(a.name)}</div><div class="fz9 muted">${cnt} txns${acCode!==currency.code?" · "+esc(acCode):""}</div></div><button onclick="deleteAccount('${a.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">&#10005;</button></div><div class="fw8 fz16">${fmtCur(bal,acCode)}</div></div>`;}).join("")}</div>
   <div class="card"><div class="fz12 fw7 mb10">Add Account</div>
     <div style="display:grid;gap:10px">
       <input class="inp" id="newAccName" placeholder="Account name (e.g. GTBank, Opay)">
       <select class="inp" id="newAccType"><option value="bank">&#127981; Bank Account</option><option value="cash">&#128181; Cash</option><option value="mobile">&#128242; Mobile Money</option><option value="savings">&#127968; Savings</option></select>
+      <select class="inp" id="newAccCurrency">${CURRENCIES.map(c=>`<option value="${c.code}" ${c.code===currency.code?"selected":""}>${c.symbol} ${c.code} — ${c.label}</option>`).join("")}</select>
       <div><span class="edit-label">Color</span><div class="swatch-row">${ACC_COLORS.map(c=>`<button type="button" class="color-swatch ${newAccColor===c?"sel":""}" style="background:${c}" onclick="selectAccColor('${c}')" title="${c}"></button>`).join("")}</div></div>
       <button class="btn btn-p w100" style="justify-content:center" onclick="addAccount()">+ Add Account</button>
     </div>
+    <div class="fz9 muted mt8">Accounts in a different currency show their own balance, but aren't converted into your totals, budgets or stats — FinanceFlow doesn't fetch exchange rates.</div>
   </div>`;
 }
 function selectAccColor(c){newAccColor=c;render();}
-function addAccount(){const n=$("newAccName")?.value.trim();if(!n)return alert("Enter account name");const t=$("newAccType")?.value||"bank";accounts.push({id:uid(),name:n,type:t,color:newAccColor});newAccColor=ACC_COLORS[0];save();render();}
+function addAccount(){const n=$("newAccName")?.value.trim();if(!n)return alert("Enter account name");const t=$("newAccType")?.value||"bank";const cur=$("newAccCurrency")?.value||currency.code;accounts.push({id:uid(),name:n,type:t,color:newAccColor,currency:cur});newAccColor=ACC_COLORS[0];save();render();}
 function deleteAccount(id){if(txnCountForAccount(id)>0&&!confirm("This account has transactions. Delete anyway?"))return;accounts=accounts.filter(a=>a.id!==id);save();render();}
 
 // ── SETTINGS ──
@@ -863,6 +963,7 @@ const SETTINGS_ITEMS=[
   {id:"profile",icon:"&#128100;",label:"Profile"},
   {id:"accounts",icon:"&#127974;",label:"Accounts"},
   {id:"budgets",icon:"&#127919;",label:"Budgets"},
+  {id:"goals",icon:"&#127942;",label:"Goals"},
   {id:"categories",icon:"&#127991;&#65039;",label:"Categories"},
   {id:"appearance",icon:"&#127912;",label:"Appearance"},
   {id:"security",icon:"&#128274;",label:"Security"},
@@ -875,9 +976,10 @@ function settingsItemSub(id){
   if(id==="profile")return esc(profile.name)||"Set your name";
   if(id==="accounts")return accounts.length+" account"+(accounts.length!==1?"s":"");
   if(id==="budgets")return budgets.length+" budget"+(budgets.length!==1?"s":"");
+  if(id==="goals")return goals.length?goals.length+" goal"+(goals.length!==1?"s":""):"Set a savings target";
   if(id==="categories")return"Rename, add & organize";
   if(id==="appearance")return(theme==="dark"?"Dark":"Light")+" · "+accentColor.n+" accent";
-  if(id==="security")return biometricEnabled?"Lock enabled":"Biometric lock off";
+  if(id==="security")return(biometricEnabled?"Biometric on":"")+(biometricEnabled&&pinHash?" · ":"")+(pinHash?"PIN set":"")||"No lock set";
   if(id==="notifications")return appFlavor!=="full"?"Not in this build":bankAlertsEnabled?"Auto-detect on":"Auto-detect off";
   if(id==="recurring")return recurring.length+" scheduled";
   if(id==="backup")return"Export, import, reset";
@@ -919,7 +1021,13 @@ function renderSettings(){
   }
   if(settingsTab==="backup"){
     body=`<div class="st-section">
-      <span class="st-label">Backup &amp; Restore</span>
+      <span class="st-label">Cloud Backup</span>
+      <div class="card" style="margin:0 0 12px">
+        <div class="fz12 fw6 mb6">&#9729;&#65039; Back up to Google Drive (or any cloud app)</div>
+        <div class="fz10 muted mb10">FinanceFlow doesn't talk to the internet directly — instead it uses Android's own "Save As" dialog, which lists Google Drive, OneDrive, Dropbox etc. as save locations if you have those apps installed. Pick one there to keep an off-device copy.</div>
+        <button class="btn btn-p w100" style="justify-content:center" onclick="exportData()">&#9729;&#65039; Backup Now</button>
+      </div>
+      <span class="st-label">Export &amp; Restore</span>
       <div class="flex-w" style="gap:8px;margin-top:4px">
         <button class="btn btn-g btn-sm" onclick="exportData()">&#128228; Backup (JSON)</button>
         <button class="btn btn-g btn-sm" onclick="exportCSV()">&#128196; Export CSV</button>
@@ -927,7 +1035,7 @@ function renderSettings(){
         <input type="file" id="impFile2" accept=".json" style="display:none" onchange="importData(this.files[0])">
         <button class="btn btn-sm btn-rd" onclick="resetAll()">&#128465; Reset All</button>
       </div>
-      <div class="fz9 muted mt6">Tip: in the save dialog, choose Google Drive (or any cloud app installed on your phone) to back up off-device — or pick device storage for a local copy.</div>
+      <div class="fz9 muted mt6">Tip: enable Reminders (in the Recurring settings page) and you'll also get a weekly nudge to back up, alongside the daily logging reminder.</div>
     </div>`;
   }
   if(settingsTab==="about"){
@@ -947,9 +1055,16 @@ function renderSettings(){
     </div>`;
   }
   if(settingsTab==="recurring"){
+    const canRemind=!!(window.Android&&window.Android.scheduleReminders);
     body=`<div class="st-section">
       <span class="st-label">Recurring Transactions</span>
       ${recurring.length?recurring.map(r=>`<div class="bud-item"><div class="flex-b"><div><div class="fz12 fw6">${esc(r.description||r.category)}</div><div class="fz10 muted mt4">${r.type==="income"?"+":"-"}${fmt(r.amount)} · ${r.frequency} · Next: ${r.nextDue}</div></div><div class="flex g6"><button class="btn btn-sm ${r.active?"btn-g":"btn-p"}" onclick="toggleRecurring('${r.id}')">${r.active?"Pause":"Resume"}</button><button class="btn btn-sm btn-rd" onclick="deleteRecurring('${r.id}')">&#128465;</button></div></div></div>`).join(""):`<div class="fz11 muted tac" style="padding:12px">No recurring transactions yet.<br>Add one via the + Add button.</div>`}
+      <div class="divider"></div>
+      <span class="st-label">Reminders</span>
+      <div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border)">
+        <div class="toggle-wrap"><div><div class="fz12 fw6">&#8987; Daily nudges &amp; bill reminders</div><div class="fz10 muted mt4">Reminds you at 6am &amp; 6pm to log transactions, and flags recurring bills due soon</div></div><label class="toggle"><input type="checkbox" ${remindersEnabled?"checked":""} onchange="toggleReminders(this.checked)" ${canRemind?"":"disabled"}><span class="toggle-slider"></span></label></div>
+      </div>
+      ${!canRemind?`<div class="fz9 muted mt6">Requires a newer build of the app.</div>`:""}
     </div>`;
   }
   if(settingsTab==="notifications"&&appFlavor!=="full"){
@@ -979,6 +1094,9 @@ function renderSettings(){
   }
   if(settingsTab==="budgets"){
     body=`<div class="st-section">${budgetsManageHTML()}</div>`;
+  }
+  if(settingsTab==="goals"){
+    body=`<div class="st-section">${goalsManageHTML()}</div>`;
   }
   if(settingsTab==="categories"){
     const ecRef=getEC(),icRef=getIC();const catRef=settingsSubTab==="expense"?ecRef:icRef;
@@ -1020,6 +1138,15 @@ function renderSettings(){
         <div class="toggle-wrap"><div><div class="fz12 fw6">&#128274; Require biometrics on open</div><div class="fz10 muted mt4">${hasBio?"Use fingerprint or PIN to unlock":"No biometric/PIN set up on this device"}</div></div><label class="toggle"><input type="checkbox" ${biometricEnabled?"checked":""} onchange="toggleBiometric(this.checked)" ${hasBio?"":"disabled"}><span class="toggle-slider"></span></label></div>
       </div>
       ${biometricEnabled?`<div class="msg msg-ok mt8">&#128274; App will lock each time you open it.</div>`:""}
+      <div class="divider"></div>
+      <span class="st-label">PIN / Passcode</span>
+      <div class="fz10 muted mb8">A fallback lock that works even without a fingerprint sensor — or on its own.</div>
+      ${pinHash?`<div class="msg msg-ok mb8">&#128274; PIN is set${biometricEnabled?" — used as a fallback if biometrics fail":""}.</div><button class="btn btn-g w100 mb6" style="justify-content:center" onclick="pinChangeOpen=!pinChangeOpen;render()">Change PIN</button><button class="btn btn-rd w100" style="justify-content:center" onclick="removePin()">Remove PIN</button>`:""}
+      ${!pinHash||pinChangeOpen?`<div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border);margin-top:8px">
+        <input class="inp mb6" id="newPinInput" type="password" inputmode="numeric" maxlength="6" placeholder="New PIN (4–6 digits)">
+        <input class="inp mb8" id="newPinConfirm" type="password" inputmode="numeric" maxlength="6" placeholder="Confirm PIN">
+        <button class="btn btn-p w100" style="justify-content:center" onclick="setPin()">&#10003; ${pinHash?"Update":"Set"} PIN</button>
+      </div>`:""}
     </div>`;
   }
   const html=`<div class="settings-panel"><div class="settings-drawer">
@@ -1139,6 +1266,32 @@ function toggleBankAlerts(on){
   }
   render();
 }
+function toggleReminders(on){
+  remindersEnabled=on;save();
+  if(window.Android){
+    if(on&&window.Android.scheduleReminders){
+      if(window.Android.requestNotificationPermission&&window.Android.hasNotificationPermission&&!window.Android.hasNotificationPermission())window.Android.requestNotificationPermission();
+      window.Android.scheduleReminders();
+      showToast("⏰ Daily reminders on — 6am & 6pm","green");
+    }else if(!on&&window.Android.cancelReminders){
+      window.Android.cancelReminders();
+      showToast("⏰ Reminders off","warn");
+    }
+  }
+  syncUpcomingBills();
+  render();
+}
+// Pushes a lightweight summary of upcoming recurring bills to the native side (SharedPreferences)
+// so the daily reminder alarm can check for bills due soon WITHOUT having to spin up the WebView.
+function syncUpcomingBills(){
+  if(!(window.Android&&window.Android.syncUpcomingBills))return;
+  const today=toLocalISODate(new Date());
+  const soon=new Date();soon.setDate(soon.getDate()+3);
+  const soonStr=toLocalISODate(soon);
+  const due=recurring.filter(r=>r.active&&r.nextDue>=today&&r.nextDue<=soonStr)
+    .map(r=>({desc:r.description||r.category,amount:r.amount,type:r.type,due:r.nextDue}));
+  try{window.Android.syncUpcomingBills(JSON.stringify(due));}catch(e){}
+}
 function getPendingBankAlerts(){
   if(!window.Android||!window.Android.getPendingBankAlerts)return[];
   try{return JSON.parse(window.Android.getPendingBankAlerts()||"[]");}catch(e){return[];}
@@ -1177,10 +1330,46 @@ function triggerAuth(){
 }
 window.onAuthResult=function(success){
   if(success){hideLock();}
-  else{const m=$("lockMsg");if(m)m.textContent="Authentication failed. Tap Unlock to retry.";}
+  else{
+    const m=$("lockMsg");if(m)m.textContent="Authentication failed. Tap Unlock to retry.";
+    if(pinHash)showPinEntry();
+  }
 };
-function showLock(){const ls=$("lockScreen");if(ls)ls.style.display="flex";}
-function hideLock(){const ls=$("lockScreen");if(ls)ls.style.display="none";}
+function showLock(){
+  const ls=$("lockScreen");if(ls)ls.style.display="flex";
+  pinLockActive=true;
+  const bioSection=$("lockBio"),pinSection=$("lockPin"),usePinBtn=$("lockUsePinBtn");
+  const useBio=biometricEnabled&&window.Android&&window.Android.hasBiometric&&window.Android.hasBiometric();
+  if(useBio){bioSection.style.display="block";pinSection.style.display="none";if(usePinBtn)usePinBtn.style.display=pinHash?"inline-flex":"none";}
+  else if(pinHash){showPinEntry();}
+}
+function showPinEntry(){
+  const bioSection=$("lockBio"),pinSection=$("lockPin");
+  if(bioSection)bioSection.style.display="none";
+  if(pinSection)pinSection.style.display="block";
+  const inp=$("pinInput");if(inp){inp.value="";setTimeout(()=>inp.focus(),100);}
+}
+function hideLock(){const ls=$("lockScreen");if(ls)ls.style.display="none";pinLockActive=false;}
+// ── PIN / PASSCODE (fallback lock when biometrics aren't available or preferred) ──
+async function sha256Hex(str){
+  const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+async function verifyPin(){
+  const val=$("pinInput")?.value||"";
+  if(!val){const m=$("pinMsg");if(m)m.textContent="Enter your PIN";return;}
+  const h=await sha256Hex(val);
+  if(h===pinHash){hideLock();}
+  else{const m=$("pinMsg");if(m)m.textContent="Incorrect PIN. Try again.";const inp=$("pinInput");if(inp)inp.value="";}
+}
+async function setPin(){
+  const p1=$("newPinInput")?.value||"",p2=$("newPinConfirm")?.value||"";
+  if(!/^\d{4,6}$/.test(p1))return alert("PIN must be 4–6 digits");
+  if(p1!==p2)return alert("PINs don't match");
+  pinHash=await sha256Hex(p1);pinChangeOpen=false;save();render();
+  showToast("🔒 PIN set","green");
+}
+function removePin(){if(!confirm("Remove your PIN? You'll only rely on biometrics (or no lock) to open the app."))return;pinHash="";save();render();showToast("🔓 PIN removed","warn");}
 
 // ── FEATURE 6: TOASTS & BUDGET ALERTS ──
 function showToast(msg,type){
@@ -1273,7 +1462,7 @@ function exportData(){
 }
 
 // ── DATA ACTIONS ──
-function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts","ffd_homelayout","ffd_catorder"].forEach(k=>localStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];userEC={};userIC={};profile={name:""};recurring=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;homeLayout=["networth","stats","chart","trend","insights","budget","recent"];catOrder={expense:[],income:[]};save();closeSettings();}}
+function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts","ffd_homelayout","ffd_catorder","ffd_goals","ffd_pin","ffd_reminders"].forEach(k=>localStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e",currency:currency.code}];userEC={};userIC={};profile={name:""};recurring=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;homeLayout=["networth","goals","stats","chart","trend","insights","budget","recent"];catOrder={expense:[],income:[]};goals=[];pinHash="";pinLockActive=false;remindersEnabled=false;if(window.Android&&window.Android.cancelReminders)window.Android.cancelReminders();save();closeSettings();}}
 function importData(file){if(!file)return;file.text().then(t=>{const d=JSON.parse(t);txns=d.txns||[];budgets=d.budgets||[];budgets.forEach(b=>{if(!b.period)b.period="month";});accounts=d.accounts||[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];userEC=d.userEC||{};userIC=d.userIC||{};profile=d.profile||{};recurring=d.recurring||[];save();render();showToast("✅ Imported successfully","green");}).catch(e=>showToast("⚠️ Import failed: "+e.message,"red"));}
 function deleteTx(id){if(confirm("Delete this transaction?")){txns=txns.filter(t=>t.id!==id);save();render();}}
 function duplicateTx(id){
@@ -1304,14 +1493,15 @@ function showModal(type,id){
     return;}}
 
   if(type==="edit"){const t=txns.find(x=>x.id===id);if(!t)return;
-    window._eType=t.type;window._eCat=t.category;window._eSub=t.subcategory||"";window._eAcc=t.accountId;
+    window._eType=t.type;window._eCat=t.category;window._eSub=t.subcategory||"";window._eAcc=t.accountId;window._eReceipt=t.receipt||null;
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Edit Transaction</span><div class="flex g6"><button class="btn btn-sm btn-g" onclick="duplicateTx('${t.id}')" title="Duplicate">&#128203;</button><button class="btn btn-sm btn-rd" onclick="deleteTx('${t.id}');showModal('close')">&#128465;</button><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div></div>
     <div style="display:grid;gap:12px"><div><span class="edit-label">Type</span><div class="flex g4"><button class="btn w100" id="eExp" style="border:1px solid ${t.type==="expense"?"var(--red)":"var(--border)"};background:${t.type==="expense"?"rgba(239,68,68,.1)":"transparent"};color:${t.type==="expense"?"var(--red)":"var(--muted)"};padding:11px" onclick="eSetType('expense')">Expense</button><button class="btn w100" id="eInc" style="border:1px solid ${t.type==="income"?"var(--green)":"var(--border)"};background:${t.type==="income"?"rgba(34,197,94,.1)":"transparent"};color:${t.type==="income"?"var(--green)":"var(--muted)"};padding:11px" onclick="eSetType('income')">Income</button><button class="btn w100 btn-g" style="padding:11px" onclick="convertToTransfer('${t.id}')">&#8646; Transfer</button></div></div>
     <div><span class="edit-label">Date</span><input class="inp" type="date" id="eDate" value="${t.date}"></div>
     <div><span class="edit-label">Description</span><input class="inp" id="eDesc" value="${esc(t.description)}"></div>
     <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="eAmt" value="${t.amount.toLocaleString("en-US",{maximumFractionDigits:2})}" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('eAmt')" title="Calculator">&#129518;</button></div></div>
     <div><span class="edit-label">Category</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openCatPicker('_eType','_eCat','_eSub','eCatLabel')"><span id="eCatLabel"></span><span class="muted">&#8250;</span></button></div>
-    <div><span class="edit-label">Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_eAcc','eAccLabel')"><span id="eAccLabel"></span><span class="muted">&#8250;</span></button></div></div>
+    <div><span class="edit-label">Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_eAcc','eAccLabel')"><span id="eAccLabel"></span><span class="muted">&#8250;</span></button></div>
+    <div><span class="edit-label">Receipt</span><div id="eReceiptBox">${receiptBoxHTML("_eReceipt","e")}</div></div></div>
     <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="saveTx('${t.id}')">&#10003; Save</button></div></div>`;
     $("eCatLabel").textContent=window._eSub?window._eCat+" / "+window._eSub:window._eCat;
     $("eAccLabel").textContent=accName(t.accountId);
@@ -1319,7 +1509,7 @@ function showModal(type,id){
 
   if(type==="addtx"){
     const EC0=getEC();const firstCat=Object.keys(EC0)[0]||"";
-    window._txT="expense";window._txCat=firstCat;window._txSub=(EC0[firstCat]||[])[0]||"";window._txAcc=accounts[0]?.id||"";
+    window._txT="expense";window._txCat=firstCat;window._txSub=(EC0[firstCat]||[])[0]||"";window._txAcc=accounts[0]?.id||"";window._txReceipt=null;
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Add Transaction</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div>
     <div class="flex g4 mb14"><button class="btn w100" id="typeExp" style="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red);padding:11px" onclick="setTT('expense')">Expense</button><button class="btn w100" id="typeInc" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="setTT('income')">Income</button><button class="btn w100" id="typeTrf" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="showModal('transfer')">&#8646; Transfer</button></div>
     <div style="display:grid;gap:12px">
@@ -1328,6 +1518,7 @@ function showModal(type,id){
       <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="txAmt" placeholder="0.00" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('txAmt')" title="Calculator">&#129518;</button></div></div>
       <div><span class="edit-label">Category</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openCatPicker('_txT','_txCat','_txSub','txCatLabel')"><span id="txCatLabel"></span><span class="muted">&#8250;</span></button></div>
       <div><span class="edit-label">Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_txAcc','txAccLabel')"><span id="txAccLabel"></span><span class="muted">&#8250;</span></button></div>
+      <div><span class="edit-label">Receipt</span><div id="txReceiptBox">${receiptBoxHTML("_txReceipt","tx")}</div></div>
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px">
         <div class="flex-b mb6"><span class="fz12 fw6">&#128257; Make Recurring</span><label class="toggle"><input type="checkbox" id="txRec" onchange="toggleRecUI(this.checked)"><span class="toggle-slider"></span></label></div>
         <div id="recUI" style="display:none"><select class="inp" id="txFreq" style="margin-top:8px"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly" selected>Monthly</option><option value="yearly">Yearly</option></select></div>
@@ -1370,7 +1561,7 @@ function eSetType(t){
   if(t==="expense"){e.style.cssText="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red)";i.style.cssText="border:1px solid var(--border);background:transparent;color:var(--muted)";}
   else{i.style.cssText="border:1px solid var(--green);background:rgba(34,197,94,.1);color:var(--green)";e.style.cssText="border:1px solid var(--border);background:transparent;color:var(--muted)";}
 }
-function saveTx(id){const t=txns.find(x=>x.id===id);if(!t)return;const a=parseAmount($("eAmt")?.value);if(!a)return alert("Enter amount");t.date=$("eDate").value;t.description=$("eDesc").value;t.amount=a;t.type=window._eType||t.type;t.category=window._eCat;t.subcategory=window._eSub||"";t.accountId=window._eAcc;save();showModal("close");render();}
+function saveTx(id){const t=txns.find(x=>x.id===id);if(!t)return;const a=parseAmount($("eAmt")?.value);if(!a)return alert("Enter amount");t.date=$("eDate").value;t.description=$("eDesc").value;t.amount=a;t.type=window._eType||t.type;t.category=window._eCat;t.subcategory=window._eSub||"";t.accountId=window._eAcc;t.receipt=window._eReceipt||null;save();showModal("close");render();}
 // Convert between income/expense and transfer while editing, without losing date/amount/description
 function convertToTransfer(id){
   const t=txns.find(x=>x.id===id);if(!t)return;
@@ -1400,7 +1591,7 @@ function setTT(t){
 }
 function addTx(keepOpen){
   const a=parseAmount($("txAmt")?.value);if(!a)return alert("Enter an amount");
-  const newTx={id:uid(),date:$("txDate").value,description:$("txDesc").value,amount:a,type:window._txT||"expense",category:window._txCat,subcategory:window._txSub||"",accountId:window._txAcc,source:"Manual"};
+  const newTx={id:uid(),date:$("txDate").value,description:$("txDesc").value,amount:a,type:window._txT||"expense",category:window._txCat,subcategory:window._txSub||"",accountId:window._txAcc,source:"Manual",receipt:window._txReceipt||null};
   txns.push(newTx);
   // Feature 2: recurring
   if($("txRec")?.checked){
@@ -1563,6 +1754,7 @@ processRecurring();
 render();
 // Feature 4: show lock screen if biometric enabled
 if(biometricEnabled&&window.Android){showLock();triggerAuth();}
+else if(pinHash){showLock();}
 // Surface any bank alerts detected while the app was closed
 if(bankAlertsEnabled){const pend=getPendingBankAlerts();if(pend.length)showToast("🔔 "+pend.length+" bank alert"+(pend.length>1?"s":"")+" detected — review in Settings","warn");}
 
