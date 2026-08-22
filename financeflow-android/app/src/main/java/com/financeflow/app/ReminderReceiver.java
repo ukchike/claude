@@ -28,18 +28,19 @@ public class ReminderReceiver extends BroadcastReceiver {
     static final String PREFS = "reminders";
     static final String KEY_ENABLED = "enabled";
     static final String KEY_UPCOMING_BILLS = "upcoming_bills";
+    static final String KEY_LAST_FIRED = "last_fired";
     private static final String ACTION_MORNING = "com.financeflow.app.REMIND_MORNING";
     private static final String ACTION_EVENING = "com.financeflow.app.REMIND_EVENING";
-    private static final String CHANNEL_ID = "financeflow_alerts";
+    /** Own channel, separate from budget alerts, so reminders can be muted independently. */
+    static final String CHANNEL_ID = "financeflow_reminders";
     private static final int REQ_MORNING = 4001;
     private static final int REQ_EVENING = 4002;
 
     @Override
     public void onReceive(Context context, Intent intent) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        if (!prefs.getBoolean(KEY_ENABLED, false)) return; // reminders were turned off since this alarm was scheduled
+        if (!prefs.getBoolean(KEY_ENABLED, false)) return; // turned off since this alarm was set
 
-        ensureChannel(context);
         boolean evening = ACTION_EVENING.equals(intent.getAction());
 
         postNotification(context, 9001,
@@ -51,7 +52,11 @@ public class ReminderReceiver extends BroadcastReceiver {
             postWeeklyBackupReminder(context);
         }
 
-        // These are one-shot alarms (setAndAllowWhileIdle) — reschedule the same slot 24h out.
+        // Record that an alarm actually fired, so the in-app Reminders screen can show
+        // "last fired" — the only way for the user to tell the schedule is really running.
+        prefs.edit().putLong(KEY_LAST_FIRED, System.currentTimeMillis()).apply();
+
+        // These are one-shot alarms — reschedule the same slot 24h out.
         scheduleNext(context, evening, false);
     }
 
@@ -78,27 +83,36 @@ public class ReminderReceiver extends BroadcastReceiver {
         }
     }
 
-    private void postNotification(Context context, int id, String title, String body) {
+    static void postNotification(Context context, int id, String title, String body) {
+        ensureChannel(context);
+        Intent open = new Intent(context, MainActivity.class);
+        open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT
+            | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_IMMUTABLE : 0);
+        PendingIntent tap = PendingIntent.getActivity(context, id, open, flags);
+
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(body)
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
+            .setContentIntent(tap)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT);
         try {
             NotificationManagerCompat.from(context).notify(id, builder.build());
         } catch (SecurityException ignored) {
-            // POST_NOTIFICATIONS not granted — skip silently, same as other notification call sites.
+            // POST_NOTIFICATIONS not granted — skip silently, same as other call sites.
         }
     }
 
-    private void ensureChannel(Context context) {
+    private static void ensureChannel(Context context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationManager nm = context.getSystemService(NotificationManager.class);
             if (nm != null && nm.getNotificationChannel(CHANNEL_ID) == null) {
                 NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID, "Budget Alerts", NotificationManager.IMPORTANCE_DEFAULT);
-                channel.setDescription("FinanceFlow budget and spending alerts");
+                    CHANNEL_ID, "Daily Reminders", NotificationManager.IMPORTANCE_DEFAULT);
+                channel.setDescription("Daily nudges to log transactions, plus upcoming bill reminders");
                 nm.createNotificationChannel(channel);
             }
         }
@@ -116,22 +130,46 @@ public class ReminderReceiver extends BroadcastReceiver {
         am.cancel(pendingIntentFor(context, true));
     }
 
-    private static void scheduleNext(Context context, boolean evening, boolean fromToday) {
-        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        if (am == null) return;
+    /** Next fire time in epoch millis for the given slot, for display in the app. */
+    static long nextFireTime(boolean evening) {
+        Calendar cal = slotToday(evening);
+        if (cal.getTimeInMillis() <= System.currentTimeMillis()) cal.add(Calendar.DAY_OF_YEAR, 1);
+        return cal.getTimeInMillis();
+    }
+
+    private static Calendar slotToday(boolean evening) {
         Calendar cal = Calendar.getInstance();
         cal.set(Calendar.HOUR_OF_DAY, evening ? 18 : 6);
         cal.set(Calendar.MINUTE, 0);
         cal.set(Calendar.SECOND, 0);
         cal.set(Calendar.MILLISECOND, 0);
+        return cal;
+    }
+
+    private static void scheduleNext(Context context, boolean evening, boolean fromToday) {
+        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+        Calendar cal = slotToday(evening);
         if (!fromToday || cal.getTimeInMillis() <= System.currentTimeMillis()) {
             cal.add(Calendar.DAY_OF_YEAR, 1);
         }
-        // Inexact-but-Doze-aware alarm — avoids requesting the SCHEDULE_EXACT_ALARM permission
-        // (Android 13+) for something that doesn't need to-the-minute precision.
+        PendingIntent pi = pendingIntentFor(context, evening);
+        long at = cal.getTimeInMillis();
+        // Prefer an exact alarm when the system already allows it, but never *ask* for the
+        // exact-alarm permission — it is a flagged permission and this app is sideloaded, so
+        // an inexact Doze-aware alarm (fires within a short window of the hour) is the
+        // deliberate fallback rather than a new install-time warning.
         try {
-            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pendingIntentFor(context, evening));
-        } catch (SecurityException ignored) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && am.canScheduleExactAlarms()) {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+            } else {
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+            }
+        } catch (SecurityException e) {
+            try {
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+            } catch (SecurityException ignored) {
+            }
         }
     }
 

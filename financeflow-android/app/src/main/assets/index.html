@@ -271,6 +271,7 @@ let statsType="expense",pMode="month",pDate=new Date(),ppOpen=false;
 let cmpMode=false,pModeB="month",pDateB=new Date(new Date().getFullYear(),new Date().getMonth()-1,1),ppBOpen=false;
 let settingsOpen=false,settingsTab="home",settingsSubTab="expense";
 let nbMode="cat",nbCat=null; // New Budget form: whole-category vs subcategory-only
+let draftGoalName="",draftGoalTarget="",draftAccName="",draftBudgetLimit="";
 let nbPeriod="month"; // New Budget form: which period type the limit applies to
 const PERIOD_LABELS={week:"Weekly",month:"Monthly",quarter:"Quarterly",year:"Yearly"};
 function setNbPeriod(p){nbPeriod=p;render();}
@@ -348,6 +349,15 @@ function allIC(){return Object.keys(getIC());}
 function allCats(){return[...allEC(),...allIC()];}
 function clr(n){return CAT_COLORS[n]||"#6366f1";}
 function budgetBarColor(pct,over){if(over)return"var(--red)";if(pct>=80)return"var(--warn)";if(pct>=50)return"var(--green)";return"var(--accent)";}
+// Spend to compare against a budget's limit. For a "rollup" budget — one with no category
+// limit of its own, whose limit is the sum of its subcategory limits — only the budgeted
+// subcategories count. Charging the whole category against that sum made a ₦10k Restaurants
+// budget read "₦33,000 / ₦10,000 — over" the moment unbudgeted Groceries spend landed in the
+// same category, while the per-subcategory bar right below it correctly showed ₦8,000/₦10,000.
+function budgetSpent(b,bp,date){
+  if(b.limit>0)return getSpent(bp,date,b.cat);
+  return(b.subs||[]).reduce((s,x)=>s+getSpent(bp,date,b.cat,x.name),0);
+}
 
 const fmt=a=>currency.symbol+Number(a||0).toLocaleString(currency.locale,{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtK=a=>{const n=Number(a||0);const s=currency.symbol;return n>=1e6?s+(n/1e6).toFixed(1)+"M":n>=1000?s+(n/1000).toFixed(0)+"k":s+n.toFixed(0);};
@@ -376,6 +386,11 @@ function parseFlexibleDate(str){
   return isNaN(generic.getTime())?null:generic;
 }
 const esc=s=>String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+// For values interpolated into a single-quoted JS string inside an inline onclick="..." —
+// e.g. onclick="rmSub('${escJs(cat)}')". Backslash-escaping is required, NOT &#39;: the browser
+// decodes HTML entities BEFORE the JS is parsed, so &#39; would still close the string literal.
+// A category named "Mum's Gifts" previously made every one of its buttons a silent no-op.
+const escJs=s=>esc(String(s||"").replace(/\\/g,"\\\\").replace(/'/g,"\\'"));
 
 // ── AMOUNT INPUT: live thousand-separator formatting ──
 function parseAmount(v){return parseFloat(String(v||"0").replace(/,/g,""))||0;}
@@ -465,7 +480,7 @@ function renderAccPicker(){
   const html=`<div class="modal-bg" onclick="closePicker()" style="z-index:260"><div class="modal" onclick="event.stopPropagation()">
     <div class="modal-handle"></div>
     <div class="flex-b mb12"><span class="fz14 fw7">Select Account</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="closePicker()">&#10005;</button></div>
-    <div class="grid2">${accounts.map(a=>`<button type="button" class="btn ${a.id===current?"btn-p":"btn-g"} w100" style="padding:14px;justify-content:center" onclick="pickAccountFor('${esc(a.id)}')">${esc(a.name)}</button>`).join("")}</div>
+    <div class="grid2">${accounts.map(a=>`<button type="button" class="btn ${a.id===current?"btn-p":"btn-g"} w100" style="padding:14px;justify-content:center" onclick="pickAccountFor('${escJs(a.id)}')">${esc(a.name)}</button>`).join("")}</div>
   </div></div>`;
   let ov=document.getElementById("pickerOverlay");if(!ov){ov=document.createElement("div");ov.id="pickerOverlay";document.body.appendChild(ov);}
   ov.innerHTML=html;
@@ -536,8 +551,8 @@ function renderCatPickerBody(){
   const subs=cats[_catPickerActiveCat]||[];
   const curSub=window[_catPicker.subVar];
   const body=$("catPickerBody");if(!body)return;
-  body.innerHTML=`<div style="flex:1;overflow-y:auto;border-right:1px solid var(--border)">${names.map(c=>`<div class="picker-list-row ${c===_catPickerActiveCat?"sel":""}" style="color:${c===_catPickerActiveCat?clr(c):"var(--text)"};background:${c===_catPickerActiveCat?clr(c)+"1a":"transparent"}" onclick="selectPickerCat('${esc(c)}')">${esc(c)}</div>`).join("")}</div>
-    <div style="flex:1;overflow-y:auto">${subs.length?subs.map(s=>`<div class="picker-list-row ${s===curSub&&_catPickerActiveCat===window[_catPicker.catVar]?"sel":""}" onclick="pickCatSub('${esc(s)}')">${esc(s)}</div>`).join(""):`<div class="picker-list-row muted" onclick="pickCatSub('')">No subcategory</div>`}
+  body.innerHTML=`<div style="flex:1;overflow-y:auto;border-right:1px solid var(--border)">${names.map(c=>`<div class="picker-list-row ${c===_catPickerActiveCat?"sel":""}" style="color:${c===_catPickerActiveCat?clr(c):"var(--text)"};background:${c===_catPickerActiveCat?clr(c)+"1a":"transparent"}" onclick="selectPickerCat('${escJs(c)}')">${esc(c)}</div>`).join("")}</div>
+    <div style="flex:1;overflow-y:auto">${subs.length?subs.map(s=>`<div class="picker-list-row ${s===curSub&&_catPickerActiveCat===window[_catPicker.catVar]?"sel":""}" onclick="pickCatSub('${escJs(s)}')">${esc(s)}</div>`).join(""):`<div class="picker-list-row muted" onclick="pickCatSub('')">No subcategory</div>`}
     ${subs.length?`<div class="picker-list-row muted" onclick="pickCatSub('')">&#8212; Just "${esc(_catPickerActiveCat)}" &#8212;</div>`:""}
     </div>`;
 }
@@ -664,10 +679,31 @@ function renderNav(){
   const av=$("avatarBtn");if(av)av.innerHTML=profile.name?profile.name.charAt(0).toUpperCase():"&#9881;";
   const tc=$("txCount");if(tc)tc.textContent=txns.length.toLocaleString()+" transactions";
 }
-function goTo(v){closePP();if(settingsOpen){settingsOpen=false;const sp=document.getElementById("settingsPanel");if(sp)sp.innerHTML="";}_sp[V]=$("main").scrollTop;V=v;render();$("main").scrollTop=_sp[v]||0;}
+function goTo(v){
+  closePP();
+  if(settingsOpen){settingsOpen=false;const sp=document.getElementById("settingsPanel");if(sp)sp.innerHTML="";}
+  // Leaving Transactions: drop multi-select. The floating select bar lives on document.body and
+  // is only torn down by rTx, so without this it stayed pinned over Home/Stats/Budgets — where
+  // its Delete button still acted on rows the user could no longer see.
+  if(V==="transactions"&&v!=="transactions"){selectMode=false;selectedTxIds=new Set();const bar=document.getElementById("selectBar");if(bar)bar.remove();}
+  _sp[V]=$("main").scrollTop;V=v;render();$("main").scrollTop=_sp[v]||0;
+}
 function viewSubTx(cat,sub){closePP();fCat=cat;fType="all";fAcc="all";search=sub;V="transactions";render();}
 function viewBudgetTx(cat){closePP();fCat=cat;fType="expense";fAcc="all";search="";V="transactions";render();}
-function render(){renderNav();if(settingsOpen){renderSettings();return;}const f=getF();const inc=f.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);const exp=f.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);if(V==="dashboard")rDash(f,inc,exp);else if(V==="stats")rStats(inc,exp);else if(V==="transactions")rTx(f,inc,exp);else if(V==="budgets")rBud(f);}
+// Everything in the selected period, ignoring the Transactions tab's category/type/account/
+// search filters. Home, Stats and Budgets must use this: those filters belong to the
+// Transactions screen, and letting them through made the dashboard silently report totals for
+// (say) one subcategory after a viewSubTx() drill-down, with nothing on screen to explain it.
+function getPeriodTx(){const range=getRangeFor(pMode,pDate);return txns.filter(t=>t.date>=range.startStr&&t.date<=range.endStr);}
+function render(){
+  renderNav();
+  if(settingsOpen){renderSettings();return;}
+  if(V==="transactions"){const f=getF();const inc=f.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);const exp=f.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);rTx(f,inc,exp);return;}
+  const f=getPeriodTx();
+  const inc=f.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
+  const exp=f.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
+  if(V==="dashboard")rDash(f,inc,exp);else if(V==="stats")rStats(inc,exp);else if(V==="budgets")rBud(f);
+}
 function needsOnboarding(){return !profile.name;}
 
 // ── FEATURE 5: INSIGHTS ──
@@ -789,16 +825,24 @@ function rDash(f,inc,exp){
   const catMap={};f.filter(t=>t.type==="expense").forEach(t=>{catMap[t.category]=(catMap[t.category]||0)+t.amount;});const catArr=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);const tot=catArr.reduce((s,c)=>s+c[1],0);
   const trend=[];for(let i=5;i>=0;i--){let m=pDate.getMonth()-i,y=pDate.getFullYear();if(m<0){m+=12;y--;}const mt=txns.filter(t=>{const d=new Date(t.date);return d.getMonth()===m&&d.getFullYear()===y;});trend.push({month:MO[m],inc:mt.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0),exp:mt.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0)});}
   const tMax=Math.max(...trend.map(t=>Math.max(t.inc,t.exp)),1);
-  const budgetedTotal=budgets.filter(b=>b.limit>0).reduce((s,b)=>s+b.limit,0);
-  const budgetedSpent=budgets.filter(b=>b.limit>0).reduce((s,b)=>s+getSpent(b.period||"month",pDate,b.cat),0);
+  // Every budget that has an effective limit — either a category limit of its own, or one
+  // that rolls up from its subcategory limits. Filtering on b.limit>0 alone (as this used to)
+  // silently dropped every subcategory-only budget from the Home card and its totals.
+  const homeBudgets=budgets.map(b=>{
+    const subTotal=(b.subs||[]).reduce((s,x)=>s+(x.limit||0),0);
+    return{b,effLimit:b.limit>0?b.limit:subTotal,bp:b.period||"month"};
+  }).filter(x=>x.effLimit>0);
+  const budgetedTotal=homeBudgets.reduce((s,x)=>s+x.effLimit,0);
+  const budgetedSpent=homeBudgets.reduce((s,x)=>s+budgetSpent(x.b,x.bp,pDate),0);
   const budgetedPct=budgetedTotal>0?Math.min((budgetedSpent/budgetedTotal)*100,100):0;
   const budgetedOver=budgetedTotal>0&&budgetedSpent>budgetedTotal;
-  const mixedPeriods=new Set(budgets.filter(b=>b.limit>0).map(b=>b.period||"month")).size>1;
+  const mixedPeriods=new Set(homeBudgets.map(x=>x.bp)).size>1;
   const budgetSummary=budgetedTotal>0?`<div class="mb10" style="padding-bottom:10px;border-bottom:1px solid var(--border)"><div class="flex-b fz10"><span class="fw7">Total budgets</span><span style="color:${budgetedOver?"var(--red)":"var(--muted)"}">${fmtK(budgetedSpent)} / ${fmtK(budgetedTotal)}</span></div><div class="bar-track" style="height:8px;margin-top:4px"><div class="bar-fill" style="width:${budgetedPct}%;background:${budgetBarColor(budgetedPct,budgetedOver)};height:100%"></div></div><div class="fz9 muted mt2">${budgetedPct.toFixed(0)}% used${budgetedOver?" — over":""}${mixedPeriods?" · each at its own reset period":""}</div></div>`:"";
-  const budH=budgets.filter(b=>b.limit>0).slice(0,4).map(b=>{
-    const bp=b.period||"month";const sp=getSpent(bp,pDate,b.cat);
-    const pct=Math.min((sp/b.limit)*100,100);const c=budgetBarColor(pct,sp>b.limit);
-    return`<div class="mb8"><div class="flex-b fz10"><span class="fw6">${esc(b.cat)} <span class="fz9 muted">(${PERIOD_LABELS[bp]})</span></span><span style="color:${sp>b.limit?"var(--red)":"var(--muted)"}">${fmtK(sp)}/${fmtK(b.limit)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${c}"></div></div></div>`;}).join("");
+  const budH=homeBudgets.map(({b,effLimit,bp})=>{
+    const sp=budgetSpent(b,bp,pDate);const over=sp>effLimit;
+    const pct=Math.min((sp/effLimit)*100,100);const c=budgetBarColor(pct,over);
+    const rollup=!(b.limit>0);
+    return`<div class="mb8"><div class="flex-b fz10"><span class="fw6">${esc(b.cat)} <span class="fz9 muted">(${PERIOD_LABELS[bp]}${rollup?" · subs":""})</span></span><span style="color:${over?"var(--red)":"var(--muted)"}">${fmtK(sp)}/${fmtK(effLimit)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${c}"></div></div></div>`;}).join("");
   const recent=[...f].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
   const insights=buildInsights(f,inc,exp);
   const savColor=savRate<0?"var(--red)":savRate<20?"var(--warn)":"var(--green)";
@@ -860,10 +904,10 @@ function rStats(inc,exp){
   if(cmpMode){
     const mB=getCatMap(pModeB,pDateB,type);const totalB=Object.values(mB.cat).reduce((s,v)=>s+v,0);const lA=getLabelFor(pMode,pDate),lB=getLabelFor(pModeB,pDateB);
     const names=[...new Set([...Object.keys(mA.cat),...Object.keys(mB.cat)])].sort((a,b)=>(mA.cat[b]||0)-(mA.cat[a]||0));
-    $("main").innerHTML=tabs+cmpPickerHdr()+`<div class="card" style="padding:12px"><div class="flex-b mb6"><span class="fz11 fw7">Category Comparison</span><span class="fz9 muted">${lA} vs ${lB}</span></div><div class="flex-b fz10 mb6" style="padding:0 6px;border-bottom:1px solid var(--border);padding-bottom:6px"><span class="muted fw6">TOTAL</span><span style="color:var(--accent);font-weight:700">${fmt(totalA)}</span><span class="muted">${fmt(totalB)}</span><span>${chgBadge(totalA,totalB,isExp)}</span></div><table class="cmp-tbl"><thead><tr><th>Category</th><th style="color:var(--accent)">${lA}</th><th class="muted">${lB}</th><th>&#916;</th></tr></thead><tbody>${names.map(name=>{const vA=mA.cat[name]||0,vB=mB.cat[name]||0;const c=clr(name);const pct=totalA&&vA?(vA/totalA*100).toFixed(0):0;const isE=exCats[name];const subNames=[...new Set([...Object.keys(mA.sub).filter(k=>k.startsWith(name+"|||")),...Object.keys(mB.sub).filter(k=>k.startsWith(name+"|||"))].map(k=>k.split("|||")[1]))];return`<tr style="cursor:${subNames.length?"pointer":"default"}" onclick="${subNames.length?`toggleCat('${esc(name)}')`:""}""><td><div class="flex g6"><div class="cat-dot" style="background:${c}"></div><span style="color:${c};font-size:11px">${esc(name)}</span><span class="fz9 muted">${pct}%</span>${subNames.length?`<span class="fz9 muted">${isE?"&#9650;":"&#9660;"}</span>`:""}</div></td><td class="fw7" style="color:var(--accent)">${fmtK(vA)}</td><td class="muted">${fmtK(vB)}</td><td>${chgBadge(vA,vB,isExp)}</td></tr>${isE?subNames.map(sn=>{const sA=mA.sub[name+"|||"+sn]||0,sB=mB.sub[name+"|||"+sn]||0;return`<tr style="background:var(--bg);cursor:pointer" onclick="viewSubTx('${esc(name)}','${esc(sn)}')"><td style="padding-left:22px;color:var(--muted);font-size:10px">${esc(sn)}</td><td class="fz10" style="color:var(--accent)">${fmtK(sA)}</td><td class="fz10 muted">${fmtK(sB)}</td><td>${chgBadge(sA,sB,isExp)}</td></tr>`;}).join(""):""}`;}).join("")}</tbody></table></div>`;
+    $("main").innerHTML=tabs+cmpPickerHdr()+`<div class="card" style="padding:12px"><div class="flex-b mb6"><span class="fz11 fw7">Category Comparison</span><span class="fz9 muted">${lA} vs ${lB}</span></div><div class="flex-b fz10 mb6" style="padding:0 6px;border-bottom:1px solid var(--border);padding-bottom:6px"><span class="muted fw6">TOTAL</span><span style="color:var(--accent);font-weight:700">${fmt(totalA)}</span><span class="muted">${fmt(totalB)}</span><span>${chgBadge(totalA,totalB,isExp)}</span></div><table class="cmp-tbl"><thead><tr><th>Category</th><th style="color:var(--accent)">${lA}</th><th class="muted">${lB}</th><th>&#916;</th></tr></thead><tbody>${names.map(name=>{const vA=mA.cat[name]||0,vB=mB.cat[name]||0;const c=clr(name);const pct=totalA&&vA?(vA/totalA*100).toFixed(0):0;const isE=exCats[name];const subNames=[...new Set([...Object.keys(mA.sub).filter(k=>k.startsWith(name+"|||")),...Object.keys(mB.sub).filter(k=>k.startsWith(name+"|||"))].map(k=>k.split("|||")[1]))];return`<tr style="cursor:${subNames.length?"pointer":"default"}" onclick="${subNames.length?`toggleCat('${escJs(name)}')`:""}""><td><div class="flex g6"><div class="cat-dot" style="background:${c}"></div><span style="color:${c};font-size:11px">${esc(name)}</span><span class="fz9 muted">${pct}%</span>${subNames.length?`<span class="fz9 muted">${isE?"&#9650;":"&#9660;"}</span>`:""}</div></td><td class="fw7" style="color:var(--accent)">${fmtK(vA)}</td><td class="muted">${fmtK(vB)}</td><td>${chgBadge(vA,vB,isExp)}</td></tr>${isE?subNames.map(sn=>{const sA=mA.sub[name+"|||"+sn]||0,sB=mB.sub[name+"|||"+sn]||0;return`<tr style="background:var(--bg);cursor:pointer" onclick="viewSubTx('${escJs(name)}','${escJs(sn)}')"><td style="padding-left:22px;color:var(--muted);font-size:10px">${esc(sn)}</td><td class="fz10" style="color:var(--accent)">${fmtK(sA)}</td><td class="fz10 muted">${fmtK(sB)}</td><td>${chgBadge(sA,sB,isExp)}</td></tr>`;}).join(""):""}`;}).join("")}</tbody></table></div>`;
   }else{
     const catArr=Object.entries(mA.cat).sort((a,b)=>b[1]-a[1]);let gp=[],cum=0;catArr.forEach(([n,v])=>{const p=(v/totalA)*100;gp.push(`${clr(n)} ${cum}% ${cum+p}%`);cum+=p;});const pie=gp.length?`conic-gradient(${gp.join(",")})`: "conic-gradient(var(--border) 0% 100%)";
-    $("main").innerHTML=ppHTML()+tabs+`<div class="card anim-card"><div class="pie-wrap anim-pop" style="background:${pie}"><div class="pie-hole"><div class="fz9 muted">${isExp?"Expenses":"Income"}</div><div class="fz13 fw8">${fmt(totalA)}</div></div></div>${catArr.length?catArr.map(([name,val],ci)=>{const pct=totalA?(val/totalA*100).toFixed(1):0;const c=clr(name);const isE=exCats[name];const subs=Object.entries(mA.sub).filter(([k])=>k.startsWith(name+"|||")).map(([k,v])=>({name:k.split("|||")[1],val:v})).sort((a,b)=>b.val-a.val);return`<div class="exp-cat anim-card" style="animation-delay:${ci*40}ms"><div class="exp-cat-hdr" onclick="toggleCat('${esc(name)}')"><div class="cat-dot" style="background:${c}"></div><span class="pct-badge" style="background:${c}33;color:${c}">${Math.round(pct)}%</span><span class="fz12 fw6" style="flex:1">${esc(name)}</span><span class="fz12 fw7">${fmt(val)}</span><span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span></div>${isE?`<div class="exp-cat-subs"><div class="fz9 muted mb4">Last 8 months</div>${catMonthlyTrendSVG(name)}${subs.length?subs.map(s=>{const subKey=name+"|||"+s.name;const subOpen=exCats[subKey];return`<div><div class="exp-sub-row" style="cursor:pointer" onclick="event.stopPropagation();toggleCat('${esc(subKey)}')"><span class="muted">${esc(s.name)} ${subOpen?"&#9650;":"&#9660;"}</span><span class="flex g6"><span class="fw6">${fmt(s.val)}</span><span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();viewSubTx('${esc(name)}','${esc(s.name)}')" title="View transactions">&#8250;</span></span></div>${subOpen?`<div style="padding:0 0 8px 12px"><div class="fz9 muted mb4">${esc(s.name)} — last 8 months</div>${catMonthlyTrendSVG(name,s.name)}</div>`:""}</div>`;}).join(""):""}</div>`:""}</div>`;}).join(""):'<div class="muted fz12 tac" style="padding:20px">No data this period</div>'}</div>`;
+    $("main").innerHTML=ppHTML()+tabs+`<div class="card anim-card"><div class="pie-wrap anim-pop" style="background:${pie}"><div class="pie-hole"><div class="fz9 muted">${isExp?"Expenses":"Income"}</div><div class="fz13 fw8">${fmt(totalA)}</div></div></div>${catArr.length?catArr.map(([name,val],ci)=>{const pct=totalA?(val/totalA*100).toFixed(1):0;const c=clr(name);const isE=exCats[name];const subs=Object.entries(mA.sub).filter(([k])=>k.startsWith(name+"|||")).map(([k,v])=>({name:k.split("|||")[1],val:v})).sort((a,b)=>b.val-a.val);return`<div class="exp-cat anim-card" style="animation-delay:${ci*40}ms"><div class="exp-cat-hdr" onclick="toggleCat('${escJs(name)}')"><div class="cat-dot" style="background:${c}"></div><span class="pct-badge" style="background:${c}33;color:${c}">${Math.round(pct)}%</span><span class="fz12 fw6" style="flex:1">${esc(name)}</span><span class="fz12 fw7">${fmt(val)}</span><span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span></div>${isE?`<div class="exp-cat-subs"><div class="fz9 muted mb4">Last 8 months</div>${catMonthlyTrendSVG(name)}${subs.length?subs.map(s=>{const subKey=name+"|||"+s.name;const subOpen=exCats[subKey];return`<div><div class="exp-sub-row" style="cursor:pointer" onclick="event.stopPropagation();toggleCat('${escJs(subKey)}')"><span class="muted">${esc(s.name)} ${subOpen?"&#9650;":"&#9660;"}</span><span class="flex g6"><span class="fw6">${fmt(s.val)}</span><span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();viewSubTx('${escJs(name)}','${escJs(s.name)}')" title="View transactions">&#8250;</span></span></div>${subOpen?`<div style="padding:0 0 8px 12px"><div class="fz9 muted mb4">${esc(s.name)} — last 8 months</div>${catMonthlyTrendSVG(name,s.name)}</div>`:""}</div>`;}).join(""):""}</div>`:""}</div>`;}).join(""):'<div class="muted fz12 tac" style="padding:20px">No data this period</div>'}</div>`;
   }
 }
 
@@ -881,7 +925,7 @@ function budgetsManageHTML(){
       <div class="tab-row mb8"><button class="tab-btn ${nbMode==="cat"?"active":""}" onclick="setNbMode('cat')">Whole Category</button><button class="tab-btn ${nbMode==="sub"?"active":""}" onclick="setNbMode('sub')">Subcategory</button></div>
       <select class="inp mb6" id="nbc" onchange="setNbCat(this.value)">${catList.map(c=>`<option value="${esc(c)}" ${c===nbCat?"selected":""}>${esc(c)}</option>`).join("")}</select>
       <div class="flex g6 mb6"><span class="st-label" style="margin:0;flex:1">Resets</span><select class="inp" id="nbPer" style="width:155px;font-size:11px" onchange="setNbPeriod(this.value)">${Object.keys(PERIOD_LABELS).map(p=>`<option value="${p}" ${nbPeriod===p?"selected":""}>${PERIOD_LABELS[p]}</option>`).join("")}</select></div>
-      ${nbMode==="sub"?((ec[nbCat]||[]).length?`<select class="inp mb6" id="nbSubSel">${(ec[nbCat]||[]).map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select><input class="inp mb6" type="text" inputmode="decimal" id="nbl" placeholder="Subcategory limit (${esc(currency.symbol)})" oninput="formatAmountInput(this)"><button class="btn btn-p w100" style="justify-content:center" onclick="addBudget()">+ Add Budget</button><div class="fz9 muted mt6">Sets a limit for just this subcategory — it still rolls up under ${esc(nbCat)} in your budget report.</div>`:`<div class="fz10 muted" style="padding:8px 0">${esc(nbCat)} has no subcategories yet. Add one from the Categories tab first.</div>`):`<input class="inp mb6" type="text" inputmode="decimal" id="nbl" placeholder="${PERIOD_LABELS[nbPeriod]} limit (${esc(currency.symbol)})" oninput="formatAmountInput(this)"><button class="btn btn-p w100" style="justify-content:center" onclick="addBudget()">+ Add Budget</button>`}`;
+      ${nbMode==="sub"?((ec[nbCat]||[]).length?`<select class="inp mb6" id="nbSubSel">${(ec[nbCat]||[]).map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select><input class="inp mb6" type="text" inputmode="decimal" id="nbl" value="${esc(draftBudgetLimit)}" placeholder="Subcategory limit (${esc(currency.symbol)})" oninput="formatAmountInput(this);draftBudgetLimit=this.value"><button class="btn btn-p w100" style="justify-content:center" onclick="addBudget()">+ Add Budget</button><div class="fz9 muted mt6">Sets a limit for just this subcategory — it still rolls up under ${esc(nbCat)} in your budget report.</div>`:`<div class="fz10 muted" style="padding:8px 0">${esc(nbCat)} has no subcategories yet. Add one from the Categories tab first.</div>`):`<input class="inp mb6" type="text" inputmode="decimal" id="nbl" value="${esc(draftBudgetLimit)}" placeholder="${PERIOD_LABELS[nbPeriod]} limit (${esc(currency.symbol)})" oninput="formatAmountInput(this);draftBudgetLimit=this.value"><button class="btn btn-p w100" style="justify-content:center" onclick="addBudget()">+ Add Budget</button>`}`;
 }
 let budgetManageOpen=false;
 function toggleBudgetManage(){budgetManageOpen=!budgetManageOpen;render();}
@@ -895,7 +939,7 @@ function addGoal(){
   if(!name)return alert("Enter a goal name");
   if(!target)return alert("Enter a target amount");
   const g={id:uid(),name,target,saved:0,color:newGoalColor,createdDate:toLocalISODate(new Date())};
-  goals.push(g);newGoalColor=GOAL_COLORS[0];save();render();
+  goals.push(g);newGoalColor=GOAL_COLORS[0];draftGoalName="";draftGoalTarget="";save();render();
   showToast("🏆 Goal \""+name+"\" created","green");
 }
 function addToGoal(id){
@@ -916,8 +960,8 @@ function goalsManageHTML(){
       </div>`;}).join(""):`<div class="fz11 muted tac" style="padding:12px">No savings goals yet.</div>`}
       <div class="divider"></div>
       <span class="st-label">New Goal</span>
-      <input class="inp mb6" id="newGoalName" placeholder="e.g. Emergency Fund, New Laptop">
-      <input class="inp mb6" type="text" inputmode="decimal" id="newGoalTarget" placeholder="Target amount (${esc(currency.symbol)})" oninput="formatAmountInput(this)">
+      <input class="inp mb6" id="newGoalName" value="${esc(draftGoalName)}" oninput="draftGoalName=this.value" placeholder="e.g. Emergency Fund, New Laptop">
+      <input class="inp mb6" type="text" inputmode="decimal" id="newGoalTarget" value="${esc(draftGoalTarget)}" placeholder="Target amount (${esc(currency.symbol)})" oninput="formatAmountInput(this);draftGoalTarget=this.value">
       <div><span class="edit-label">Color</span><div class="swatch-row mb8">${GOAL_COLORS.map(c=>`<button type="button" class="color-swatch ${newGoalColor===c?"sel":""}" style="background:${c}" onclick="selectGoalColor('${c}')" title="${c}"></button>`).join("")}</div></div>
       <button class="btn btn-p w100" style="justify-content:center" onclick="addGoal()">+ Create Goal</button>`;
 }
@@ -925,9 +969,9 @@ function rBud(f){
   const hdr=`<div class="flex-b mb10"><span class="fz16 fw7">Budgets</span><div class="flex g6"><button class="btn ${budgetManageOpen?"btn-p":"btn-g"} btn-sm" onclick="toggleBudgetManage()">${budgetManageOpen?"&#10003; Done":"&#43; Add / Edit"}</button><button class="cmp-toggle ${cmpMode?"on":""}" onclick="toggleCmp()">${cmpMode?"&#10005; Close":"&#9145; Compare"}</button></div></div>${budgetManageOpen?`<div class="card">${budgetsManageHTML()}</div>`:""}`;
   const lA=getLabelFor(pMode,pDate),lB=getLabelFor(pModeB,pDateB);
   if(cmpMode){
-    $("main").innerHTML=hdr+cmpPickerHdr()+budgets.map(b=>{const bp=b.period||"month";const subTotal=(b.subs||[]).reduce((s,x)=>s+(x.limit||0),0);const hasCatLimit=b.limit>0;const effLimit=hasCatLimit?b.limit:subTotal;const spA=getSpent(bp,pDate,b.cat),spB=getSpent(bp,pDateB,b.cat);const bLA=getLabelFor(bp,pDate),bLB=getLabelFor(bp,pDateB);const pA=effLimit>0?Math.min((spA/effLimit)*100,100):0,pB=effLimit>0?Math.min((spB/effLimit)*100,100):0;const cA=effLimit>0&&spA>effLimit?"var(--red)":pA>80?"var(--warn)":"var(--accent)";const cB=effLimit>0&&spB>effLimit?"var(--red)":pB>80?"var(--warn)":"var(--green)";const isE=exCats["b_"+b.id];const hs=b.subs&&b.subs.length>0;return`<div class="card" style="padding:12px;margin-bottom:10px"><div class="flex-b mb6" style="cursor:pointer" onclick="toggleCat('b_${b.id}')"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw7 fz12">${esc(b.cat)}</span><span class="rec-badge">${PERIOD_LABELS[bp]}</span>${hs?`<span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span>`:""}</div><span class="fz10 muted">${effLimit>0?"Limit: "+fmtK(effLimit)+(hasCatLimit?"":" (subs total)"):"No limit set"}</span></div><table class="cmp-tbl mb8"><thead><tr><th>Period</th><th>Spent</th><th>%</th><th>&#916;</th></tr></thead><tbody><tr><td style="color:var(--accent);font-size:10px">${bLA}</td><td class="fw7" style="color:${cA}">${fmtK(spA)}</td><td class="fz10 muted">${pA.toFixed(0)}%</td><td>${chgBadge(spA,spB,true)}</td></tr><tr><td class="muted fz10">${bLB}</td><td class="fw7" style="color:${cB}">${fmtK(spB)}</td><td class="fz10 muted">${pB.toFixed(0)}%</td><td></td></tr></tbody></table><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:3px"><div style="height:100%;width:${pA}%;background:${cA};border-radius:4px"></div></div><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden"><div style="height:100%;width:${pB}%;background:${cB};border-radius:4px"></div></div><div class="flex-b fz9 mt4"><span style="color:var(--accent)">&#9632; ${bLA}</span><span class="muted">&#9632; ${bLB}</span></div>${isE&&hs?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">${b.subs.map(s=>{const ssA=getSpent(bp,pDate,b.cat,s.name),ssB=getSpent(bp,pDateB,b.cat,s.name);const spA2=s.limit>0?Math.min((ssA/s.limit)*100,100):0,spB2=s.limit>0?Math.min((ssB/s.limit)*100,100):0;return`<div class="mb8"><div class="flex-b fz10 mb3"><span class="muted">${esc(s.name)}</span>${chgBadge(ssA,ssB,true)}</div><div class="flex-b fz9 mb2"><span style="color:var(--accent)">${fmtK(ssA)}</span><span class="muted">${fmtK(ssB)}</span></div><div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:2px"><div style="height:100%;width:${spA2}%;background:var(--accent);border-radius:3px"></div></div><div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${spB2}%;background:var(--green);border-radius:3px"></div></div></div>`;}).join("")}</div>`:""}`;}).join("")||`<div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#127919;</div><div class="fz13 fw6 mb4">No budgets yet</div><button class="btn btn-p btn-sm" onclick="toggleBudgetManage()">+ Create Budget</button></div>`;
+    $("main").innerHTML=hdr+cmpPickerHdr()+budgets.map(b=>{const bp=b.period||"month";const subTotal=(b.subs||[]).reduce((s,x)=>s+(x.limit||0),0);const hasCatLimit=b.limit>0;const effLimit=hasCatLimit?b.limit:subTotal;const spA=budgetSpent(b,bp,pDate),spB=budgetSpent(b,bp,pDateB);const bLA=getLabelFor(bp,pDate),bLB=getLabelFor(bp,pDateB);const pA=effLimit>0?Math.min((spA/effLimit)*100,100):0,pB=effLimit>0?Math.min((spB/effLimit)*100,100):0;const cA=effLimit>0&&spA>effLimit?"var(--red)":pA>80?"var(--warn)":"var(--accent)";const cB=effLimit>0&&spB>effLimit?"var(--red)":pB>80?"var(--warn)":"var(--green)";const isE=exCats["b_"+b.id];const hs=b.subs&&b.subs.length>0;return`<div class="card" style="padding:12px;margin-bottom:10px"><div class="flex-b mb6" style="cursor:pointer" onclick="toggleCat('b_${b.id}')"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw7 fz12">${esc(b.cat)}</span><span class="rec-badge">${PERIOD_LABELS[bp]}</span>${hs?`<span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span>`:""}</div><span class="fz10 muted">${effLimit>0?"Limit: "+fmtK(effLimit)+(hasCatLimit?"":" (subs total)"):"No limit set"}</span></div><table class="cmp-tbl mb8"><thead><tr><th>Period</th><th>Spent</th><th>%</th><th>&#916;</th></tr></thead><tbody><tr><td style="color:var(--accent);font-size:10px">${bLA}</td><td class="fw7" style="color:${cA}">${fmtK(spA)}</td><td class="fz10 muted">${pA.toFixed(0)}%</td><td>${chgBadge(spA,spB,true)}</td></tr><tr><td class="muted fz10">${bLB}</td><td class="fw7" style="color:${cB}">${fmtK(spB)}</td><td class="fz10 muted">${pB.toFixed(0)}%</td><td></td></tr></tbody></table><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:3px"><div style="height:100%;width:${pA}%;background:${cA};border-radius:4px"></div></div><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden"><div style="height:100%;width:${pB}%;background:${cB};border-radius:4px"></div></div><div class="flex-b fz9 mt4"><span style="color:var(--accent)">&#9632; ${bLA}</span><span class="muted">&#9632; ${bLB}</span></div>${isE&&hs?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">${b.subs.map(s=>{const ssA=getSpent(bp,pDate,b.cat,s.name),ssB=getSpent(bp,pDateB,b.cat,s.name);const spA2=s.limit>0?Math.min((ssA/s.limit)*100,100):0,spB2=s.limit>0?Math.min((ssB/s.limit)*100,100):0;return`<div class="mb8"><div class="flex-b fz10 mb3"><span class="muted">${esc(s.name)}</span>${chgBadge(ssA,ssB,true)}</div><div class="flex-b fz9 mb2"><span style="color:var(--accent)">${fmtK(ssA)}</span><span class="muted">${fmtK(ssB)}</span></div><div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:2px"><div style="height:100%;width:${spA2}%;background:var(--accent);border-radius:3px"></div></div><div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${spB2}%;background:var(--green);border-radius:3px"></div></div></div>`;}).join("")}</div>`:""}`;}).join("")||`<div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#127919;</div><div class="fz13 fw6 mb4">No budgets yet</div><button class="btn btn-p btn-sm" onclick="toggleBudgetManage()">+ Create Budget</button></div>`;
   }else{
-    $("main").innerHTML=ppHTML()+hdr+(budgets.length?budgets.map(b=>{const bp=b.period||"month";const spent=getSpent(bp,pDate,b.cat);const subTotal=(b.subs||[]).reduce((s,x)=>s+(x.limit||0),0);const hasCatLimit=b.limit>0;const isRollup=!hasCatLimit&&subTotal>0;const effLimit=hasCatLimit?b.limit:subTotal;const pct=effLimit>0?Math.min((spent/effLimit)*100,100):0;const over=effLimit>0&&spent>effLimit;const c=budgetBarColor(pct,over);const isE=exCats["b_"+b.id];const hs=b.subs&&b.subs.length>0;return`<div class="card anim-card" style="border-color:${over?"rgba(239,68,68,.25)":"var(--border)"};animation-delay:${budgets.indexOf(b)*45}ms"><div class="flex-b" style="cursor:pointer" onclick="toggleCat('b_${b.id}')"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw7 fz13">${esc(b.cat)}</span><span class="rec-badge">${PERIOD_LABELS[bp]}</span><span class="fz10 muted">${hs?isE?"&#9650;":"&#9660;":""}</span></div><div class="flex g8"><button class="btn btn-g btn-sm" style="padding:4px 8px" onclick="event.stopPropagation();viewBudgetTx('${esc(b.cat)}')" title="View transactions">&#128269;</button><span class="fz12 fw7">${effLimit>0?fmt(effLimit):"—"}</span></div></div>${effLimit>0?`<div class="flex-b fz10 muted mt4 mb4"><span style="color:${c}">${fmt(spent)} spent</span><span>${pct.toFixed(0)}% · ${over?"Over "+fmtK(spent-effLimit):fmtK(effLimit-spent)+" left"}</span></div><div class="bar-track" style="height:8px"><div class="bar-fill" style="width:${pct}%;background:${c};height:100%"></div></div>${isRollup?`<div class="fz9 muted mt4">Total of ${b.subs.length} subcategory limit${b.subs.length>1?"s":""} below</div>`:""}`:`<div class="fz10 muted mt4 mb4">${fmt(spent)} spent · no limit set</div>`}${isE&&hs?`<div class="exp-cat-subs" style="margin-top:10px;padding:8px 0 0 0;border-top:1px solid var(--border)">${b.subs.map(s=>{const ss=getSpent(bp,pDate,b.cat,s.name);const sp=s.limit>0?Math.min((ss/s.limit)*100,100):0;const so=s.limit>0&&ss>s.limit;const sc=budgetBarColor(sp,so);return`<div class="mb8"><div class="flex-b fz10"><span class="muted">${esc(s.name)}</span><span><span style="color:${sc}">${fmtK(ss)}</span> / ${fmtK(s.limit)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${sp}%;background:${sc}"></div></div></div>`;}).join("")}</div>`:""}</div>`;}).join(""):`<div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#127919;</div><div class="fz13 fw6 mb4">No budgets yet</div><div class="fz11 muted mb12">Set spending limits to stay on track</div><button class="btn btn-p btn-sm" onclick="toggleBudgetManage()">+ Create Budget</button></div>`);
+    $("main").innerHTML=ppHTML()+hdr+(budgets.length?budgets.map(b=>{const bp=b.period||"month";const spent=budgetSpent(b,bp,pDate);const subTotal=(b.subs||[]).reduce((s,x)=>s+(x.limit||0),0);const hasCatLimit=b.limit>0;const isRollup=!hasCatLimit&&subTotal>0;const effLimit=hasCatLimit?b.limit:subTotal;const pct=effLimit>0?Math.min((spent/effLimit)*100,100):0;const over=effLimit>0&&spent>effLimit;const c=budgetBarColor(pct,over);const isE=exCats["b_"+b.id];const hs=b.subs&&b.subs.length>0;return`<div class="card anim-card" style="border-color:${over?"rgba(239,68,68,.25)":"var(--border)"};animation-delay:${budgets.indexOf(b)*45}ms"><div class="flex-b" style="cursor:pointer" onclick="toggleCat('b_${b.id}')"><div class="flex g6"><div class="cat-dot" style="background:${clr(b.cat)}"></div><span class="fw7 fz13">${esc(b.cat)}</span><span class="rec-badge">${PERIOD_LABELS[bp]}</span><span class="fz10 muted">${hs?isE?"&#9650;":"&#9660;":""}</span></div><div class="flex g8"><button class="btn btn-g btn-sm" style="padding:4px 8px" onclick="event.stopPropagation();viewBudgetTx('${escJs(b.cat)}')" title="View transactions">&#128269;</button><span class="fz12 fw7">${effLimit>0?fmt(effLimit):"—"}</span></div></div>${effLimit>0?`<div class="flex-b fz10 muted mt4 mb4"><span style="color:${c}">${fmt(spent)} spent</span><span>${pct.toFixed(0)}% · ${over?"Over "+fmtK(spent-effLimit):fmtK(effLimit-spent)+" left"}</span></div><div class="bar-track" style="height:8px"><div class="bar-fill" style="width:${pct}%;background:${c};height:100%"></div></div>${isRollup?`<div class="fz9 muted mt4">Total of ${b.subs.length} subcategory limit${b.subs.length>1?"s":""} below</div>`:""}`:`<div class="fz10 muted mt4 mb4">${fmt(spent)} spent · no limit set</div>`}${isE&&hs?`<div class="exp-cat-subs" style="margin-top:10px;padding:8px 0 0 0;border-top:1px solid var(--border)">${b.subs.map(s=>{const ss=getSpent(bp,pDate,b.cat,s.name);const sp=s.limit>0?Math.min((ss/s.limit)*100,100):0;const so=s.limit>0&&ss>s.limit;const sc=budgetBarColor(sp,so);return`<div class="mb8"><div class="flex-b fz10"><span class="muted">${esc(s.name)}</span><span><span style="color:${sc}">${fmtK(ss)}</span> / ${fmtK(s.limit)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${sp}%;background:${sc}"></div></div></div>`;}).join("")}</div>`:""}</div>`;}).join(""):`<div class="card tac" style="padding:28px"><div style="font-size:32px;margin-bottom:8px">&#127919;</div><div class="fz13 fw6 mb4">No budgets yet</div><div class="fz11 muted mb12">Set spending limits to stay on track</div><button class="btn btn-p btn-sm" onclick="toggleBudgetManage()">+ Create Budget</button></div>`);
   }
 }
 
@@ -940,7 +984,7 @@ function accountsSectionHTML(){
   <div class="grid2 mb12">${accounts.map(a=>{const bal=getAccountBalance(a.id);const cnt=txnCountForAccount(a.id);const ic=a.type==="cash"?"&#128181;":"&#127981;";const acCode=a.currency||currency.code;return`<div class="acc-card"><div class="flex g8 mb8"><div style="width:34px;height:34px;border-radius:8px;background:${a.color}20;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:16px">${ic}</div><div style="flex:1;min-width:0"><div class="fw7 fz12 ellip">${esc(a.name)}</div><div class="fz9 muted">${cnt} txns${acCode!==currency.code?" · "+esc(acCode):""}</div></div><button onclick="deleteAccount('${a.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">&#10005;</button></div><div class="fw8 fz16">${fmtCur(bal,acCode)}</div></div>`;}).join("")}</div>
   <div class="card"><div class="fz12 fw7 mb10">Add Account</div>
     <div style="display:grid;gap:10px">
-      <input class="inp" id="newAccName" placeholder="Account name (e.g. GTBank, Opay)">
+      <input class="inp" id="newAccName" value="${esc(draftAccName)}" oninput="draftAccName=this.value" placeholder="Account name (e.g. GTBank, Opay)">
       <select class="inp" id="newAccType"><option value="bank">&#127981; Bank Account</option><option value="cash">&#128181; Cash</option><option value="mobile">&#128242; Mobile Money</option><option value="savings">&#127968; Savings</option></select>
       <select class="inp" id="newAccCurrency">${CURRENCIES.map(c=>`<option value="${c.code}" ${c.code===currency.code?"selected":""}>${c.symbol} ${c.code} — ${c.label}</option>`).join("")}</select>
       <div><span class="edit-label">Color</span><div class="swatch-row">${ACC_COLORS.map(c=>`<button type="button" class="color-swatch ${newAccColor===c?"sel":""}" style="background:${c}" onclick="selectAccColor('${c}')" title="${c}"></button>`).join("")}</div></div>
@@ -950,7 +994,7 @@ function accountsSectionHTML(){
   </div>`;
 }
 function selectAccColor(c){newAccColor=c;render();}
-function addAccount(){const n=$("newAccName")?.value.trim();if(!n)return alert("Enter account name");const t=$("newAccType")?.value||"bank";const cur=$("newAccCurrency")?.value||currency.code;accounts.push({id:uid(),name:n,type:t,color:newAccColor,currency:cur});newAccColor=ACC_COLORS[0];save();render();}
+function addAccount(){const n=$("newAccName")?.value.trim();if(!n)return alert("Enter account name");const t=$("newAccType")?.value||"bank";const cur=$("newAccCurrency")?.value||currency.code;accounts.push({id:uid(),name:n,type:t,color:newAccColor,currency:cur});newAccColor=ACC_COLORS[0];draftAccName="";save();render();}
 function deleteAccount(id){if(txnCountForAccount(id)>0&&!confirm("This account has transactions. Delete anyway?"))return;accounts=accounts.filter(a=>a.id!==id);save();render();}
 
 // ── SETTINGS ──
@@ -1065,6 +1109,7 @@ function renderSettings(){
         <div class="toggle-wrap"><div><div class="fz12 fw6">&#8987; Daily nudges &amp; bill reminders</div><div class="fz10 muted mt4">Reminds you at 6am &amp; 6pm to log transactions, and flags recurring bills due soon</div></div><label class="toggle"><input type="checkbox" ${remindersEnabled?"checked":""} onchange="toggleReminders(this.checked)" ${canRemind?"":"disabled"}><span class="toggle-slider"></span></label></div>
       </div>
       ${!canRemind?`<div class="fz9 muted mt6">Requires a newer build of the app.</div>`:""}
+      ${canRemind&&remindersEnabled?reminderDiagnosticsHTML():""}
     </div>`;
   }
   if(settingsTab==="notifications"&&appFlavor!=="full"){
@@ -1103,21 +1148,21 @@ function renderSettings(){
     const catNames=Object.keys(catRef);
     const orderedNames=orderedCatNames(settingsSubTab);
     body=`<div class="st-section"><div class="tab-row mb10"><button class="tab-btn ${settingsSubTab==="expense"?"active":""}" onclick="settingsSubTab='expense';editingSub=null;editingCat=null;render()">Expense</button><button class="tab-btn ${settingsSubTab==="income"?"active":""}" onclick="settingsSubTab='income';editingSub=null;editingCat=null;render()">Income</button></div>
-      ${orderedNames.map((cat,catIdx)=>{const subs=catRef[cat];const isE=expandedCatSet===cat;const c=clr(cat);const catEditing=editingCat===cat;return`<div class="cat-item" onclick="expandedCatSet=expandedCatSet==='${esc(cat)}'?null:'${esc(cat)}';editingSub=null;editingCat=null;render()"><div class="cat-dot" style="background:${c}"></div><span class="fz12 fw6" style="flex:1;color:${c}">${esc(cat)}</span><div class="reorder-btns" onclick="event.stopPropagation()"><button onclick="moveCat('${settingsSubTab}','${esc(cat)}',-1)" ${catIdx===0?"disabled":""} title="Move up">&#8593;</button><button onclick="moveCat('${settingsSubTab}','${esc(cat)}',1)" ${catIdx===orderedNames.length-1?"disabled":""} title="Move down">&#8595;</button></div><button onclick="event.stopPropagation();editingCat=editingCat==='${esc(cat)}'?null:'${esc(cat)}';expandedCatSet='${esc(cat)}';editingSub=null;render()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 4px" title="Rename category">&#9998;</button><span class="fz10 muted">${subs.length} subs</span><span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span></div>${isE?`<div style="padding:8px 0 10px 20px;background:var(--bg);border-radius:6px;margin-bottom:4px">
+      ${orderedNames.map((cat,catIdx)=>{const subs=catRef[cat];const isE=expandedCatSet===cat;const c=clr(cat);const catEditing=editingCat===cat;return`<div class="cat-item" onclick="expandedCatSet=expandedCatSet==='${escJs(cat)}'?null:'${escJs(cat)}';editingSub=null;editingCat=null;render()"><div class="cat-dot" style="background:${c}"></div><span class="fz12 fw6" style="flex:1;color:${c}">${esc(cat)}</span><div class="reorder-btns" onclick="event.stopPropagation()"><button onclick="moveCat('${settingsSubTab}','${escJs(cat)}',-1)" ${catIdx===0?"disabled":""} title="Move up">&#8593;</button><button onclick="moveCat('${settingsSubTab}','${escJs(cat)}',1)" ${catIdx===orderedNames.length-1?"disabled":""} title="Move down">&#8595;</button></div><button onclick="event.stopPropagation();editingCat=editingCat==='${escJs(cat)}'?null:'${escJs(cat)}';expandedCatSet='${escJs(cat)}';editingSub=null;render()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 4px" title="Rename category">&#9998;</button><span class="fz10 muted">${subs.length} subs</span><span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span></div>${isE?`<div style="padding:8px 0 10px 20px;background:var(--bg);border-radius:6px;margin-bottom:4px">
       ${catEditing?`<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px" onclick="event.stopPropagation()">
         <span class="edit-label">Rename Category</span>
         <input class="inp mb8" id="catRenameInput" value="${esc(cat)}" style="font-size:12px">
-        <div class="flex g6"><button class="btn btn-p btn-sm" style="flex:1;justify-content:center" onclick="applyCatEdit('${esc(cat)}')">&#10003; Save</button><button class="btn btn-g btn-sm" onclick="editingCat=null;render()">Cancel</button></div>
+        <div class="flex g6"><button class="btn btn-p btn-sm" style="flex:1;justify-content:center" onclick="applyCatEdit('${escJs(cat)}')">&#10003; Save</button><button class="btn btn-g btn-sm" onclick="editingCat=null;render()">Cancel</button></div>
       </div>`:""}
-      <div class="mb6">${subs.map((s,subIdx)=>{const key=cat+"|||"+s;const editing=editingSub===key;return`<div class="sub-row-item"><button class="sub-move" onclick="event.stopPropagation();moveSub('${settingsSubTab}','${esc(cat)}','${esc(s)}',-1)" ${subIdx===0?"disabled":""}>&#8593;</button><button class="sub-move" onclick="event.stopPropagation();moveSub('${settingsSubTab}','${esc(cat)}','${esc(s)}',1)" ${subIdx===subs.length-1?"disabled":""}>&#8595;</button><span class="sub-pill ${editing?"sel":""}" style="cursor:pointer" onclick="event.stopPropagation();editingSub=editingSub==='${esc(key)}'?null:'${esc(key)}';render()">&#9998; ${esc(s)} <button onclick="event.stopPropagation();rmSub('${esc(cat)}','${esc(s)}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px">&#10005;</button></span></div>`;}).join("")}${!subs.length?`<span class="fz10 muted">No subcategories</span>`:""}</div>
+      <div class="mb6">${subs.map((s,subIdx)=>{const key=cat+"|||"+s;const editing=editingSub===key;return`<div class="sub-row-item"><button class="sub-move" onclick="event.stopPropagation();moveSub('${settingsSubTab}','${escJs(cat)}','${escJs(s)}',-1)" ${subIdx===0?"disabled":""}>&#8593;</button><button class="sub-move" onclick="event.stopPropagation();moveSub('${settingsSubTab}','${escJs(cat)}','${escJs(s)}',1)" ${subIdx===subs.length-1?"disabled":""}>&#8595;</button><span class="sub-pill ${editing?"sel":""}" style="cursor:pointer" onclick="event.stopPropagation();editingSub=editingSub==='${escJs(key)}'?null:'${escJs(key)}';render()">&#9998; ${esc(s)} <button onclick="event.stopPropagation();rmSub('${escJs(cat)}','${escJs(s)}')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:11px">&#10005;</button></span></div>`;}).join("")}${!subs.length?`<span class="fz10 muted">No subcategories</span>`:""}</div>
       ${editingSub&&editingSub.startsWith(cat+"|||")?(()=>{const oldSub=editingSub.split("|||")[1];return`<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px" onclick="event.stopPropagation()">
         <span class="edit-label">Rename</span>
         <input class="inp mb6" id="subRenameInput" value="${esc(oldSub)}" style="font-size:12px">
         <span class="edit-label">Move to category</span>
         <select class="inp mb8" id="subMoveTarget" style="font-size:12px">${catNames.map(cn=>`<option value="${esc(cn)}" ${cn===cat?"selected":""}>${cn===cat?"Keep in "+esc(cn):"Move to "+esc(cn)}</option>`).join("")}</select>
-        <div class="flex g6"><button class="btn btn-p btn-sm" style="flex:1;justify-content:center" onclick="applySubEdit('${esc(cat)}','${esc(oldSub)}')">&#10003; Save</button><button class="btn btn-g btn-sm" onclick="editingSub=null;render()">Cancel</button></div>
+        <div class="flex g6"><button class="btn btn-p btn-sm" style="flex:1;justify-content:center" onclick="applySubEdit('${escJs(cat)}','${escJs(oldSub)}')">&#10003; Save</button><button class="btn btn-g btn-sm" onclick="editingSub=null;render()">Cancel</button></div>
       </div>`;})():""}
-      <div class="flex g6"><input class="inp" id="nsi_${esc(cat)}" style="font-size:11px;padding:6px 10px" placeholder="New subcategory name"><button class="btn btn-p btn-sm" onclick="addSub('${esc(cat)}')">Add</button></div></div>`:""}`;}).join("")}
+      <div class="flex g6"><input class="inp" id="nsi_${esc(cat)}" style="font-size:11px;padding:6px 10px" placeholder="New subcategory name"><button class="btn btn-p btn-sm" onclick="addSub('${escJs(cat)}')">Add</button></div></div>`:""}`;}).join("")}
       <div class="divider"></div>
       <span class="st-label">New Category</span>
       <input class="inp mb6" id="nCatN" placeholder="Category name">
@@ -1185,12 +1230,12 @@ function addBudget(){
     if(!b){b={id:uid(),cat,limit:0,period,subs:[]};budgets.push(b);}
     const existing=b.subs.find(s=>s.name===sub);
     if(existing)existing.limit=lim;else b.subs.push({name:sub,limit:lim});
-    expandedBudget=b.id;save();render();
+    expandedBudget=b.id;draftBudgetLimit="";save();render();
     showToast("🎯 "+sub+" budget added under "+cat,"green");
     return;
   }
   if(budgets.find(b=>b.cat===cat))return alert("Budget for this category already exists");
-  const nb={id:uid(),cat,limit:lim,period,subs:[]};budgets.push(nb);expandedBudget=nb.id;save();render();showToast("🎯 Budget added — set subcategory limits below","green");
+  const nb={id:uid(),cat,limit:lim,period,subs:[]};budgets.push(nb);expandedBudget=nb.id;draftBudgetLimit="";save();render();showToast("🎯 Budget added — set subcategory limits below","green");
 }
 function saveBudget(id){const b=budgets.find(x=>x.id===id);if(!b)return;b.cat=$(`bCat_${id}`)?.value||b.cat;b.limit=parseAmount($(`bLim_${id}`)?.value)||b.limit;b.period=$(`bPer_${id}`)?.value||b.period||"month";b.subs.forEach((s,i)=>{const v=parseAmount($(`bSub_${id}_${i}`)?.value);if(!isNaN(v))s.limit=v;});const nc=$(`nsc_${id}`)?.value,nl=parseAmount($(`nsl_${id}`)?.value);if(nc&&nl){if(!b.subs.find(s=>s.name===nc))b.subs.push({name:nc,limit:nl});}save();expandedBudget=null;render();}
 function deleteBudget(id){if(!confirm("Delete this budget?"))return;budgets=budgets.filter(b=>b.id!==id);save();expandedBudget=null;render();}
@@ -1280,6 +1325,38 @@ function toggleReminders(on){
   }
   syncUpcomingBills();
   render();
+}
+function getReminderStatus(){
+  if(!(window.Android&&window.Android.reminderStatus))return null;
+  try{return JSON.parse(window.Android.reminderStatus()||"{}");}catch(e){return null;}
+}
+function fmtWhen(ms){
+  if(!ms)return"—";
+  const d=new Date(ms),now=new Date();
+  const time=d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+  const sameDay=d.toDateString()===now.toDateString();
+  const tomorrow=new Date(now);tomorrow.setDate(now.getDate()+1);
+  if(sameDay)return"Today "+time;
+  if(d.toDateString()===tomorrow.toDateString())return"Tomorrow "+time;
+  return d.toLocaleDateString([],{day:"numeric",month:"short"})+" "+time;
+}
+// The whole point of this panel: daily reminders are otherwise unverifiable until 6am, and on
+// aggressive OEM battery managers the alarms get killed silently. This shows exactly what's
+// blocking them and lets the user fire one immediately to confirm.
+function reminderDiagnosticsHTML(){
+  const s=getReminderStatus();
+  if(!s)return"";
+  const rows=[
+    {ok:s.notifications,label:"Notifications allowed",fix:s.notifications?"":`<button class="btn btn-sm btn-p" onclick="Android.openNotificationSettings()">Enable</button>`},
+    {ok:s.batteryUnrestricted,label:"Battery unrestricted",fix:s.batteryUnrestricted?"":`<button class="btn btn-sm btn-p" onclick="Android.openBatterySettings()">Fix</button>`},
+  ];
+  return`<div style="background:var(--bg);border-radius:10px;padding:4px 12px;border:1px solid var(--border);margin-top:8px">
+    ${rows.map(r=>`<div class="perm-row"><div class="flex g6"><div class="perm-dot" style="background:${r.ok?"var(--green)":"var(--warn)"}"></div><span class="fz11 fw6">${r.label}</span></div>${r.fix||`<span class="fz10 green fw6">OK</span>`}</div>`).join("")}
+    <div class="perm-row"><span class="fz11 fw6">Next reminder</span><span class="fz10 muted">${fmtWhen(Math.min(s.nextMorning||Infinity,s.nextEvening||Infinity))}</span></div>
+    <div class="perm-row"><span class="fz11 fw6">Last fired</span><span class="fz10 muted">${s.lastFired?fmtWhen(s.lastFired):"Not yet"}</span></div>
+  </div>
+  <button class="btn btn-g w100 mt8" style="justify-content:center" onclick="Android.testReminder();showToast('&#128276; Test reminder sent — check your notification shade','green')">&#128276; Send a test reminder now</button>
+  ${!s.batteryUnrestricted?`<div class="fz9 muted mt6">Your device's battery optimiser can silently stop scheduled reminders. Tap <b>Fix</b> above and set FinanceFlow to <b>Unrestricted</b> / <b>Don't optimise</b>.</div>`:""}`;
 }
 // Pushes a lightweight summary of upcoming recurring bills to the native side (SharedPreferences)
 // so the daily reminder alarm can check for bills due soon WITHOUT having to spin up the WebView.
@@ -1457,13 +1534,43 @@ function exportCSV(){
   saveOrDownload("financeflow_"+toLocalISODate(new Date())+".csv",csv,"text/csv");
 }
 function exportData(){
-  const content=JSON.stringify({txns,budgets,accounts,userEC,userIC,profile,recurring});
+  // Everything persisted by save() EXCEPT the security settings (pinHash, biometricEnabled).
+  // Those are deliberately left out: a backup file travels to Google Drive and another device,
+  // and restoring a lock the user can no longer satisfy would lock them out of their own data.
+  const content=JSON.stringify({
+    version:2,exportedAt:new Date().toISOString(),
+    txns,budgets,accounts,userEC,userIC,profile,recurring,
+    goals,catOrder,homeLayout,hiddenDefaultCats,
+    theme,accent:accentColor.h,currency:currency.code,remindersEnabled
+  });
   saveOrDownload("financeflow_"+toLocalISODate(new Date())+".json",content,"application/json");
 }
 
 // ── DATA ACTIONS ──
 function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts","ffd_homelayout","ffd_catorder","ffd_goals","ffd_pin","ffd_reminders"].forEach(k=>localStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e",currency:currency.code}];userEC={};userIC={};profile={name:""};recurring=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;homeLayout=["networth","goals","stats","chart","trend","insights","budget","recent"];catOrder={expense:[],income:[]};goals=[];pinHash="";pinLockActive=false;remindersEnabled=false;if(window.Android&&window.Android.cancelReminders)window.Android.cancelReminders();save();closeSettings();}}
-function importData(file){if(!file)return;file.text().then(t=>{const d=JSON.parse(t);txns=d.txns||[];budgets=d.budgets||[];budgets.forEach(b=>{if(!b.period)b.period="month";});accounts=d.accounts||[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];userEC=d.userEC||{};userIC=d.userIC||{};profile=d.profile||{};recurring=d.recurring||[];save();render();showToast("✅ Imported successfully","green");}).catch(e=>showToast("⚠️ Import failed: "+e.message,"red"));}
+function importData(file){if(!file)return;file.text().then(t=>{
+  const d=JSON.parse(t);
+  txns=d.txns||[];
+  budgets=d.budgets||[];budgets.forEach(b=>{if(!b.period)b.period="month";});
+  accounts=d.accounts||[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];
+  userEC=d.userEC||{};userIC=d.userIC||{};profile=d.profile||{};recurring=d.recurring||[];
+  // These four were previously dropped on restore. hiddenDefaultCats especially: without it,
+  // every renamed default category came back as a duplicate alongside its new name.
+  goals=Array.isArray(d.goals)?d.goals:[];
+  catOrder=d.catOrder&&typeof d.catOrder==="object"?d.catOrder:{expense:[],income:[]};
+  hiddenDefaultCats=d.hiddenDefaultCats&&typeof d.hiddenDefaultCats==="object"?d.hiddenDefaultCats:{expense:[],income:[]};
+  if(!Array.isArray(hiddenDefaultCats.expense))hiddenDefaultCats.expense=[];
+  if(!Array.isArray(hiddenDefaultCats.income))hiddenDefaultCats.income=[];
+  const validSecs=["networth","goals","stats","chart","trend","insights","budget","recent"];
+  if(Array.isArray(d.homeLayout)&&d.homeLayout.every(x=>validSecs.includes(x))){
+    const arr=[...d.homeLayout];validSecs.forEach(k=>{if(!arr.includes(k))arr.push(k);});homeLayout=arr;
+  }
+  if(d.theme==="light"||d.theme==="dark")theme=d.theme;
+  const ac=ACCENT_COLORS.find(c=>c.h===d.accent);if(ac)accentColor=ac;
+  const cu=CURRENCIES.find(c=>c.code===d.currency);if(cu)currency=cu;
+  accounts.forEach(a=>{if(!a.currency)a.currency=currency.code;});
+  applyTheme();save();render();showToast("✅ Imported successfully","green");
+}).catch(e=>showToast("⚠️ Import failed: "+e.message,"red"));}
 function deleteTx(id){if(confirm("Delete this transaction?")){txns=txns.filter(t=>t.id!==id);save();render();}}
 function duplicateTx(id){
   const t=txns.find(x=>x.id===id);if(!t)return;
@@ -1510,6 +1617,10 @@ function showModal(type,id){
   if(type==="addtx"){
     const EC0=getEC();const firstCat=Object.keys(EC0)[0]||"";
     window._txT="expense";window._txCat=firstCat;window._txSub=(EC0[firstCat]||[])[0]||"";window._txAcc=accounts[0]?.id||"";window._txReceipt=null;
+    // Clear any bank-alert link from a previously abandoned Add-Transaction. Without this, a
+    // cancelled "add from alert" left the id set and the next unrelated manual transaction
+    // silently dismissed that still-pending alert. confirmBankAlert() re-sets it after this.
+    window._bankAlertId=null;
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Add Transaction</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div>
     <div class="flex g4 mb14"><button class="btn w100" id="typeExp" style="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red);padding:11px" onclick="setTT('expense')">Expense</button><button class="btn w100" id="typeInc" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="setTT('income')">Income</button><button class="btn w100" id="typeTrf" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="showModal('transfer')">&#8646; Transfer</button></div>
     <div style="display:grid;gap:12px">
@@ -1744,7 +1855,7 @@ function bulkDeleteSelected(){
   render();
   showToast("🗑️ Deleted "+n+" transaction"+(n>1?"s":""),"red");
 }
-function fmtD(d){const dt=new Date(d),td=new Date(),df=Math.floor((td-dt)/864e5);if(df===0)return"Today";if(df===1)return"Yesterday";return dt.toLocaleDateString("en-NG",{weekday:"short",day:"numeric",month:"short"});}
+function fmtD(d){const[y,m,day]=String(d).split("-").map(Number);const dt=new Date(y,(m||1)-1,day||1);const n=new Date();const td=new Date(n.getFullYear(),n.getMonth(),n.getDate());const df=Math.round((td-dt)/864e5);if(df===0)return"Today";if(df===1)return"Yesterday";return dt.toLocaleDateString("en-NG",{weekday:"short",day:"numeric",month:"short"});}
 let _st;function doS(v){clearTimeout(_st);_st=setTimeout(()=>{search=v;render();},250);}
 
 document.addEventListener("click",()=>{if(ppOpen||ppBOpen){closePP();render();}});

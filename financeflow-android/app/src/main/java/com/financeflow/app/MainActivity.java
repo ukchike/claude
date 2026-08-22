@@ -10,6 +10,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.view.Window;
@@ -379,6 +380,78 @@ public class MainActivity extends AppCompatActivity {
         public void syncUpcomingBills(String json) {
             getSharedPreferences(ReminderReceiver.PREFS, Context.MODE_PRIVATE)
                 .edit().putString(ReminderReceiver.KEY_UPCOMING_BILLS, json).apply();
+        }
+
+        /** Fires a reminder immediately so the user can confirm notifications actually arrive. */
+        @JavascriptInterface
+        public void testReminder() {
+            ReminderReceiver.postNotification(MainActivity.this, 9009, "Test reminder",
+                "Reminders are working. You'll get these at 6am and 6pm daily.");
+        }
+
+        /**
+         * Diagnostics for the Reminders screen: whether notifications are allowed, whether the
+         * OEM battery optimiser is likely to kill our alarms, when the next one is due, and
+         * when one last actually fired.
+         */
+        @JavascriptInterface
+        public String reminderStatus() {
+            JSONObject o = new JSONObject();
+            try {
+                o.put("notifications", NotificationManagerCompat.from(MainActivity.this).areNotificationsEnabled());
+                boolean unrestricted = true;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                    if (pm != null) unrestricted = pm.isIgnoringBatteryOptimizations(getPackageName());
+                }
+                o.put("batteryUnrestricted", unrestricted);
+                o.put("nextMorning", ReminderReceiver.nextFireTime(false));
+                o.put("nextEvening", ReminderReceiver.nextFireTime(true));
+                o.put("lastFired", getSharedPreferences(ReminderReceiver.PREFS, Context.MODE_PRIVATE)
+                    .getLong(ReminderReceiver.KEY_LAST_FIRED, 0));
+            } catch (Exception ignored) {
+            }
+            return o.toString();
+        }
+
+        /**
+         * Opens the system battery-optimisation list so the user can mark FinanceFlow as
+         * unrestricted. Uses the settings-list intent rather than the direct-request one so no
+         * extra (Play-Protect-flagged) permission has to be declared.
+         */
+        @JavascriptInterface
+        public void openBatterySettings() {
+            runOnUiThread(() -> {
+                try {
+                    startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+                } catch (Exception e) {
+                    try {
+                        Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                        i.setData(Uri.parse("package:" + getPackageName()));
+                        startActivity(i);
+                    } catch (Exception ignored) {
+                    }
+                }
+            });
+        }
+
+        /** Opens this app's system notification settings (per-channel mute lives here). */
+        @JavascriptInterface
+        public void openNotificationSettings() {
+            runOnUiThread(() -> {
+                try {
+                    Intent i = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                    i.putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
+                    startActivity(i);
+                } catch (Exception e) {
+                    try {
+                        Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                        i.setData(Uri.parse("package:" + getPackageName()));
+                        startActivity(i);
+                    } catch (Exception ignored) {
+                    }
+                }
+            });
         }
     }
 

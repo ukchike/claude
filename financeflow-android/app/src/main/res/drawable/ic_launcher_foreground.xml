@@ -1,44 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- FinanceFlow mark: a person (savings/spending — you) beside a stack of coins (money),
-     in green and gold on black. A soft glass-style highlight sweeps across the upper half. -->
+<!-- FinanceFlow mark: a bold rising "growth" arrow, split into two tones the way the
+     reference design language splits its glyph — pale mint on the leading half, solid
+     white on the trailing half and arrowhead. Flat, rounded, no shadows. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- coin stack (money), to the right of the person -->
+    <!-- leading (lower-left) half of the trend line -->
     <path
-        android:fillColor="#F5C518"
-        android:strokeColor="#B8860B"
-        android:strokeWidth="1.4"
-        android:pathData="M58,74 A16,7 0 1,0 90,74 A16,7 0 1,0 58,74 Z" />
+        android:strokeColor="#A7F3D0"
+        android:strokeWidth="10"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M29,67 L47,49 L58,60" />
+    <!-- trailing (upper-right) half -->
     <path
-        android:fillColor="#F7CE3E"
-        android:strokeColor="#B8860B"
-        android:strokeWidth="1.4"
-        android:pathData="M58,64 A16,7 0 1,0 90,64 A16,7 0 1,0 58,64 Z" />
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="10"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M58,60 L78,40" />
+    <!-- arrowhead: an L-bracket with round joins, corner sitting on the end of the line -->
     <path
-        android:fillColor="#FADB6B"
-        android:strokeColor="#B8860B"
-        android:strokeWidth="1.4"
-        android:pathData="M58,54 A16,7 0 1,0 90,54 A16,7 0 1,0 58,54 Z" />
-    <!-- person: head + shoulders -->
-    <path
-        android:fillColor="#22C55E"
-        android:pathData="M20,80 L20,62 Q20,46 38,46 Q56,46 56,62 L56,80 Z" />
-    <path
-        android:fillColor="#22C55E"
-        android:pathData="M29,35 A9,9 0 1,0 47,35 A9,9 0 1,0 29,35 Z" />
-    <!-- glass highlight -->
-    <path android:pathData="M12,52 Q54,12 96,52 L96,16 Q54,-14 12,16 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:type="linear"
-                android:startX="54" android:startY="6"
-                android:endX="54" android:endY="56"
-                android:startColor="#4DFFFFFF"
-                android:endColor="#00FFFFFF" />
-        </aapt:attr>
-    </path>
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="10"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M62,40 L78,40 L78,56" />
 </vector>
