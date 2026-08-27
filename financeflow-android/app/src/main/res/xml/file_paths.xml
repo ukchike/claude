@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Exposes only the cache subfolder used for share images via FileProvider — nothing else on
+     disk is reachable through this provider. -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="shared_images" path="images/" />
+</paths>

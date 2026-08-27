@@ -1097,7 +1097,7 @@ function txRow(t){
 // ── STATS ──
 function rStats(inc,exp){
   const type=statsType;const isExp=type==="expense";const mA=getCatMap(pMode,pDate,type);const totalA=Object.values(mA.cat).reduce((s,v)=>s+v,0);
-  const tabs=`<div class="flex-b mb10"><div class="tab-row" style="flex:1;margin-right:8px"><button class="tab-btn ${type==="income"?"active":""}" onclick="statsType='income';render()">Income ${fmtK(inc)}</button><button class="tab-btn ${type==="expense"?"active":""}" onclick="statsType='expense';render()">Expenses ${fmtK(exp)}</button></div><button class="cmp-toggle ${cmpMode?"on":""}" onclick="toggleCmp()">${cmpMode?"&#10005; Close":"&#9145; Compare"}</button></div>`;
+  const tabs=`<div class="flex-b mb10"><div class="tab-row" style="flex:1;margin-right:8px"><button class="tab-btn ${type==="income"?"active":""}" onclick="statsType='income';render()">Income ${fmtK(inc)}</button><button class="tab-btn ${type==="expense"?"active":""}" onclick="statsType='expense';render()">Expenses ${fmtK(exp)}</button></div><button class="btn btn-g btn-sm" style="margin-right:6px" onclick="shareSpendingSummary()" title="Share as image">&#128228;</button><button class="cmp-toggle ${cmpMode?"on":""}" onclick="toggleCmp()">${cmpMode?"&#10005; Close":"&#9145; Compare"}</button></div>`;
   if(cmpMode){
     const mB=getCatMap(pModeB,pDateB,type);const totalB=Object.values(mB.cat).reduce((s,v)=>s+v,0);const lA=getLabelFor(pMode,pDate),lB=getLabelFor(pModeB,pDateB);
     const names=[...new Set([...Object.keys(mA.cat),...Object.keys(mB.cat)])].sort((a,b)=>(mA.cat[b]||0)-(mA.cat[a]||0));
@@ -1764,6 +1764,73 @@ function exportCSV(){
   });
   const csv=[h.join(","),...rows].join("\n");
   saveOrDownload("financeflow_"+toLocalISODate(new Date())+".csv",csv,"text/csv");
+}
+// ── SHARE SPENDING SUMMARY AS IMAGE ──
+// Draws a shareable card (current Stats period/type, total, top categories) on a plain <canvas>
+// — no server-side rendering, no screenshot capture, just 2D drawing calls — then hands the PNG
+// to the native share sheet. Reads the live CSS custom properties so the image matches whatever
+// theme/accent colour is actually on screen.
+function cssVar(name,fallback){const v=getComputedStyle(document.documentElement).getPropertyValue(name).trim();return v||fallback;}
+// CanvasRenderingContext2D.roundRect() is a fairly recent Canvas addition — not guaranteed on
+// every WebView version a sideloaded app might run under. Traces the same path manually so the
+// summary image degrades to plain (square) rects instead of throwing on an older WebView.
+function roundRectPath(ctx,x,y,w,h,r){
+  if(typeof ctx.roundRect==="function"){ctx.roundRect(x,y,w,h,r);return;}
+  r=Math.min(r,w/2,h/2);
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+function buildSummaryImageDataUrl(){
+  const type=statsType;const isExp=type!=="income";
+  const mA=getCatMap(pMode,pDate,type);
+  const total=Object.values(mA.cat).reduce((s,v)=>s+v,0);
+  const catArr=Object.entries(mA.cat).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const label=getLabelFor(pMode,pDate);
+  const bg=cssVar("--bg","#000000"),card=cssVar("--card","#121212"),text=cssVar("--text","#f2f2f5"),muted=cssVar("--muted","#8b8b93"),border=cssVar("--border","#242426"),accent=cssVar("--accent","#3b82f6"),green=cssVar("--green","#22c55e"),red=cssVar("--red","#ef4444");
+  const W=720,H=960;
+  const canvas=document.createElement("canvas");canvas.width=W;canvas.height=H;
+  const ctx=canvas.getContext("2d");
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+  // header
+  ctx.fillStyle=accent;ctx.font="700 30px sans-serif";ctx.fillText("FinanceFlow",48,72);
+  ctx.fillStyle=muted;ctx.font="15px sans-serif";ctx.fillText((profile.name?esc(profile.name).replace(/&amp;.*?;/g,""):"")+"  ·  "+new Date().toLocaleDateString(),48,98);
+  // period + type
+  ctx.fillStyle=text;ctx.font="600 22px sans-serif";ctx.fillText(label+" — "+(isExp?"Expenses":"Income"),48,160);
+  // big total
+  ctx.fillStyle=isExp?red:green;ctx.font="800 64px sans-serif";ctx.fillText(fmt(total),48,240);
+  // divider
+  ctx.strokeStyle=border;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(48,270);ctx.lineTo(W-48,270);ctx.stroke();
+  // category bars
+  let y=330;
+  if(!catArr.length){ctx.fillStyle=muted;ctx.font="18px sans-serif";ctx.fillText("No transactions this period",48,y);}
+  catArr.forEach(([name,val])=>{
+    const pct=total?val/total*100:0;
+    const c=clr(name);
+    ctx.fillStyle=text;ctx.font="600 19px sans-serif";ctx.fillText(name,48,y);
+    ctx.fillStyle=muted;ctx.font="15px sans-serif";ctx.textAlign="right";ctx.fillText(fmt(val)+"  ("+pct.toFixed(0)+"%)",W-48,y);ctx.textAlign="left";
+    const barY=y+16,barW=W-96;
+    ctx.fillStyle=border;ctx.beginPath();roundRectPath(ctx,48,barY,barW,10,5);ctx.fill();
+    ctx.fillStyle=c;ctx.beginPath();roundRectPath(ctx,48,barY,Math.max(barW*pct/100,8),10,5);ctx.fill();
+    y+=70;
+  });
+  // footer card
+  ctx.fillStyle=card;ctx.beginPath();roundRectPath(ctx,48,H-120,W-96,72,14);ctx.fill();
+  ctx.fillStyle=muted;ctx.font="14px sans-serif";ctx.fillText("Made with FinanceFlow — your money, on your device.",70,H-78);
+  return canvas.toDataURL("image/png");
+}
+function shareSpendingSummary(){
+  let dataUrl;
+  try{dataUrl=buildSummaryImageDataUrl();}catch(e){showToast("⚠️ Couldn't build the summary image","red");return;}
+  if(window.Android&&window.Android.shareImage){
+    window.Android.shareImage(dataUrl.split(",")[1],"FinanceFlow Summary");
+  }else{
+    const a=document.createElement("a");a.href=dataUrl;a.download="financeflow_summary.png";a.click();
+    showToast("💾 Downloaded summary image","green");
+  }
 }
 function exportData(){
   // Everything persisted by save() EXCEPT the security settings (pinHash, biometricEnabled).

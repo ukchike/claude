@@ -13,6 +13,7 @@ import android.os.Bundle;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.text.TextUtils;
+import android.util.Base64;
 import android.view.Window;
 import android.webkit.JavascriptInterface;
 import android.webkit.JsResult;
@@ -31,10 +32,13 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -330,6 +334,34 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     suppressNextLock = true;
                     startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+                } catch (Exception ignored) {
+                }
+            });
+        }
+
+        // Writes a base64 PNG (drawn on-device with <canvas>, no screenshot capture involved) to
+        // the cache dir and hands it to the system share sheet via a content:// Uri from
+        // FileProvider — never a raw file:// path, which most share targets now reject outright.
+        @JavascriptInterface
+        public void shareImage(final String base64Png, final String title) {
+            runOnUiThread(() -> {
+                try {
+                    File dir = new File(getCacheDir(), "images");
+                    if (!dir.exists()) dir.mkdirs();
+                    File imgFile = new File(dir, "summary_" + System.currentTimeMillis() + ".png");
+                    byte[] bytes = Base64.decode(base64Png, Base64.DEFAULT);
+                    try (FileOutputStream fos = new FileOutputStream(imgFile)) {
+                        fos.write(bytes);
+                    }
+                    Uri uri = FileProvider.getUriForFile(MainActivity.this,
+                        getPackageName() + ".fileprovider", imgFile);
+                    Intent shareIntent = new Intent(Intent.ACTION_SEND);
+                    shareIntent.setType("image/png");
+                    shareIntent.putExtra(Intent.EXTRA_STREAM, uri);
+                    shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    suppressNextLock = true;
+                    startActivity(Intent.createChooser(shareIntent,
+                        TextUtils.isEmpty(title) ? "Share" : title));
                 } catch (Exception ignored) {
                 }
             });
