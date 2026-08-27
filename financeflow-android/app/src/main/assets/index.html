@@ -149,6 +149,7 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
 .toast-undo button{background:none;border:none;color:var(--accent);font-weight:800;font-size:12px;letter-spacing:.03em;padding:6px 8px;cursor:pointer}
 /* Feature 2: Recurring badge */
 .rec-badge{background:rgba(var(--accent-rgb),.15);color:var(--accent);border:1px solid rgba(var(--accent-rgb),.3);border-radius:4px;padding:1px 5px;font-size:8px;font-weight:700}
+.tag-chip{display:inline-block;background:var(--active);color:var(--muted);border-radius:8px;padding:1px 6px;font-size:8px;font-weight:600;margin-left:3px;cursor:pointer}
 /* Insight card */
 .insight-row{display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)}
 .insight-row:last-child{border:none}
@@ -237,6 +238,7 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
 <nav class="bnav" id="bnav"></nav>
 <div id="modal-container"></div>
 <datalist id="payeeList"></datalist>
+<datalist id="tagList"></datalist>
 <script>
 
 // ── CATEGORIES ──
@@ -684,7 +686,24 @@ function toggleCat(n){exCats[n]=!exCats[n];render();}
 
 function getCatMap(mode,date,type){const range=getRangeFor(mode,date);const cat={},sub={};txns.filter(t=>t.date>=range.startStr&&t.date<=range.endStr&&t.type===type).forEach(t=>{cat[t.category]=(cat[t.category]||0)+t.amount;if(t.subcategory){const k=t.category+"|||"+t.subcategory;sub[k]=(sub[k]||0)+t.amount;}});return{cat,sub};}
 function getSpent(mode,date,catName,subName){const range=getRangeFor(mode,date);return txns.filter(t=>t.date>=range.startStr&&t.date<=range.endStr&&t.type==="expense"&&t.category===catName&&(!subName||t.subcategory===subName)).reduce((s,t)=>s+t.amount,0);}
-function getF(){const range=getRangeFor(pMode,pDate);return txns.filter(t=>{if(t.date<range.startStr||t.date>range.endStr)return false;if(fType!=="all"&&t.type!==fType)return false;if(fCat!=="all"&&t.category!==fCat)return false;if(fAcc!=="all"){const touches=t.type==="transfer"?(t.fromAccountId===fAcc||t.toAccountId===fAcc):t.accountId===fAcc;if(!touches)return false;}if(search){const s=search.toLowerCase();if(!(t.description||"").toLowerCase().includes(s)&&!(t.category||"").toLowerCase().includes(s)&&!(t.subcategory||"").toLowerCase().includes(s))return false;}return true;});}
+function getF(){const range=getRangeFor(pMode,pDate);return txns.filter(t=>{if(t.date<range.startStr||t.date>range.endStr)return false;if(fType!=="all"&&t.type!==fType)return false;if(fCat!=="all"&&t.category!==fCat)return false;if(fAcc!=="all"){const touches=t.type==="transfer"?(t.fromAccountId===fAcc||t.toAccountId===fAcc):t.accountId===fAcc;if(!touches)return false;}if(search){const s=search.toLowerCase();const inTags=(t.tags||[]).some(tag=>tag.toLowerCase().includes(s));if(!inTags&&!(t.description||"").toLowerCase().includes(s)&&!(t.category||"").toLowerCase().includes(s)&&!(t.subcategory||"").toLowerCase().includes(s))return false;}return true;});}
+// Tags/labels: free-text, orthogonal to category — e.g. "work travel", "tax deductible" — for
+// grouping transactions a single category can't express. Stored as t.tags (string array).
+function parseTags(str){
+  const seen=new Set();
+  return String(str||"").split(",").map(s=>s.trim()).filter(s=>{if(!s||seen.has(s.toLowerCase()))return false;seen.add(s.toLowerCase());return true;}).slice(0,10);
+}
+function tagsToInput(tags){return(tags||[]).join(", ");}
+function refreshTagList(){
+  const dl=$("tagList");if(!dl)return;
+  const seen=new Set(),opts=[];
+  for(let i=txns.length-1;i>=0&&opts.length<40;i--){
+    (txns[i].tags||[]).forEach(tag=>{if(tag&&!seen.has(tag.toLowerCase())){seen.add(tag.toLowerCase());opts.push(tag);}});
+  }
+  dl.innerHTML=opts.map(t=>`<option value="${esc(t)}">`).join("");
+}
+function tagChipsHTML(tags){return(tags&&tags.length)?tags.map(tag=>`<span class="tag-chip" onclick="event.stopPropagation();viewTagTx('${escJs(tag)}')">#${esc(tag)}</span>`).join(""):"";}
+function viewTagTx(tag){closePP();fCat="all";fType="all";fAcc="all";search=tag;V="transactions";render();}
 
 // ── ACCOUNT BALANCE HELPERS (income/expense affect one account; transfers move between two) ──
 function getAccountBalance(accId){
@@ -1072,7 +1091,7 @@ function clearedDotHTML(t){
 function toggleCleared(id){const t=txns.find(x=>x.id===id);if(!t)return;t.cleared=!t.cleared;save();render();}
 function txRow(t){
   if(t.type==="transfer")return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:rgba(var(--accent-rgb),.1);color:var(--accent)">&#8646;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Transfer")}</div><div class="fz9 muted">${esc(accName(t.fromAccountId))} &#8594; ${esc(accName(t.toAccountId))}</div></div><div><div class="fz12 fw7 tar accent">${clearedDotHTML(t)}${fmt(t.amount)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
-  const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}${t.receipt?'<span class="rec-badge">&#128247;</span>':""}${t.splitGroupId?'<span class="rec-badge">&#128203; split</span>':""}</div><div class="fz9 muted">${esc(t.subcategory?t.category+" › "+t.subcategory:t.category)} · ${esc(acc?acc.name:"")}</div></div><div><div class="fz12 fw7 tar ${t.type==="income"?"green":"red"}">${clearedDotHTML(t)}${t.type==="income"?"+":"-"}${fmt(t.amount)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
+  const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}${t.receipt?'<span class="rec-badge">&#128247;</span>':""}${t.splitGroupId?'<span class="rec-badge">&#128203; split</span>':""}${tagChipsHTML(t.tags)}</div><div class="fz9 muted">${esc(t.subcategory?t.category+" › "+t.subcategory:t.category)} · ${esc(acc?acc.name:"")}</div></div><div><div class="fz12 fw7 tar ${t.type==="income"?"green":"red"}">${clearedDotHTML(t)}${t.type==="income"?"+":"-"}${fmt(t.amount)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
 }
 
 // ── STATS ──
@@ -1738,10 +1757,10 @@ window.onSaveResult=function(success){
   else showToast("⚠️ Save cancelled","warn");
 };
 function exportCSV(){
-  const h=["Date","Description","Amount","Type","Category","Subcategory","Account"];
+  const h=["Date","Description","Amount","Type","Category","Subcategory","Account","Tags"];
   const rows=txns.sort((a,b)=>b.date.localeCompare(a.date)).map(t=>{
-    if(t.type==="transfer")return[t.date,t.description||"",t.amount,"transfer","Transfer","",accName(t.fromAccountId)+" → "+accName(t.toAccountId)].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",");
-    const acc=accounts.find(a=>a.id===t.accountId);return[t.date,t.description||"",t.amount,t.type,t.category,t.subcategory||"",acc?acc.name:""].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",");
+    if(t.type==="transfer")return[t.date,t.description||"",t.amount,"transfer","Transfer","",accName(t.fromAccountId)+" → "+accName(t.toAccountId),(t.tags||[]).join("; ")].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",");
+    const acc=accounts.find(a=>a.id===t.accountId);return[t.date,t.description||"",t.amount,t.type,t.category,t.subcategory||"",acc?acc.name:"",(t.tags||[]).join("; ")].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",");
   });
   const csv=[h.join(","),...rows].join("\n");
   saveOrDownload("financeflow_"+toLocalISODate(new Date())+".csv",csv,"text/csv");
@@ -1810,7 +1829,7 @@ function refreshPayeeList(){
 function showModal(type,id){
   const mc=$("modal-container");if(type==="close"){mc.innerHTML="";return;}
   const EC=getEC(),IC=getIC();
-  if(type==="edit"||type==="addtx")refreshPayeeList();
+  if(type==="edit"||type==="addtx"){refreshPayeeList();refreshTagList();}
 
   if(type==="edit"&&id){const t=txns.find(x=>x.id===id);if(t&&t.type==="transfer"){
     window._tfFrom=t.fromAccountId;window._tfTo=t.toAccountId;
@@ -1833,6 +1852,7 @@ function showModal(type,id){
     <div style="display:grid;gap:12px"><div><span class="edit-label">Type</span><div class="flex g4"><button class="btn w100" id="eExp" style="border:1px solid ${t.type==="expense"?"var(--red)":"var(--border)"};background:${t.type==="expense"?"rgba(239,68,68,.1)":"transparent"};color:${t.type==="expense"?"var(--red)":"var(--muted)"};padding:11px" onclick="eSetType('expense')">Expense</button><button class="btn w100" id="eInc" style="border:1px solid ${t.type==="income"?"var(--green)":"var(--border)"};background:${t.type==="income"?"rgba(34,197,94,.1)":"transparent"};color:${t.type==="income"?"var(--green)":"var(--muted)"};padding:11px" onclick="eSetType('income')">Income</button><button class="btn w100 btn-g" style="padding:11px" onclick="convertToTransfer('${t.id}')">&#8646; Transfer</button></div></div>
     <div><span class="edit-label">Date</span><input class="inp" type="date" id="eDate" value="${t.date}"></div>
     <div><span class="edit-label">Description</span><input class="inp" id="eDesc" value="${esc(t.description)}" list="payeeList"></div>
+    <div><span class="edit-label">Tags (comma separated)</span><input class="inp" id="eTags" value="${esc(tagsToInput(t.tags))}" placeholder="e.g. work travel, tax deductible" list="tagList"></div>
     <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="eAmt" value="${t.amount.toLocaleString("en-US",{maximumFractionDigits:2})}" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('eAmt')" title="Calculator">&#129518;</button></div></div>
     <div><span class="edit-label">Category</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openCatPicker('_eType','_eCat','_eSub','eCatLabel')"><span id="eCatLabel"></span><span class="muted">&#8250;</span></button></div>
     <div><span class="edit-label">Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_eAcc','eAccLabel')"><span id="eAccLabel"></span><span class="muted">&#8250;</span></button></div>
@@ -1861,6 +1881,7 @@ function showModal(type,id){
     <div style="display:grid;gap:12px">
       <div><span class="edit-label">Date</span><input class="inp" type="date" id="txDate" value="${toLocalISODate(new Date())}"></div>
       <div><span class="edit-label">Description</span><input class="inp" id="txDesc" placeholder="e.g. Grocery run" list="payeeList"></div>
+      <div><span class="edit-label">Tags (comma separated)</span><input class="inp" id="txTags" placeholder="e.g. work travel, tax deductible" list="tagList"></div>
       ${sm?`<div><div class="flex-b"><span class="edit-label" style="margin:0">Split across categories</span><button type="button" class="btn" style="background:none;border:none;color:var(--accent);font-size:11px;padding:0" onclick="toggleSplitMode()">Use one category instead</button></div><div id="txSplitBox">${splitLinesHTML()}</div></div>`:`
       <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="txAmt" placeholder="0.00" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('txAmt')" title="Calculator">&#129518;</button></div></div>
       <div><span class="edit-label">Category</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openCatPicker('_txT','_txCat','_txSub','txCatLabel')"><span id="txCatLabel"></span><span class="muted">&#8250;</span></button></div>
@@ -1909,7 +1930,7 @@ function eSetType(t){
   if(t==="expense"){e.style.cssText="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red)";i.style.cssText="border:1px solid var(--border);background:transparent;color:var(--muted)";}
   else{i.style.cssText="border:1px solid var(--green);background:rgba(34,197,94,.1);color:var(--green)";e.style.cssText="border:1px solid var(--border);background:transparent;color:var(--muted)";}
 }
-function saveTx(id){const t=txns.find(x=>x.id===id);if(!t)return;const a=parseAmount($("eAmt")?.value);if(!a)return alert("Enter amount");t.date=$("eDate").value;t.description=$("eDesc").value;t.amount=a;t.type=window._eType||t.type;t.category=window._eCat;t.subcategory=window._eSub||"";t.accountId=window._eAcc;t.receipt=window._eReceipt||null;t.cleared=!!$("eCleared")?.checked;save();showModal("close");render();}
+function saveTx(id){const t=txns.find(x=>x.id===id);if(!t)return;const a=parseAmount($("eAmt")?.value);if(!a)return alert("Enter amount");t.date=$("eDate").value;t.description=$("eDesc").value;t.amount=a;t.type=window._eType||t.type;t.category=window._eCat;t.subcategory=window._eSub||"";t.accountId=window._eAcc;t.receipt=window._eReceipt||null;t.cleared=!!$("eCleared")?.checked;t.tags=parseTags($("eTags")?.value);save();showModal("close");render();}
 // Convert between income/expense and transfer while editing, without losing date/amount/description
 function convertToTransfer(id){
   const t=txns.find(x=>x.id===id);if(!t)return;
@@ -1945,7 +1966,7 @@ function setTT(t){
 // handle them correctly — they already sum however many transactions land in a category. The
 // only new code is generating the group on save and collapsing it back into one row for display.
 function toggleSplitMode(){
-  const keepDate=$("txDate")?.value,keepDesc=$("txDesc")?.value,keepAcc=window._txAcc,keepT=window._txT;
+  const keepDate=$("txDate")?.value,keepDesc=$("txDesc")?.value,keepTags=$("txTags")?.value,keepAcc=window._txAcc,keepT=window._txT;
   window._txSplitMode=!window._txSplitMode;
   if(window._txSplitMode&&(!window._txSplits||!window._txSplits.length)){
     const EC=getEC();const firstCat=Object.keys(EC)[0]||"";
@@ -1955,6 +1976,7 @@ function toggleSplitMode(){
   showModal("addtx");
   if(keepDate)$("txDate").value=keepDate;
   if(keepDesc!==undefined&&$("txDesc"))$("txDesc").value=keepDesc;
+  if(keepTags!==undefined&&$("txTags"))$("txTags").value=keepTags;
   window._txAcc=keepAcc;if(keepT==="income")setTT("income");
   $("txAccLabel").textContent=accName(keepAcc);
 }
@@ -1987,10 +2009,10 @@ function splitTotal(){return(window._txSplits||[]).reduce((s,x)=>s+(parseAmount(
 function addSplitTx(keepOpen){
   const lines=(window._txSplits||[]).map(s=>({category:s.category,subcategory:s.subcategory||"",amount:parseAmount(s.amount)})).filter(s=>s.amount>0);
   if(lines.length<2)return alert("Add at least 2 categories with amounts (or switch back to a single category)");
-  const date=$("txDate").value,desc=$("txDesc").value,acc=window._txAcc,type=window._txT||"expense";
+  const date=$("txDate").value,desc=$("txDesc").value,tags=parseTags($("txTags")?.value),acc=window._txAcc,type=window._txT||"expense";
   if(!date)return alert("Choose a date");
   const groupId=uid();
-  const created=lines.map(s=>({id:uid(),date,description:desc,amount:s.amount,type,category:s.category,subcategory:s.subcategory,accountId:acc,source:"Manual",splitGroupId:groupId,cleared:!!window._txFromBankAlert}));
+  const created=lines.map(s=>({id:uid(),date,description:desc,tags,amount:s.amount,type,category:s.category,subcategory:s.subcategory,accountId:acc,source:"Manual",splitGroupId:groupId,cleared:!!window._txFromBankAlert}));
   txns.push(...created);
   save();
   created.forEach(t=>checkBudgetAlerts(t));
@@ -2007,7 +2029,7 @@ function addSplitTx(keepOpen){
 function addTx(keepOpen){
   if(window._txSplitMode)return addSplitTx(keepOpen);
   const a=parseAmount($("txAmt")?.value);if(!a)return alert("Enter an amount");
-  const newTx={id:uid(),date:$("txDate").value,description:$("txDesc").value,amount:a,type:window._txT||"expense",category:window._txCat,subcategory:window._txSub||"",accountId:window._txAcc,source:"Manual",receipt:window._txReceipt||null,cleared:!!window._txFromBankAlert};
+  const newTx={id:uid(),date:$("txDate").value,description:$("txDesc").value,tags:parseTags($("txTags")?.value),amount:a,type:window._txT||"expense",category:window._txCat,subcategory:window._txSub||"",accountId:window._txAcc,source:"Manual",receipt:window._txReceipt||null,cleared:!!window._txFromBankAlert};
   txns.push(newTx);
   // Feature 2: recurring
   if($("txRec")?.checked){
@@ -2023,6 +2045,7 @@ function addTx(keepOpen){
     const keepDate=$("txDate").value,keepAcc=window._txAcc,keepT=window._txT,keepCat=window._txCat,keepSub=window._txSub;
     render();showModal("addtx");
     $("txDate").value=keepDate;window._txAcc=keepAcc;
+    if($("txTags"))$("txTags").value=""; // tags describe THIS purchase, not carried to the next one
     if(keepT==="income")setTT("income");
     window._txCat=keepCat;window._txSub=keepSub;
     const lbl=$("txCatLabel");if(lbl)lbl.textContent=keepSub?keepCat+" / "+keepSub:keepCat;
@@ -2071,7 +2094,7 @@ function rTx(f,inc,exp){
       return`<div class="tx-row" onclick="expandedSplit=expandedSplit==='${t.groupId}'?null:'${t.groupId}';render()"><div class="tx-icon" style="background:rgba(var(--accent-rgb),.1);color:var(--accent)">&#128203;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Split transaction")}</div><div class="fz9 muted">Split &#183; ${t.items.length} categories ${isOpen?"&#9650;":"&#9660;"}</div></div><span class="cat-badge" style="background:rgba(var(--accent-rgb),.15);color:var(--accent)">Split</span><div class="fz12 fw7 ${t.type==="income"?"green":"red"}" style="min-width:58px;text-align:right">${t.type==="income"?"+":"-"}${fmt(total)}</div></div>${isOpen?`<div style="padding:2px 12px 8px 46px;background:var(--bg)">${t.items.map(x=>`<div class="flex-b" style="padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="event.stopPropagation();showModal('edit','${x.id}')"><span class="fz10 muted">${esc(x.category)}${x.subcategory?" · "+esc(x.subcategory):""}</span><span class="fz11 fw6">${fmt(x.amount)}</span></div>`).join("")}</div>`:""}`;
     }
     if(t.type==="transfer")return`<div class="tx-row" onclick="${rowClick(t)}">${checkHTML(t)}<div class="tx-icon" style="background:rgba(var(--accent-rgb),.1);color:var(--accent)">&#8646;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Transfer")}</div><div class="fz9 muted">${esc(accName(t.fromAccountId))} &#8594; ${esc(accName(t.toAccountId))}</div></div><span class="cat-badge" style="background:rgba(var(--accent-rgb),.15);color:var(--accent)">Transfer</span><div class="fz12 fw7 accent" style="min-width:58px;text-align:right">${fmt(t.amount)}</div></div>`;
-    const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="${rowClick(t)}">${checkHTML(t)}<div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}</div><div class="fz9 muted">${esc(acc?acc.name:"")} ${t.subcategory?"· "+esc(t.subcategory):""}</div></div><span class="cat-badge" style="background:${clr(t.category)}22;color:${clr(t.category)}">${esc(t.category)}</span><div class="fz12 fw7 ${t.type==="income"?"green":"red"}" style="min-width:58px;text-align:right">${t.type==="income"?"+":"-"}${fmt(t.amount)}</div></div>`;}).join("")}`;}).join(""):'<div class="muted fz12 tac" style="padding:40px">No transactions found</div>'}</div>`;
+    const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="${rowClick(t)}">${checkHTML(t)}<div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}${tagChipsHTML(t.tags)}</div><div class="fz9 muted">${esc(acc?acc.name:"")} ${t.subcategory?"· "+esc(t.subcategory):""}</div></div><span class="cat-badge" style="background:${clr(t.category)}22;color:${clr(t.category)}">${esc(t.category)}</span><div class="fz12 fw7 ${t.type==="income"?"green":"red"}" style="min-width:58px;text-align:right">${t.type==="income"?"+":"-"}${fmt(t.amount)}</div></div>`;}).join("")}`;}).join(""):'<div class="muted fz12 tac" style="padding:40px">No transactions found</div>'}</div>`;
   const si=$("si");if(si&&search){si.focus();si.setSelectionRange(search.length,search.length);}
   if(selectMode&&selectedTxIds.size){
     const bar=document.createElement("div");bar.id="selectBar";bar.className="select-bar";
