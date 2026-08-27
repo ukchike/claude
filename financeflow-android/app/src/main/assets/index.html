@@ -145,6 +145,8 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
 #lockScreen .lock-logo{width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#2563EB,#4F6BF0 55%,#8B5CF6);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:28px;margin:0 auto 20px}
 /* Feature 6: Toast notifications */
 .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);padding:9px 18px;border-radius:24px;font-size:12px;font-weight:600;z-index:500;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.4);animation:fadeIn .2s;pointer-events:none}
+.toast-undo{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:14px;padding:10px 10px 10px 18px;border-radius:24px;font-size:12px;font-weight:600;z-index:500;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.4);animation:fadeIn .2s;pointer-events:auto;background:var(--card);border:1px solid var(--border);color:var(--text)}
+.toast-undo button{background:none;border:none;color:var(--accent);font-weight:800;font-size:12px;letter-spacing:.03em;padding:6px 8px;cursor:pointer}
 /* Feature 2: Recurring badge */
 .rec-badge{background:rgba(var(--accent-rgb),.15);color:var(--accent);border:1px solid rgba(var(--accent-rgb),.3);border-radius:4px;padding:1px 5px;font-size:8px;font-weight:700}
 /* Insight card */
@@ -234,6 +236,7 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
 <button class="fab" id="fabAdd" onclick="showModal('addtx')" title="Add Transaction">+</button>
 <nav class="bnav" id="bnav"></nav>
 <div id="modal-container"></div>
+<datalist id="payeeList"></datalist>
 <script>
 
 // ── CATEGORIES ──
@@ -951,7 +954,7 @@ function addToGoal(id){
   if(g.saved>=g.target)showToast("🎉 Goal reached: "+g.name+"!","green");
 }
 function editGoal(id){const g=goals.find(x=>x.id===id);if(!g)return;g.name=$(`goalName_${id}`)?.value.trim()||g.name;g.target=parseAmount($(`goalTarget_${id}`)?.value)||g.target;save();expandedGoal=null;render();}
-function deleteGoal(id){if(!confirm("Delete this savings goal? Your saved progress will be lost."))return;goals=goals.filter(g=>g.id!==id);save();render();}
+function deleteGoal(id){const idx=goals.findIndex(g=>g.id===id);if(idx<0)return;const removed=goals[idx];goals.splice(idx,1);save();render();showUndoToast("Goal deleted",()=>{goals.splice(idx,0,removed);save();});}
 function goalsManageHTML(){
   return`<span class="st-label">Your Goals</span>
       ${goals.length?goals.map(g=>{const isE=expandedGoal===g.id;const pct=g.target>0?Math.min((g.saved/g.target)*100,100):0;const reached=g.saved>=g.target;return`<div class="bud-item"><div class="flex-b" onclick="expandedGoal=expandedGoal==='${g.id}'?null:'${g.id}';render()" style="cursor:pointer"><div class="flex g6"><div class="cat-dot" style="background:${g.color}"></div><span class="fw6 fz12">${esc(g.name)}</span>${reached?`<span class="rec-badge">&#127942; Reached</span>`:""}</div><div class="flex g6"><span class="fz11 fw7">${fmtK(g.saved)} / ${fmtK(g.target)}</span><span class="fz11 muted">${isE?"&#9650;":"&#9660;"}</span></div></div>
@@ -995,7 +998,7 @@ function accountsSectionHTML(){
 }
 function selectAccColor(c){newAccColor=c;render();}
 function addAccount(){const n=$("newAccName")?.value.trim();if(!n)return alert("Enter account name");const t=$("newAccType")?.value||"bank";const cur=$("newAccCurrency")?.value||currency.code;accounts.push({id:uid(),name:n,type:t,color:newAccColor,currency:cur});newAccColor=ACC_COLORS[0];draftAccName="";save();render();}
-function deleteAccount(id){if(txnCountForAccount(id)>0&&!confirm("This account has transactions. Delete anyway?"))return;accounts=accounts.filter(a=>a.id!==id);save();render();}
+function deleteAccount(id){if(txnCountForAccount(id)>0&&!confirm("This account has transactions. Delete anyway?"))return;const idx=accounts.findIndex(a=>a.id===id);if(idx<0)return;const removed=accounts[idx];accounts=accounts.filter(a=>a.id!==id);save();render();showUndoToast("Account deleted",()=>{accounts.splice(idx,0,removed);save();});}
 
 // ── SETTINGS ──
 function openSettings(tab){settingsOpen=true;settingsTab=tab||"home";let sp=document.getElementById("settingsPanel");if(!sp){sp=document.createElement("div");sp.id="settingsPanel";document.body.appendChild(sp);}render();}
@@ -1238,11 +1241,11 @@ function addBudget(){
   const nb={id:uid(),cat,limit:lim,period,subs:[]};budgets.push(nb);expandedBudget=nb.id;draftBudgetLimit="";save();render();showToast("🎯 Budget added — set subcategory limits below","green");
 }
 function saveBudget(id){const b=budgets.find(x=>x.id===id);if(!b)return;b.cat=$(`bCat_${id}`)?.value||b.cat;b.limit=parseAmount($(`bLim_${id}`)?.value)||b.limit;b.period=$(`bPer_${id}`)?.value||b.period||"month";b.subs.forEach((s,i)=>{const v=parseAmount($(`bSub_${id}_${i}`)?.value);if(!isNaN(v))s.limit=v;});const nc=$(`nsc_${id}`)?.value,nl=parseAmount($(`nsl_${id}`)?.value);if(nc&&nl){if(!b.subs.find(s=>s.name===nc))b.subs.push({name:nc,limit:nl});}save();expandedBudget=null;render();}
-function deleteBudget(id){if(!confirm("Delete this budget?"))return;budgets=budgets.filter(b=>b.id!==id);save();expandedBudget=null;render();}
-function rmBudSub(id,si){const b=budgets.find(x=>x.id===id);if(b){b.subs.splice(si,1);save();render();}}
+function deleteBudget(id){const idx=budgets.findIndex(b=>b.id===id);if(idx<0)return;const removed=budgets[idx];budgets.splice(idx,1);save();expandedBudget=null;render();showUndoToast("Budget deleted",()=>{budgets.splice(idx,0,removed);save();});}
+function rmBudSub(id,si){const b=budgets.find(x=>x.id===id);if(!b)return;const removed=b.subs[si];b.subs.splice(si,1);save();render();showUndoToast("Sub-limit removed",()=>{b.subs.splice(si,0,removed);save();});}
 function addCategory(){const n=$("nCatN")?.value.trim();if(!n)return alert("Enter a category name");if(settingsSubTab==="expense"){if(getEC()[n])return alert("Category already exists");userEC[n]=[];}else{if(getIC()[n])return alert("Category already exists");userIC[n]=[];}save();render();}
 function addSub(cat){const inp=$(`nsi_${cat}`);if(!inp)return;const s=inp.value.trim();if(!s)return alert("Enter a subcategory name");const ec=getEC(),ic=getIC();if(ec[cat]!==undefined){if(!userEC[cat])userEC[cat]=[...DEF_EC[cat]||[]];if(userEC[cat].includes(s))return alert("Already exists");userEC[cat].push(s);}else if(ic[cat]!==undefined){if(!userIC[cat])userIC[cat]=[...DEF_IC[cat]||[]];if(userIC[cat].includes(s))return alert("Already exists");userIC[cat].push(s);}save();render();}
-function rmSub(cat,sub){const ec=getEC(),ic=getIC();if(ec[cat]!==undefined){if(!userEC[cat])userEC[cat]=[...(DEF_EC[cat]||[])];userEC[cat]=userEC[cat].filter(s=>s!==sub);}else if(ic[cat]!==undefined){if(!userIC[cat])userIC[cat]=[...(DEF_IC[cat]||[])];userIC[cat]=userIC[cat].filter(s=>s!==sub);}save();render();}
+function rmSub(cat,sub){const ec=getEC(),ic=getIC();const isExpense=ec[cat]!==undefined;if(isExpense){if(!userEC[cat])userEC[cat]=[...(DEF_EC[cat]||[])];userEC[cat]=userEC[cat].filter(s=>s!==sub);}else if(ic[cat]!==undefined){if(!userIC[cat])userIC[cat]=[...(DEF_IC[cat]||[])];userIC[cat]=userIC[cat].filter(s=>s!==sub);}save();render();showUndoToast("\""+sub+"\" removed",()=>{const arr=isExpense?userEC[cat]:userIC[cat];if(arr&&!arr.includes(sub))arr.push(sub);save();});}
 
 // Rename and/or move a subcategory, cascading the change to any transactions,
 // recurring templates, and (for expense categories) budget sub-limits that reference it.
@@ -1466,6 +1469,26 @@ function showToast(msg,type){
   el.style.cssText=`background:${c};border:1px solid ${bc};color:${tc}`;
   el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),3000);
 }
+// Undo-able delete: replaces the old confirm()-then-gone-forever pattern (every delete in the
+// app — transactions, budgets, goals, recurring, accounts, subcategories — was previously
+// unrecoverable after one tap). Deletes now apply immediately and show a 6s "Undo" toast that
+// puts the exact removed record(s) back via restoreFn.
+let _undoState=null,_undoTimer=null;
+function showUndoToast(label,restoreFn){
+  document.querySelectorAll(".toast-undo").forEach(e=>e.remove());
+  _undoState=restoreFn;
+  const el=document.createElement("div");el.className="toast-undo";
+  el.innerHTML=`<span>${esc(label)}</span><button onclick="performUndo()">UNDO</button>`;
+  document.body.appendChild(el);
+  clearTimeout(_undoTimer);
+  _undoTimer=setTimeout(()=>{el.remove();_undoState=null;},6000);
+}
+function performUndo(){
+  if(_undoState){_undoState();_undoState=null;showToast("↩️ Restored","green");}
+  document.querySelectorAll(".toast-undo").forEach(e=>e.remove());
+  clearTimeout(_undoTimer);
+  render();
+}
 function checkBudgetAlerts(tx){
   if(tx.type!=="expense")return;
   budgets.forEach(b=>{
@@ -1514,7 +1537,7 @@ function processRecurring(){
 }
 function addRecurring(r){recurring.push(r);save();}
 function toggleRecurring(id){const r=recurring.find(x=>x.id===id);if(r){r.active=!r.active;save();render();}}
-function deleteRecurring(id){if(!confirm("Delete this recurring transaction?"))return;recurring=recurring.filter(r=>r.id!==id);save();render();}
+function deleteRecurring(id){const idx=recurring.findIndex(r=>r.id===id);if(idx<0)return;const removed=recurring[idx];recurring.splice(idx,1);save();render();showUndoToast("Recurring transaction deleted",()=>{recurring.splice(idx,0,removed);save();});}
 
 // ── FEATURE 3: BACKUP / EXPORT ──
 // Routes through the native "Save As" bridge (Storage Access Framework) when running
@@ -1580,7 +1603,7 @@ function importData(file){if(!file)return;file.text().then(t=>{
   accounts.forEach(a=>{if(!a.currency)a.currency=currency.code;});
   applyTheme();save();render();showToast("✅ Imported successfully","green");
 }).catch(e=>showToast("⚠️ Import failed: "+e.message,"red"));}
-function deleteTx(id){if(confirm("Delete this transaction?")){txns=txns.filter(t=>t.id!==id);save();render();}}
+function deleteTx(id){const idx=txns.findIndex(t=>t.id===id);if(idx<0)return;const removed=txns[idx];txns.splice(idx,1);save();render();showUndoToast("Transaction deleted",()=>{txns.splice(idx,0,removed);save();});}
 function duplicateTx(id){
   const t=txns.find(x=>x.id===id);if(!t)return;
   const copy={...t,id:uid(),date:toLocalISODate(new Date())};
@@ -1589,9 +1612,23 @@ function duplicateTx(id){
 }
 
 // ── MODALS ──
+// Payee/merchant autocomplete: the description field had no memory, so typing "Shoprite" was
+// full free-text friction every single time. Populates the shared <datalist> from past
+// descriptions, most-recent-first, so the on-screen keyboard offers a suggestion after 1-2
+// keystrokes. Refreshed each time an Add/Edit Transaction modal opens (cheap — capped at 40).
+function refreshPayeeList(){
+  const dl=$("payeeList");if(!dl)return;
+  const seen=new Set(),opts=[];
+  for(let i=txns.length-1;i>=0&&opts.length<40;i--){
+    const d=(txns[i].description||"").trim();
+    if(d&&!seen.has(d.toLowerCase())){seen.add(d.toLowerCase());opts.push(d);}
+  }
+  dl.innerHTML=opts.map(d=>`<option value="${esc(d)}">`).join("");
+}
 function showModal(type,id){
   const mc=$("modal-container");if(type==="close"){mc.innerHTML="";return;}
   const EC=getEC(),IC=getIC();
+  if(type==="edit"||type==="addtx")refreshPayeeList();
 
   if(type==="edit"&&id){const t=txns.find(x=>x.id===id);if(t&&t.type==="transfer"){
     window._tfFrom=t.fromAccountId;window._tfTo=t.toAccountId;
@@ -1613,7 +1650,7 @@ function showModal(type,id){
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Edit Transaction</span><div class="flex g6"><button class="btn btn-sm btn-g" onclick="duplicateTx('${t.id}')" title="Duplicate">&#128203;</button><button class="btn btn-sm btn-rd" onclick="deleteTx('${t.id}');showModal('close')">&#128465;</button><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div></div>
     <div style="display:grid;gap:12px"><div><span class="edit-label">Type</span><div class="flex g4"><button class="btn w100" id="eExp" style="border:1px solid ${t.type==="expense"?"var(--red)":"var(--border)"};background:${t.type==="expense"?"rgba(239,68,68,.1)":"transparent"};color:${t.type==="expense"?"var(--red)":"var(--muted)"};padding:11px" onclick="eSetType('expense')">Expense</button><button class="btn w100" id="eInc" style="border:1px solid ${t.type==="income"?"var(--green)":"var(--border)"};background:${t.type==="income"?"rgba(34,197,94,.1)":"transparent"};color:${t.type==="income"?"var(--green)":"var(--muted)"};padding:11px" onclick="eSetType('income')">Income</button><button class="btn w100 btn-g" style="padding:11px" onclick="convertToTransfer('${t.id}')">&#8646; Transfer</button></div></div>
     <div><span class="edit-label">Date</span><input class="inp" type="date" id="eDate" value="${t.date}"></div>
-    <div><span class="edit-label">Description</span><input class="inp" id="eDesc" value="${esc(t.description)}"></div>
+    <div><span class="edit-label">Description</span><input class="inp" id="eDesc" value="${esc(t.description)}" list="payeeList"></div>
     <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="eAmt" value="${t.amount.toLocaleString("en-US",{maximumFractionDigits:2})}" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('eAmt')" title="Calculator">&#129518;</button></div></div>
     <div><span class="edit-label">Category</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openCatPicker('_eType','_eCat','_eSub','eCatLabel')"><span id="eCatLabel"></span><span class="muted">&#8250;</span></button></div>
     <div><span class="edit-label">Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_eAcc','eAccLabel')"><span id="eAccLabel"></span><span class="muted">&#8250;</span></button></div>
@@ -1634,7 +1671,7 @@ function showModal(type,id){
     <div class="flex g4 mb14"><button class="btn w100" id="typeExp" style="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red);padding:11px" onclick="setTT('expense')">Expense</button><button class="btn w100" id="typeInc" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="setTT('income')">Income</button><button class="btn w100" id="typeTrf" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="showModal('transfer')">&#8646; Transfer</button></div>
     <div style="display:grid;gap:12px">
       <div><span class="edit-label">Date</span><input class="inp" type="date" id="txDate" value="${toLocalISODate(new Date())}"></div>
-      <div><span class="edit-label">Description</span><input class="inp" id="txDesc" placeholder="e.g. Grocery run"></div>
+      <div><span class="edit-label">Description</span><input class="inp" id="txDesc" placeholder="e.g. Grocery run" list="payeeList"></div>
       <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="txAmt" placeholder="0.00" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('txAmt')" title="Calculator">&#129518;</button></div></div>
       <div><span class="edit-label">Category</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openCatPicker('_txT','_txCat','_txSub','txCatLabel')"><span id="txCatLabel"></span><span class="muted">&#8250;</span></button></div>
       <div><span class="edit-label">Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_txAcc','txAccLabel')"><span id="txAccLabel"></span><span class="muted">&#8250;</span></button></div>
@@ -1857,12 +1894,12 @@ function applyBulkTransfer(){
 }
 function bulkDeleteSelected(){
   const n=selectedTxIds.size;if(!n)return;
-  if(!confirm("Delete "+n+" selected transaction"+(n>1?"s":"")+"? This can't be undone."))return;
+  const removed=txns.filter(t=>selectedTxIds.has(t.id));
   txns=txns.filter(t=>!selectedTxIds.has(t.id));
   save();
   selectMode=false;selectedTxIds=new Set();
   render();
-  showToast("🗑️ Deleted "+n+" transaction"+(n>1?"s":""),"red");
+  showUndoToast("Deleted "+n+" transaction"+(n>1?"s":""),()=>{txns.push(...removed);save();});
 }
 function fmtD(d){const[y,m,day]=String(d).split("-").map(Number);const dt=new Date(y,(m||1)-1,day||1);const n=new Date();const td=new Date(n.getFullYear(),n.getMonth(),n.getDate());const df=Math.round((td-dt)/864e5);if(df===0)return"Today";if(df===1)return"Yesterday";return dt.toLocaleDateString("en-NG",{weekday:"short",day:"numeric",month:"short"});}
 let _st;function doS(v){clearTimeout(_st);_st=setTimeout(()=>{search=v;render();},250);}
