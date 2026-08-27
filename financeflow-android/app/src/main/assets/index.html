@@ -588,6 +588,7 @@ function save(){
   localStorage.setItem("ffd_goals",JSON.stringify(goals));
   localStorage.setItem("ffd_pin",pinHash);
   localStorage.setItem("ffd_reminders",JSON.stringify(remindersEnabled));
+  localStorage.setItem("ffd_onboard",JSON.stringify(onboardComplete));
   if(remindersEnabled)syncUpcomingBills();
 }
 function load(){
@@ -610,6 +611,7 @@ function load(){
   try{const g=localStorage.getItem("ffd_goals");if(g)goals=JSON.parse(g);}catch(e){}
   try{pinHash=localStorage.getItem("ffd_pin")||"";}catch(e){}
   try{const rm=localStorage.getItem("ffd_reminders");if(rm)remindersEnabled=JSON.parse(rm);}catch(e){}
+  try{const ob=localStorage.getItem("ffd_onboard");onboardComplete=ob!==null?JSON.parse(ob):!!profile.name;}catch(e){onboardComplete=!!profile.name;}
   if(!accounts.length)accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];
   accounts.forEach(a=>{if(!a.currency)a.currency=currency.code;}); // pre-per-account-currency accounts inherit the app's global currency
   applyTheme();
@@ -663,6 +665,24 @@ function getAccountBalance(accId){
     return s+(t.type==="income"?t.amount:-t.amount);
   },0);
 }
+// This account's balance expressed in the app's primary currency. Same-currency accounts pass
+// through unchanged. A foreign-currency account only contributes if the user has entered a
+// manual rate (a.fxRate) for it — FinanceFlow deliberately never fetches live exchange rates
+// (zero network calls, by design), so there is no "automatic" conversion; null means "still
+// excluded from totals" exactly as before this feature existed.
+function acctPrimaryEquiv(a){
+  const bal=getAccountBalance(a.id);
+  const code=a.currency||currency.code;
+  if(code===currency.code)return bal;
+  if(a.fxRate>0)return bal*a.fxRate;
+  return null;
+}
+function setAccFxRate(id,val){
+  const a=accounts.find(x=>x.id===id);if(!a)return;
+  const rate=parseAmount(val);
+  a.fxRate=rate>0?rate:null;
+  save();render();
+}
 function txnCountForAccount(accId){
   return txns.filter(t=>t.type==="transfer"?(t.fromAccountId===accId||t.toAccountId===accId):t.accountId===accId).length;
 }
@@ -707,7 +727,64 @@ function render(){
   const exp=f.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
   if(V==="dashboard")rDash(f,inc,exp);else if(V==="stats")rStats(inc,exp);else if(V==="budgets")rBud(f);
 }
-function needsOnboarding(){return !profile.name;}
+// Persisted separately from profile.name (rather than inferring "done" from the name being
+// set) so the 3-step flow below — name+currency, then main account, then a first action — can't
+// be silently short-circuited by step 1 alone setting profile.name and making the gate false.
+// On load(), an account that predates this flag (profile.name already set, key never written)
+// is treated as already onboarded rather than re-shown the welcome flow.
+let onboardComplete=false,onboardStep=0;
+function needsOnboarding(){return !onboardComplete;}
+// Previously: a single "Set Up Your Account" button that opened the full Settings > Profile
+// page, saved a name, and dropped straight into an empty app with no accounts, no currency
+// chosen deliberately, and no hint what to do next. This is a 3-step flow covering the three
+// things every new user needs before the app is useful, ending in an action instead of a blank
+// screen.
+function renderOnboarding(){
+  const wrap=inner=>`<div style="min-height:60vh;display:flex;flex-direction:column;justify-content:center;padding:24px 8px"><div style="max-width:340px;margin:0 auto;width:100%">${inner}</div></div>`;
+  if(onboardStep===0){
+    return wrap(`<div class="tac" style="margin-bottom:20px"><div style="font-size:44px;margin-bottom:10px">&#128200;</div><div class="fz16 fw8 mb4">Welcome to FinanceFlow</div><div class="fz12 muted">Let's get you set up — takes less than a minute.</div></div>
+      <span class="edit-label">Your Name</span>
+      <input class="inp mb12" id="obName" placeholder="e.g. John Doe">
+      <span class="edit-label">Currency</span>
+      <select class="inp mb16" id="obCurrency">${CURRENCIES.map(c=>`<option value="${c.code}" ${c.code===currency.code?"selected":""}>${c.symbol} ${c.code} — ${c.label}</option>`).join("")}</select>
+      <button class="btn btn-p w100" style="justify-content:center;padding:13px" onclick="obSaveWelcome()">Continue &#8250;</button>`);
+  }
+  if(onboardStep===1){
+    const first=accounts[0]||{name:"Cash",type:"cash"};
+    return wrap(`<div class="tac" style="margin-bottom:20px"><div style="font-size:36px;margin-bottom:8px">&#127974;</div><div class="fz16 fw8 mb4">Your main account</div><div class="fz12 muted">Where does most of your money live? You can add more accounts later.</div></div>
+      <span class="edit-label">Account Name</span>
+      <input class="inp mb12" id="obAccName" value="${esc(first.name)}" placeholder="e.g. Cash, GTBank, Opay">
+      <span class="edit-label">Type</span>
+      <select class="inp mb16" id="obAccType"><option value="bank" ${first.type==="bank"?"selected":""}>&#127981; Bank Account</option><option value="cash" ${first.type==="cash"?"selected":""}>&#128181; Cash</option><option value="mobile" ${first.type==="mobile"?"selected":""}>&#128242; Mobile Money</option><option value="savings" ${first.type==="savings"?"selected":""}>&#127968; Savings</option></select>
+      <button class="btn btn-p w100" style="justify-content:center;padding:13px" onclick="obSaveAccount()">Continue &#8250;</button>`);
+  }
+  return wrap(`<div class="tac" style="margin-bottom:24px"><div style="font-size:36px;margin-bottom:8px">&#127881;</div><div class="fz16 fw8 mb4">You're all set, ${esc((profile.name||"").split(" ")[0])}!</div><div class="fz12 muted">How would you like to start?</div></div>
+    <button class="btn btn-p w100 mb10" style="justify-content:center;padding:13px" onclick="obFinish('addtx')">&#65291; Add my first transaction</button>
+    <button class="btn btn-g w100 mb16" style="justify-content:center;padding:13px" onclick="obFinish('upload')">&#8679; Import a bank statement (CSV)</button>
+    <div class="tac"><button class="btn" style="background:none;border:none;color:var(--muted);font-size:11px" onclick="obFinish('skip')">Skip for now</button></div>`);
+}
+function obSaveWelcome(){
+  const n=$("obName")?.value.trim();
+  if(!n)return alert("Enter your name");
+  profile.name=n;
+  const found=CURRENCIES.find(c=>c.code===$("obCurrency")?.value);
+  if(found)currency=found;
+  accounts.forEach(a=>{if(!a.currency)a.currency=currency.code;});
+  onboardStep=1;save();render();
+}
+function obSaveAccount(){
+  const n=$("obAccName")?.value.trim()||"Cash";
+  const t=$("obAccType")?.value||"cash";
+  let acc=accounts[0];
+  if(!acc){acc={id:uid(),color:ACC_COLORS[0]};accounts.push(acc);}
+  acc.name=n;acc.type=t;acc.currency=currency.code;
+  onboardStep=2;save();render();
+}
+function obFinish(action){
+  onboardComplete=true;save();render();
+  if(action==="addtx")showModal("addtx");
+  else if(action==="upload")showModal("upload");
+}
 
 // ── FEATURE 5: INSIGHTS ──
 // ── HOME: daily income/expense trend chart (week or month view) ──
@@ -802,7 +879,11 @@ function catMonthlyTrendSVG(catName,subName){
 // primary-currency accounts to stay consistent with the Total Balance figure above it.
 function netWorthHistory(months){
   const n=months||6;
-  const primaryIds=new Set(accounts.filter(a=>(a.currency||currency.code)===currency.code).map(a=>a.id));
+  // rateOf: same-currency accounts pass through at 1; foreign accounts with a manual rate set
+  // convert at TODAY's rate applied uniformly across all past months (rates aren't tracked
+  // historically) — an approximation, but still more useful than excluding them outright.
+  // Accounts with no rate set stay excluded, same as before this feature existed.
+  const rateOf={};accounts.forEach(a=>{const code=a.currency||currency.code;rateOf[a.id]=code===currency.code?1:(a.fxRate>0?a.fxRate:null);});
   const now=new Date();const arr=[];
   for(let i=n-1;i>=0;i--){
     let m=now.getMonth()-i,y=now.getFullYear();
@@ -812,12 +893,14 @@ function netWorthHistory(months){
       if(t.date>cutoff)return s;
       if(t.type==="transfer"){
         let d=0;
-        if(primaryIds.has(t.fromAccountId))d-=t.amount;
-        if(primaryIds.has(t.toAccountId))d+=t.amount;
+        const rFrom=rateOf[t.fromAccountId],rTo=rateOf[t.toAccountId];
+        if(rFrom!==null&&rFrom!==undefined)d-=t.amount*rFrom;
+        if(rTo!==null&&rTo!==undefined)d+=t.amount*rTo;
         return s+d;
       }
-      if(!primaryIds.has(t.accountId))return s;
-      return s+(t.type==="income"?t.amount:-t.amount);
+      const r=rateOf[t.accountId];
+      if(r===null||r===undefined)return s;
+      return s+(t.type==="income"?t.amount:-t.amount)*r;
     },0);
     arr.push({label:MO[m],val:bal});
   }
@@ -873,10 +956,10 @@ function buildInsights(f,inc,exp){
 
 // ── DASHBOARD ──
 function rDash(f,inc,exp){
-  if(needsOnboarding()){$("main").innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;padding:20px"><div style="font-size:48px;margin-bottom:16px">&#128200;</div><div class="fz16 fw8 mb4">Welcome to FinanceFlow</div><div class="fz12 muted mb16">Your personal money manager.<br>Let's get you set up in seconds.</div><button class="btn btn-p" style="padding:12px 28px;font-size:14px" onclick="openSettings('profile')">&#128100; Set Up Your Account</button></div>`;return;}
+  if(needsOnboarding()){$("main").innerHTML=renderOnboarding();return;}
   const net=inc-exp;const savRate=inc>0?((inc-exp)/inc*100):0;
-  const tb=accounts.filter(a=>(a.currency||currency.code)===currency.code).reduce((s,a)=>s+getAccountBalance(a.id),0);
-  const foreignAccCount=accounts.filter(a=>(a.currency||currency.code)!==currency.code).length;
+  const tb=accounts.reduce((s,a)=>{const eq=acctPrimaryEquiv(a);return eq===null?s:s+eq;},0);
+  const foreignAccCount=accounts.filter(a=>acctPrimaryEquiv(a)===null).length;
   const catMap={};f.filter(t=>t.type==="expense").forEach(t=>{catMap[t.category]=(catMap[t.category]||0)+t.amount;});const catArr=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);const tot=catArr.reduce((s,c)=>s+c[1],0);
   const trend=[];for(let i=5;i>=0;i--){let m=pDate.getMonth()-i,y=pDate.getFullYear();if(m<0){m+=12;y--;}const mt=txns.filter(t=>{const d=new Date(t.date);return d.getMonth()===m&&d.getFullYear()===y;});trend.push({month:MO[m],inc:mt.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0),exp:mt.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0)});}
   const tMax=Math.max(...trend.map(t=>Math.max(t.inc,t.exp)),1);
@@ -1039,11 +1122,11 @@ function rBud(f){
 
 // ── ACCOUNTS ──
 function accountsSectionHTML(){
-  const primary=accounts.filter(a=>(a.currency||currency.code)===currency.code);
   const foreign=accounts.filter(a=>(a.currency||currency.code)!==currency.code);
-  const tb=primary.reduce((s,a)=>s+getAccountBalance(a.id),0);
-  return`<div class="flex-b mb4"><span class="fz13 fw7">Your Accounts</span>${accounts.length>1?`<button class="btn btn-g btn-sm" onclick="showModal('transfer')">&#8646; Transfer</button>`:""}</div><div class="fz10 muted mb12">Total balance (${esc(currency.code)}): <span class="fw7 accent fz14">${fmt(tb)}</span>${foreign.length?` <span class="fz9 muted">· ${foreign.length} account${foreign.length>1?"s":""} in other currencies not included</span>`:""}</div>
-  <div class="grid2 mb12">${accounts.map(a=>{const bal=getAccountBalance(a.id);const cnt=txnCountForAccount(a.id);const ic=a.type==="cash"?"&#128181;":"&#127981;";const acCode=a.currency||currency.code;return`<div class="acc-card"><div class="flex g8 mb8"><div style="width:34px;height:34px;border-radius:8px;background:${a.color}20;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:16px">${ic}</div><div style="flex:1;min-width:0"><div class="fw7 fz12 ellip">${esc(a.name)}</div><div class="fz9 muted">${cnt} txns${acCode!==currency.code?" · "+esc(acCode):""}</div></div><button onclick="deleteAccount('${a.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">&#10005;</button></div><div class="fw8 fz16">${fmtCur(bal,acCode)}</div></div>`;}).join("")}</div>
+  const unconverted=foreign.filter(a=>!(a.fxRate>0));
+  const tb=accounts.reduce((s,a)=>{const eq=acctPrimaryEquiv(a);return eq===null?s:s+eq;},0);
+  return`<div class="flex-b mb4"><span class="fz13 fw7">Your Accounts</span>${accounts.length>1?`<button class="btn btn-g btn-sm" onclick="showModal('transfer')">&#8646; Transfer</button>`:""}</div><div class="fz10 muted mb12">Total balance (${esc(currency.code)}): <span class="fw7 accent fz14">${fmt(tb)}</span>${unconverted.length?` <span class="fz9 muted">· ${unconverted.length} account${unconverted.length>1?"s":""} not included (no rate set)</span>`:""}</div>
+  <div class="grid2 mb12">${accounts.map(a=>{const bal=getAccountBalance(a.id);const cnt=txnCountForAccount(a.id);const ic=a.type==="cash"?"&#128181;":"&#127981;";const acCode=a.currency||currency.code;const isForeign=acCode!==currency.code;const eq=acctPrimaryEquiv(a);return`<div class="acc-card"><div class="flex g8 mb8"><div style="width:34px;height:34px;border-radius:8px;background:${a.color}20;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:16px">${ic}</div><div style="flex:1;min-width:0"><div class="fw7 fz12 ellip">${esc(a.name)}</div><div class="fz9 muted">${cnt} txns${isForeign?" · "+esc(acCode):""}</div></div><button onclick="deleteAccount('${a.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">&#10005;</button></div><div class="fw8 fz16">${fmtCur(bal,acCode)}</div>${isForeign?`<div class="flex g6 mt8" style="align-items:center"><span class="fz9 muted" style="white-space:nowrap">1 ${esc(acCode)} =</span><input class="inp" style="font-size:11px;padding:5px 8px" type="text" inputmode="decimal" value="${a.fxRate?a.fxRate:""}" placeholder="rate" onchange="setAccFxRate('${a.id}',this.value)"><span class="fz9 muted">${esc(currency.code)}</span></div>${eq!==null?`<div class="fz9 muted mt4">&#8776; ${fmt(eq)}</div>`:""}`:""}</div>`;}).join("")}</div>
   <div class="card"><div class="fz12 fw7 mb10">Add Account</div>
     <div style="display:grid;gap:10px">
       <input class="inp" id="newAccName" value="${esc(draftAccName)}" oninput="draftAccName=this.value" placeholder="Account name (e.g. GTBank, Opay)">
@@ -1052,7 +1135,7 @@ function accountsSectionHTML(){
       <div><span class="edit-label">Color</span><div class="swatch-row">${ACC_COLORS.map(c=>`<button type="button" class="color-swatch ${newAccColor===c?"sel":""}" style="background:${c}" onclick="selectAccColor('${c}')" title="${c}"></button>`).join("")}</div></div>
       <button class="btn btn-p w100" style="justify-content:center" onclick="addAccount()">+ Add Account</button>
     </div>
-    <div class="fz9 muted mt8">Accounts in a different currency show their own balance, but aren't converted into your totals, budgets or stats — FinanceFlow doesn't fetch exchange rates.</div>
+    <div class="fz9 muted mt8">Accounts in a different currency show their own balance. Enter a rate on the account card above to fold it into your Total Balance too — FinanceFlow never fetches live exchange rates, so this is always a rate you set yourself. Budgets and stats stay per-category and are unaffected either way.</div>
   </div>`;
 }
 function selectAccColor(c){newAccColor=c;render();}
@@ -1269,6 +1352,10 @@ function saveProfile(){
   const n=$("pName")?.value.trim()||"";
   const wasOnboarding=needsOnboarding();
   profile.name=n;
+  // Covers reaching Settings > Profile directly (tapping the header avatar) before finishing
+  // the onboarding flow below — without this, needsOnboarding() would still be true afterward
+  // and the very next render() would bounce straight back to the welcome screen.
+  if(wasOnboarding&&n)onboardComplete=true;
   save();
   if(wasOnboarding&&n){
     V="dashboard";
@@ -1639,7 +1726,7 @@ function exportData(){
 }
 
 // ── DATA ACTIONS ──
-function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts","ffd_homelayout","ffd_catorder","ffd_goals","ffd_pin","ffd_reminders"].forEach(k=>localStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e",currency:currency.code}];userEC={};userIC={};profile={name:""};recurring=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;homeLayout=["networth","goals","stats","chart","trend","insights","budget","recent"];catOrder={expense:[],income:[]};goals=[];pinHash="";pinLockActive=false;remindersEnabled=false;if(window.Android&&window.Android.cancelReminders)window.Android.cancelReminders();save();closeSettings();}}
+function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts","ffd_homelayout","ffd_catorder","ffd_goals","ffd_pin","ffd_reminders","ffd_onboard"].forEach(k=>localStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e",currency:currency.code}];userEC={};userIC={};profile={name:""};recurring=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;homeLayout=["networth","goals","stats","chart","trend","insights","budget","recent"];catOrder={expense:[],income:[]};goals=[];pinHash="";pinLockActive=false;remindersEnabled=false;onboardComplete=false;onboardStep=0;if(window.Android&&window.Android.cancelReminders)window.Android.cancelReminders();save();closeSettings();}}
 function importData(file){if(!file)return;file.text().then(t=>{
   const d=JSON.parse(t);
   txns=d.txns||[];
