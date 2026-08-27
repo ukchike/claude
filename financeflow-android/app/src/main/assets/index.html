@@ -795,6 +795,58 @@ function catMonthlyTrendSVG(catName,subName){
   </svg>`;
 }
 
+// Net worth over time — Home previously only ever showed the current total plus the change vs
+// last period, with no way to see the trend that produced it. Computed retroactively from
+// transaction history (no daily snapshots stored) by re-running getAccountBalance's own
+// income/expense/transfer logic with a date cutoff at each month-end, restricted to
+// primary-currency accounts to stay consistent with the Total Balance figure above it.
+function netWorthHistory(months){
+  const n=months||6;
+  const primaryIds=new Set(accounts.filter(a=>(a.currency||currency.code)===currency.code).map(a=>a.id));
+  const now=new Date();const arr=[];
+  for(let i=n-1;i>=0;i--){
+    let m=now.getMonth()-i,y=now.getFullYear();
+    while(m<0){m+=12;y--;}
+    const cutoff=toLocalISODate(new Date(y,m+1,0));
+    const bal=txns.reduce((s,t)=>{
+      if(t.date>cutoff)return s;
+      if(t.type==="transfer"){
+        let d=0;
+        if(primaryIds.has(t.fromAccountId))d-=t.amount;
+        if(primaryIds.has(t.toAccountId))d+=t.amount;
+        return s+d;
+      }
+      if(!primaryIds.has(t.accountId))return s;
+      return s+(t.type==="income"?t.amount:-t.amount);
+    },0);
+    arr.push({label:MO[m],val:bal});
+  }
+  return arr;
+}
+function netWorthTrendSVG(){
+  const data=netWorthHistory(6);
+  const padL=40,padR=6,padB=14,padT=6,w=300,h=90;
+  const plotW=w-padL-padR;
+  const vals=data.map(d=>d.val);
+  const max=Math.max(...vals,0),min=Math.min(...vals,0);
+  const range=(max-min)||1;
+  const stepX=data.length>1?plotW/(data.length-1):plotW;
+  const yOf=v=>padT+(1-(v-min)/range)*(h-padT-padB);
+  const xOf=i=>padL+i*stepX;
+  const path=data.map((d,i)=>`${i===0?"M":"L"}${xOf(i).toFixed(1)},${yOf(d.val).toFixed(1)}`).join(" ");
+  const dots=data.map((d,i)=>`<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(d.val).toFixed(1)}" r="2.5" style="fill:var(--accent)"/>`).join("");
+  const labels=data.map((d,i)=>`<text x="${xOf(i).toFixed(1)}" y="${h+6}" font-size="8" text-anchor="middle" style="fill:var(--muted)">${esc(d.label)}</text>`).join("");
+  const zeroLine=min<0&&max>0?`<line x1="${padL}" y1="${yOf(0).toFixed(1)}" x2="${w-padR}" y2="${yOf(0).toFixed(1)}" style="stroke:var(--border)" stroke-width="1" stroke-dasharray="2,2"/>`:"";
+  const yTicks=[min,(min+max)/2,max];
+  const yLabels=yTicks.map(v=>`<text x="${(padL-6).toFixed(1)}" y="${(yOf(v)+3).toFixed(1)}" font-size="8" text-anchor="end" style="fill:var(--muted)">${esc(fmtK(v))}</text>`).join("");
+  return`<svg viewBox="0 0 ${w} ${h+10}" style="width:100%;height:106px;overflow:visible">
+    ${yLabels}${zeroLine}
+    <path d="${path}" fill="none" style="stroke:var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}
+    ${labels}
+  </svg>`;
+}
+
 function buildInsights(f,inc,exp){
   const insights=[];
   const savRate=inc>0?((inc-exp)/inc*100):0;
@@ -859,7 +911,7 @@ function rDash(f,inc,exp){
 
   const netChange=inc-exp;
   const sections={
-    networth:`<div class="nw-card"><div class="fz10" style="opacity:.85">Total Balance (${esc(currency.code)})</div><div class="nw-val">${fmt(tb)}</div><div class="nw-chg" style="color:${netChange>=0?"#bbf7d0":"#fecaca"}">${netChange>=0?"&#9650;":"&#9660;"} ${fmt(Math.abs(netChange))} this period</div>${foreignAccCount?`<div class="fz9 mt4" style="opacity:.8">+ ${foreignAccCount} account${foreignAccCount>1?"s":""} in other currencies below</div>`:""}</div>${accounts.length?`<div class="acc-deck">${accounts.map(a=>{const bal=getAccountBalance(a.id);const acCode=a.currency||currency.code;const pct=tb!==0?Math.min(Math.abs(bal/tb*100),100):0;return`<div class="acc-deck-card" style="border-color:${a.color}44"><div class="flex g6 mb8"><div style="width:26px;height:26px;border-radius:7px;background:${a.color}22;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:13px">${a.type==="cash"?"&#128181;":"&#127981;"}</div><span class="fz11 fw7 ellip" style="flex:1">${esc(a.name)}</span></div><div class="fz14 fw8 mb6">${fmtCur(bal,acCode)}</div><div class="bar-track" style="height:5px"><div class="bar-fill" style="width:${acCode===currency.code?pct:100}%;background:${a.color}"></div></div></div>`;}).join("")}</div>`:""}`,
+    networth:`<div class="nw-card"><div class="fz10" style="opacity:.85">Total Balance (${esc(currency.code)})</div><div class="nw-val">${fmt(tb)}</div><div class="nw-chg" style="color:${netChange>=0?"#bbf7d0":"#fecaca"}">${netChange>=0?"&#9650;":"&#9660;"} ${fmt(Math.abs(netChange))} this period</div>${foreignAccCount?`<div class="fz9 mt4" style="opacity:.8">+ ${foreignAccCount} account${foreignAccCount>1?"s":""} in other currencies below</div>`:""}</div>${accounts.length?`<div class="acc-deck">${accounts.map(a=>{const bal=getAccountBalance(a.id);const acCode=a.currency||currency.code;const pct=tb!==0?Math.min(Math.abs(bal/tb*100),100):0;return`<div class="acc-deck-card" style="border-color:${a.color}44"><div class="flex g6 mb8"><div style="width:26px;height:26px;border-radius:7px;background:${a.color}22;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:13px">${a.type==="cash"?"&#128181;":"&#127981;"}</div><span class="fz11 fw7 ellip" style="flex:1">${esc(a.name)}</span></div><div class="fz14 fw8 mb6">${fmtCur(bal,acCode)}</div><div class="bar-track" style="height:5px"><div class="bar-fill" style="width:${acCode===currency.code?pct:100}%;background:${a.color}"></div></div></div>`;}).join("")}</div>`:""}<div class="card" style="margin-top:10px"><div class="fz11 fw7 mb6">Net Worth — Last 6 Months</div>${netWorthTrendSVG()}</div>`,
     goals:goals.length?`<div class="card"><div class="flex-b mb8"><span class="fz12 fw7">&#127942; Goals</span><button class="btn btn-g btn-sm" onclick="openSettings('goals')">Manage</button></div>${goals.slice(0,3).map(g=>{const pct=g.target>0?Math.min((g.saved/g.target)*100,100):0;const reached=g.saved>=g.target;return`<div class="mb8"><div class="flex-b fz10"><span class="fw6">${esc(g.name)}</span><span class="muted">${fmtK(g.saved)}/${fmtK(g.target)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${reached?"var(--green)":g.color}"></div></div></div>`;}).join("")}</div>`:"",
     stats:`<div class="stat-row">
       <div class="stat"><div class="stat-label">Income</div><div class="stat-val green">${fmtK(inc)}</div></div>
@@ -895,9 +947,16 @@ function moveHomeSection(key,dir){
   [homeLayout[i],homeLayout[j]]=[homeLayout[j],homeLayout[i]];
   save();render();
 }
+// A tappable dot before the amount: hollow = not yet reconciled against the bank, filled green
+// = confirmed. Reusing this for Bank Alerts too — a transaction added FROM a confirmed bank
+// alert is trivially "cleared" since it came straight from the bank's own notification.
+function clearedDotHTML(t){
+  return`<span onclick="event.stopPropagation();toggleCleared('${t.id}')" title="${t.cleared?"Reconciled — tap to unmark":"Tap to mark reconciled against your bank"}" style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;cursor:pointer;background:${t.cleared?"var(--green)":"transparent"};border:1.5px solid ${t.cleared?"var(--green)":"var(--muted)"}"></span>`;
+}
+function toggleCleared(id){const t=txns.find(x=>x.id===id);if(!t)return;t.cleared=!t.cleared;save();render();}
 function txRow(t){
-  if(t.type==="transfer")return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:rgba(var(--accent-rgb),.1);color:var(--accent)">&#8646;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Transfer")}</div><div class="fz9 muted">${esc(accName(t.fromAccountId))} &#8594; ${esc(accName(t.toAccountId))}</div></div><div><div class="fz12 fw7 tar accent">${fmt(t.amount)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
-  const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}${t.receipt?'<span class="rec-badge">&#128247;</span>':""}</div><div class="fz9 muted">${esc(t.subcategory?t.category+" › "+t.subcategory:t.category)} · ${esc(acc?acc.name:"")}</div></div><div><div class="fz12 fw7 tar ${t.type==="income"?"green":"red"}">${t.type==="income"?"+":"-"}${fmt(t.amount)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
+  if(t.type==="transfer")return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:rgba(var(--accent-rgb),.1);color:var(--accent)">&#8646;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Transfer")}</div><div class="fz9 muted">${esc(accName(t.fromAccountId))} &#8594; ${esc(accName(t.toAccountId))}</div></div><div><div class="fz12 fw7 tar accent">${clearedDotHTML(t)}${fmt(t.amount)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
+  const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}${t.receipt?'<span class="rec-badge">&#128247;</span>':""}</div><div class="fz9 muted">${esc(t.subcategory?t.category+" › "+t.subcategory:t.category)} · ${esc(acc?acc.name:"")}</div></div><div><div class="fz12 fw7 tar ${t.type==="income"?"green":"red"}">${clearedDotHTML(t)}${t.type==="income"?"+":"-"}${fmt(t.amount)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
 }
 
 // ── STATS ──
@@ -1385,6 +1444,7 @@ function confirmBankAlert(idx){
   if(!a)return;
   showModal("addtx");
   window._bankAlertId=a.id;
+  window._txFromBankAlert=true; // straight from the bank's own notification — mark reconciled by default
   setTimeout(()=>{
     setAmountValue("txAmt",a.amount);
     if($("txDesc"))$("txDesc").value=(a.text||"").slice(0,60);
@@ -1606,7 +1666,7 @@ function importData(file){if(!file)return;file.text().then(t=>{
 function deleteTx(id){const idx=txns.findIndex(t=>t.id===id);if(idx<0)return;const removed=txns[idx];txns.splice(idx,1);save();render();showUndoToast("Transaction deleted",()=>{txns.splice(idx,0,removed);save();});}
 function duplicateTx(id){
   const t=txns.find(x=>x.id===id);if(!t)return;
-  const copy={...t,id:uid(),date:toLocalISODate(new Date())};
+  const copy={...t,id:uid(),date:toLocalISODate(new Date()),cleared:false}; // a duplicate is a fresh, not-yet-confirmed entry
   txns.push(copy);save();showModal("close");render();
   showToast("📋 Transaction duplicated","green");
 }
@@ -1654,7 +1714,8 @@ function showModal(type,id){
     <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="eAmt" value="${t.amount.toLocaleString("en-US",{maximumFractionDigits:2})}" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('eAmt')" title="Calculator">&#129518;</button></div></div>
     <div><span class="edit-label">Category</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openCatPicker('_eType','_eCat','_eSub','eCatLabel')"><span id="eCatLabel"></span><span class="muted">&#8250;</span></button></div>
     <div><span class="edit-label">Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_eAcc','eAccLabel')"><span id="eAccLabel"></span><span class="muted">&#8250;</span></button></div>
-    <div><span class="edit-label">Receipt</span><div id="eReceiptBox">${receiptBoxHTML("_eReceipt","e")}</div></div></div>
+    <div><span class="edit-label">Receipt</span><div id="eReceiptBox">${receiptBoxHTML("_eReceipt","e")}</div></div>
+    <div class="toggle-wrap" style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px"><div><div class="fz12 fw6">&#9989; Reconciled</div><div class="fz10 muted mt4">Confirmed against your bank statement</div></div><label class="toggle"><input type="checkbox" id="eCleared" ${t.cleared?"checked":""}><span class="toggle-slider"></span></label></div></div>
     <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="saveTx('${t.id}')">&#10003; Save</button></div></div>`;
     $("eCatLabel").textContent=window._eSub?window._eCat+" / "+window._eSub:window._eCat;
     $("eAccLabel").textContent=accName(t.accountId);
@@ -1667,6 +1728,7 @@ function showModal(type,id){
     // cancelled "add from alert" left the id set and the next unrelated manual transaction
     // silently dismissed that still-pending alert. confirmBankAlert() re-sets it after this.
     window._bankAlertId=null;
+    window._txFromBankAlert=false;
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Add Transaction</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div>
     <div class="flex g4 mb14"><button class="btn w100" id="typeExp" style="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red);padding:11px" onclick="setTT('expense')">Expense</button><button class="btn w100" id="typeInc" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="setTT('income')">Income</button><button class="btn w100" id="typeTrf" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="showModal('transfer')">&#8646; Transfer</button></div>
     <div style="display:grid;gap:12px">
@@ -1718,7 +1780,7 @@ function eSetType(t){
   if(t==="expense"){e.style.cssText="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red)";i.style.cssText="border:1px solid var(--border);background:transparent;color:var(--muted)";}
   else{i.style.cssText="border:1px solid var(--green);background:rgba(34,197,94,.1);color:var(--green)";e.style.cssText="border:1px solid var(--border);background:transparent;color:var(--muted)";}
 }
-function saveTx(id){const t=txns.find(x=>x.id===id);if(!t)return;const a=parseAmount($("eAmt")?.value);if(!a)return alert("Enter amount");t.date=$("eDate").value;t.description=$("eDesc").value;t.amount=a;t.type=window._eType||t.type;t.category=window._eCat;t.subcategory=window._eSub||"";t.accountId=window._eAcc;t.receipt=window._eReceipt||null;save();showModal("close");render();}
+function saveTx(id){const t=txns.find(x=>x.id===id);if(!t)return;const a=parseAmount($("eAmt")?.value);if(!a)return alert("Enter amount");t.date=$("eDate").value;t.description=$("eDesc").value;t.amount=a;t.type=window._eType||t.type;t.category=window._eCat;t.subcategory=window._eSub||"";t.accountId=window._eAcc;t.receipt=window._eReceipt||null;t.cleared=!!$("eCleared")?.checked;save();showModal("close");render();}
 // Convert between income/expense and transfer while editing, without losing date/amount/description
 function convertToTransfer(id){
   const t=txns.find(x=>x.id===id);if(!t)return;
@@ -1748,7 +1810,7 @@ function setTT(t){
 }
 function addTx(keepOpen){
   const a=parseAmount($("txAmt")?.value);if(!a)return alert("Enter an amount");
-  const newTx={id:uid(),date:$("txDate").value,description:$("txDesc").value,amount:a,type:window._txT||"expense",category:window._txCat,subcategory:window._txSub||"",accountId:window._txAcc,source:"Manual",receipt:window._txReceipt||null};
+  const newTx={id:uid(),date:$("txDate").value,description:$("txDesc").value,amount:a,type:window._txT||"expense",category:window._txCat,subcategory:window._txSub||"",accountId:window._txAcc,source:"Manual",receipt:window._txReceipt||null,cleared:!!window._txFromBankAlert};
   txns.push(newTx);
   // Feature 2: recurring
   if($("txRec")?.checked){
