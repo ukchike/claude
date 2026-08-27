@@ -45,6 +45,20 @@ public class MainActivity extends AppCompatActivity {
     private static final String CHANNEL_ID = "financeflow_alerts";
     private int notifId = 1;
 
+    // ── Lock-on-resume ──
+    // Without this, the PIN/biometric lock only ever ran once at cold start (a single JS line
+    // at the bottom of index.html), so backgrounding the app with Home and reopening it from
+    // the app switcher skipped the lock screen entirely — anyone with the phone unlocked could
+    // reopen FinanceFlow straight to the transaction list. onPause/onResume close that gap.
+    //
+    // suppressNextLock guards the false positives: the file chooser, the SAF save dialog, the
+    // notification-listener/battery/app-details settings screens and external links (About)
+    // all launch a separate Activity, which pauses MainActivity exactly like leaving the app
+    // does. Every call site that launches one of those sets this flag first so returning from
+    // them doesn't re-trigger the lock.
+    private boolean suppressNextLock = false;
+    private boolean awaitingLockCheck = false;
+
     // Web <input type=file> support (CSV/JSON upload, Google Drive included via document providers)
     private ValueCallback<Uri[]> filePathCallback;
     private ActivityResultLauncher<Intent> fileChooserLauncher;
@@ -118,6 +132,7 @@ public class MainActivity extends AppCompatActivity {
                     intent.putExtra(Intent.EXTRA_MIME_TYPES, acceptTypes);
                 }
                 try {
+                    suppressNextLock = true;
                     fileChooserLauncher.launch(Intent.createChooser(intent, "Select File"));
                 } catch (Exception e) {
                     filePathCallback = null;
@@ -291,6 +306,7 @@ public class MainActivity extends AppCompatActivity {
             intent.putExtra(Intent.EXTRA_TITLE, filename);
             runOnUiThread(() -> {
                 try {
+                    suppressNextLock = true;
                     createDocumentLauncher.launch(intent);
                 } catch (Exception e) {
                     pendingSaveContent = null;
@@ -312,6 +328,7 @@ public class MainActivity extends AppCompatActivity {
         public void openNotificationListenerSettings() {
             runOnUiThread(() -> {
                 try {
+                    suppressNextLock = true;
                     startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
                 } catch (Exception ignored) {
                 }
@@ -324,6 +341,7 @@ public class MainActivity extends AppCompatActivity {
         public void openExternalLink(String url) {
             runOnUiThread(() -> {
                 try {
+                    suppressNextLock = true;
                     startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
                 } catch (Exception ignored) {
                 }
@@ -423,11 +441,13 @@ public class MainActivity extends AppCompatActivity {
         public void openBatterySettings() {
             runOnUiThread(() -> {
                 try {
+                    suppressNextLock = true;
                     startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
                 } catch (Exception e) {
                     try {
                         Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
                         i.setData(Uri.parse("package:" + getPackageName()));
+                        suppressNextLock = true;
                         startActivity(i);
                     } catch (Exception ignored) {
                     }
@@ -442,11 +462,13 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     Intent i = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
                     i.putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
+                    suppressNextLock = true;
                     startActivity(i);
                 } catch (Exception e) {
                     try {
                         Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
                         i.setData(Uri.parse("package:" + getPackageName()));
+                        suppressNextLock = true;
                         startActivity(i);
                     } catch (Exception ignored) {
                     }
@@ -461,6 +483,31 @@ public class MainActivity extends AppCompatActivity {
             webView.goBack();
         } else {
             super.onBackPressed();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (suppressNextLock) {
+            // We're the ones navigating away (file picker, SAF save, a settings screen, an
+            // external link) — don't count this as "left the app".
+            suppressNextLock = false;
+        } else {
+            awaitingLockCheck = true;
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (awaitingLockCheck) {
+            awaitingLockCheck = false;
+            // relock() is a JS function in index.html; it decides whether to actually show the
+            // lock screen (only if a PIN or biometric lock is configured) and re-triggers
+            // biometric auth. Guarded with typeof in case this fires before the page finishes
+            // its first load.
+            webView.evaluateJavascript("if(typeof relock==='function')relock();", null);
         }
     }
 }

@@ -1427,6 +1427,15 @@ function showPinEntry(){
   const inp=$("pinInput");if(inp){inp.value="";setTimeout(()=>inp.focus(),100);}
 }
 function hideLock(){const ls=$("lockScreen");if(ls)ls.style.display="none";pinLockActive=false;}
+// Called by MainActivity.onResume() (native onPause/onResume — see MainActivity.java) every
+// time the app comes back from the background, NOT just at cold start. Previously the lock only
+// ever ran once, at the bottom of this file, so backgrounding the app with Home and reopening it
+// skipped the lock screen entirely regardless of PIN/biometric settings.
+function relock(){
+  if(pinLockActive)return; // already showing
+  if(biometricEnabled&&window.Android){showLock();triggerAuth();}
+  else if(pinHash){showLock();}
+}
 // ── PIN / PASSCODE (fallback lock when biometrics aren't available or preferred) ──
 async function sha256Hex(str){
   const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(str));
@@ -1863,9 +1872,7 @@ document.addEventListener("click",()=>{if(ppOpen||ppBOpen){closePP();render();}}
 load();
 processRecurring();
 render();
-// Feature 4: show lock screen if biometric enabled
-if(biometricEnabled&&window.Android){showLock();triggerAuth();}
-else if(pinHash){showLock();}
+relock(); // cold-start lock check; subsequent checks come from native onResume via relock() too
 // Surface any bank alerts detected while the app was closed
 if(bankAlertsEnabled){const pend=getPendingBankAlerts();if(pend.length)showToast("🔔 "+pend.length+" bank alert"+(pend.length>1?"s":"")+" detected — review in Settings","warn");}
 
