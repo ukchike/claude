@@ -280,7 +280,21 @@ const PERIOD_LABELS={week:"Weekly",month:"Monthly",quarter:"Quarterly",year:"Yea
 function setNbPeriod(p){nbPeriod=p;render();}
 let editingSub=null; // "cat|||sub" currently open for rename/move in Categories tab
 let editingCat=null; // category name currently open for rename in Categories tab
-let expandedBudget=null,expandedCatSet=null;
+let expandedBudget=null,expandedCatSet=null,expandedSplit=null;
+// Collapses transactions sharing a splitGroupId into one combined display entry (used only
+// outside multi-select mode — see rTx). Groups by first-occurrence position, not adjacency, so
+// it stays correct even if an undo or import re-inserts a line out of order.
+function groupSplits(list){
+  const seen=new Set(),out=[];
+  list.forEach(t=>{
+    if(t.splitGroupId){
+      if(seen.has(t.splitGroupId))return;
+      seen.add(t.splitGroupId);
+      out.push({split:true,groupId:t.splitGroupId,items:list.filter(x=>x.splitGroupId===t.splitGroupId),date:t.date,description:t.description,accountId:t.accountId,type:t.type});
+    }else out.push(t);
+  });
+  return out;
+}
 let pinChangeOpen=false;
 let hiddenDefaultCats={expense:[],income:[]}; // default category names hidden after being renamed
 let bankAlertsEnabled=false; // Feature: auto-detect bank transactions from notifications
@@ -1058,7 +1072,7 @@ function clearedDotHTML(t){
 function toggleCleared(id){const t=txns.find(x=>x.id===id);if(!t)return;t.cleared=!t.cleared;save();render();}
 function txRow(t){
   if(t.type==="transfer")return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:rgba(var(--accent-rgb),.1);color:var(--accent)">&#8646;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Transfer")}</div><div class="fz9 muted">${esc(accName(t.fromAccountId))} &#8594; ${esc(accName(t.toAccountId))}</div></div><div><div class="fz12 fw7 tar accent">${clearedDotHTML(t)}${fmt(t.amount)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
-  const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}${t.receipt?'<span class="rec-badge">&#128247;</span>':""}</div><div class="fz9 muted">${esc(t.subcategory?t.category+" › "+t.subcategory:t.category)} · ${esc(acc?acc.name:"")}</div></div><div><div class="fz12 fw7 tar ${t.type==="income"?"green":"red"}">${clearedDotHTML(t)}${t.type==="income"?"+":"-"}${fmt(t.amount)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
+  const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}${t.receipt?'<span class="rec-badge">&#128247;</span>':""}${t.splitGroupId?'<span class="rec-badge">&#128203; split</span>':""}</div><div class="fz9 muted">${esc(t.subcategory?t.category+" › "+t.subcategory:t.category)} · ${esc(acc?acc.name:"")}</div></div><div><div class="fz12 fw7 tar ${t.type==="income"?"green":"red"}">${clearedDotHTML(t)}${t.type==="income"?"+":"-"}${fmt(t.amount)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
 }
 
 // ── STATS ──
@@ -1774,6 +1788,7 @@ function deleteTx(id){const idx=txns.findIndex(t=>t.id===id);if(idx<0)return;con
 function duplicateTx(id){
   const t=txns.find(x=>x.id===id);if(!t)return;
   const copy={...t,id:uid(),date:toLocalISODate(new Date()),cleared:false}; // a duplicate is a fresh, not-yet-confirmed entry
+  delete copy.splitGroupId; // stand alone — must NOT silently join the original's split group and change its displayed total
   txns.push(copy);save();showModal("close");render();
   showToast("📋 Transaction duplicated","green");
 }
@@ -1836,22 +1851,29 @@ function showModal(type,id){
     // silently dismissed that still-pending alert. confirmBankAlert() re-sets it after this.
     window._bankAlertId=null;
     window._txFromBankAlert=false;
+    // toggleSplitMode() sets _skipSplitReset before re-invoking this same branch, so flipping
+    // the toggle doesn't wipe the split lines the user was mid-way through building.
+    if(!window._skipSplitReset){window._txSplitMode=false;window._txSplits=[];}
+    window._skipSplitReset=false;
+    const sm=window._txSplitMode;
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Add Transaction</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div>
     <div class="flex g4 mb14"><button class="btn w100" id="typeExp" style="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red);padding:11px" onclick="setTT('expense')">Expense</button><button class="btn w100" id="typeInc" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="setTT('income')">Income</button><button class="btn w100" id="typeTrf" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="showModal('transfer')">&#8646; Transfer</button></div>
     <div style="display:grid;gap:12px">
       <div><span class="edit-label">Date</span><input class="inp" type="date" id="txDate" value="${toLocalISODate(new Date())}"></div>
       <div><span class="edit-label">Description</span><input class="inp" id="txDesc" placeholder="e.g. Grocery run" list="payeeList"></div>
+      ${sm?`<div><div class="flex-b"><span class="edit-label" style="margin:0">Split across categories</span><button type="button" class="btn" style="background:none;border:none;color:var(--accent);font-size:11px;padding:0" onclick="toggleSplitMode()">Use one category instead</button></div><div id="txSplitBox">${splitLinesHTML()}</div></div>`:`
       <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="txAmt" placeholder="0.00" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('txAmt')" title="Calculator">&#129518;</button></div></div>
       <div><span class="edit-label">Category</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openCatPicker('_txT','_txCat','_txSub','txCatLabel')"><span id="txCatLabel"></span><span class="muted">&#8250;</span></button></div>
+      <div class="tar"><button type="button" class="btn" style="background:none;border:none;color:var(--accent);font-size:11px;padding:0" onclick="toggleSplitMode()">&#8646; Split into multiple categories</button></div>`}
       <div><span class="edit-label">Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_txAcc','txAccLabel')"><span id="txAccLabel"></span><span class="muted">&#8250;</span></button></div>
-      <div><span class="edit-label">Receipt</span><div id="txReceiptBox">${receiptBoxHTML("_txReceipt","tx")}</div></div>
+      ${sm?"":`<div><span class="edit-label">Receipt</span><div id="txReceiptBox">${receiptBoxHTML("_txReceipt","tx")}</div></div>
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px">
         <div class="flex-b mb6"><span class="fz12 fw6">&#128257; Make Recurring</span><label class="toggle"><input type="checkbox" id="txRec" onchange="toggleRecUI(this.checked)"><span class="toggle-slider"></span></label></div>
         <div id="recUI" style="display:none"><select class="inp" id="txFreq" style="margin-top:8px"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly" selected>Monthly</option><option value="yearly">Yearly</option></select></div>
-      </div>
+      </div>`}
     </div>
     <div class="flex g6 mt16"><button class="btn btn-g" style="flex:1;justify-content:center;padding:14px;font-size:14px" onclick="addTx(true)">&#128260; Save &amp; Add New</button><button class="btn btn-p" style="flex:1;justify-content:center;padding:14px;font-size:14px" onclick="addTx(false)">+ Add Transaction</button></div></div></div>`;
-    $("txCatLabel").textContent=window._txSub?firstCat+" / "+window._txSub:firstCat;
+    if($("txCatLabel"))$("txCatLabel").textContent=window._txSub?firstCat+" / "+window._txSub:firstCat;
     $("txAccLabel").textContent=accName(window._txAcc);
   }
 
@@ -1915,7 +1937,75 @@ function setTT(t){
   if(t==="expense"){e.style.cssText="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red)";i.style.cssText="border:1px solid var(--border);color:var(--muted)";}
   else{i.style.cssText="border:1px solid var(--green);background:rgba(34,197,94,.1);color:var(--green)";e.style.cssText="border:1px solid var(--border);color:var(--muted)";}
 }
+// ── SPLIT TRANSACTIONS ──
+// A "split" is NOT one transaction object with an internal list of category lines — it's
+// several perfectly normal transactions (same date/description/account, different category and
+// amount) tagged with a shared splitGroupId. That means every existing aggregation function
+// (budgets, stats, CSV export, daily/monthly trends, reconciliation) needs zero changes to
+// handle them correctly — they already sum however many transactions land in a category. The
+// only new code is generating the group on save and collapsing it back into one row for display.
+function toggleSplitMode(){
+  const keepDate=$("txDate")?.value,keepDesc=$("txDesc")?.value,keepAcc=window._txAcc,keepT=window._txT;
+  window._txSplitMode=!window._txSplitMode;
+  if(window._txSplitMode&&(!window._txSplits||!window._txSplits.length)){
+    const EC=getEC();const firstCat=Object.keys(EC)[0]||"";
+    window._txSplits=[{category:firstCat,subcategory:(EC[firstCat]||[])[0]||"",amount:""},{category:firstCat,subcategory:(EC[firstCat]||[])[0]||"",amount:""}];
+  }
+  window._skipSplitReset=true;
+  showModal("addtx");
+  if(keepDate)$("txDate").value=keepDate;
+  if(keepDesc!==undefined&&$("txDesc"))$("txDesc").value=keepDesc;
+  window._txAcc=keepAcc;if(keepT==="income")setTT("income");
+  $("txAccLabel").textContent=accName(keepAcc);
+}
+function splitLinesHTML(){
+  const EC=window._txT==="income"?getIC():getEC();
+  const rows=(window._txSplits||[]).map((s,i)=>`<div class="flex g6 mb6">
+    <select class="inp" style="flex:1.3;font-size:11px" onchange="setSplitCat(${i},this.value)">${Object.keys(EC).map(c=>`<option value="${esc(c)}" ${c===s.category?"selected":""}>${esc(c)}</option>`).join("")}</select>
+    <select class="inp" style="flex:1;font-size:11px" onchange="setSplitSub(${i},this.value)"><option value="">(none)</option>${(EC[s.category]||[]).map(sub=>`<option value="${esc(sub)}" ${sub===s.subcategory?"selected":""}>${esc(sub)}</option>`).join("")}</select>
+    <input class="inp" style="width:78px;font-size:11px;padding:8px" type="text" inputmode="decimal" value="${esc(s.amount||"")}" placeholder="0.00" oninput="formatAmountInput(this);setSplitAmount(${i},this.value)">
+    <button type="button" class="btn btn-sm btn-rd" onclick="removeSplitLine(${i})">&#10005;</button>
+  </div>`).join("");
+  return rows+`<button type="button" class="btn btn-g btn-sm w100 mb8" onclick="addSplitLine()">+ Add category</button><div class="flex-b fz12 fw7" style="padding-top:6px;border-top:1px solid var(--border)"><span>Total</span><span id="txSplitTotal">${fmt(splitTotal())}</span></div>`;
+}
+function renderSplitBox(){const box=$("txSplitBox");if(box)box.innerHTML=splitLinesHTML();}
+function setSplitCat(i,val){
+  const EC=window._txT==="income"?getIC():getEC();
+  window._txSplits[i].category=val;
+  window._txSplits[i].subcategory=(EC[val]||[])[0]||"";
+  renderSplitBox();
+}
+function setSplitSub(i,val){window._txSplits[i].subcategory=val;}
+function setSplitAmount(i,val){window._txSplits[i].amount=val;const el=$("txSplitTotal");if(el)el.textContent=fmt(splitTotal());}
+function addSplitLine(){
+  const EC=window._txT==="income"?getIC():getEC();const firstCat=Object.keys(EC)[0]||"";
+  window._txSplits.push({category:firstCat,subcategory:(EC[firstCat]||[])[0]||"",amount:""});
+  renderSplitBox();
+}
+function removeSplitLine(i){window._txSplits.splice(i,1);renderSplitBox();}
+function splitTotal(){return(window._txSplits||[]).reduce((s,x)=>s+(parseAmount(x.amount)||0),0);}
+function addSplitTx(keepOpen){
+  const lines=(window._txSplits||[]).map(s=>({category:s.category,subcategory:s.subcategory||"",amount:parseAmount(s.amount)})).filter(s=>s.amount>0);
+  if(lines.length<2)return alert("Add at least 2 categories with amounts (or switch back to a single category)");
+  const date=$("txDate").value,desc=$("txDesc").value,acc=window._txAcc,type=window._txT||"expense";
+  if(!date)return alert("Choose a date");
+  const groupId=uid();
+  const created=lines.map(s=>({id:uid(),date,description:desc,amount:s.amount,type,category:s.category,subcategory:s.subcategory,accountId:acc,source:"Manual",splitGroupId:groupId,cleared:!!window._txFromBankAlert}));
+  txns.push(...created);
+  save();
+  created.forEach(t=>checkBudgetAlerts(t));
+  if(window._bankAlertId){dismissBankAlert(window._bankAlertId);window._bankAlertId=null;}
+  const total=lines.reduce((s,x)=>s+x.amount,0);
+  if(keepOpen){
+    render();showModal("addtx"); // starts the next entry fresh (single-category) rather than re-priming a split
+    showToast("✅ Split transaction added ("+fmt(total)+") — ready for the next one","green");
+  }else{
+    showModal("close");render();
+    showToast("✅ Split transaction added ("+fmt(total)+")","green");
+  }
+}
 function addTx(keepOpen){
+  if(window._txSplitMode)return addSplitTx(keepOpen);
   const a=parseAmount($("txAmt")?.value);if(!a)return alert("Enter an amount");
   const newTx={id:uid(),date:$("txDate").value,description:$("txDesc").value,amount:a,type:window._txT||"expense",category:window._txCat,subcategory:window._txSub||"",accountId:window._txAcc,source:"Manual",receipt:window._txReceipt||null,cleared:!!window._txFromBankAlert};
   txns.push(newTx);
@@ -1975,7 +2065,11 @@ function rTx(f,inc,exp){
   const checkHTML=t=>selectMode?`<div class="sel-check ${selectedTxIds.has(t.id)?"on":""}">${selectedTxIds.has(t.id)?"&#10003;":""}</div>`:"";
   $("main").innerHTML=ppHTML()+`<div class="flex g6 mb8 flex-w"><div style="position:relative;flex:1 1 120px"><span style="position:absolute;left:8px;top:10px;font-size:12px" class="muted">&#128269;</span><input class="inp" id="si" style="padding-left:28px;font-size:12px" placeholder="Search..." value="${esc(search)}" oninput="doS(this.value)"></div><select class="inp" style="width:90px;font-size:12px" onchange="fType=this.value;render()"><option value="all" ${fType==="all"?"selected":""}>All</option><option value="income" ${fType==="income"?"selected":""}>Income</option><option value="expense" ${fType==="expense"?"selected":""}>Expense</option><option value="transfer" ${fType==="transfer"?"selected":""}>Transfer</option></select><select class="inp" style="width:130px;font-size:12px" onchange="fCat=this.value;render()"><option value="all">All Categories</option>${allCats().map(c=>`<option value="${esc(c)}" ${fCat===c?"selected":""}>${esc(c)}</option>`).join("")}</select><select class="inp" style="width:100px;font-size:12px" onchange="fAcc=this.value;render()"><option value="all">All Accts</option>${accounts.map(a=>`<option value="${esc(a.id)}" ${fAcc===a.id?"selected":""}>${esc(a.name)}</option>`).join("")}</select></div>
   <div class="flex-b fz10 muted mb8"><span>${f.length} transactions</span><div class="flex g6"><span>In: <span class="green">${fmtK(inc)}</span> &middot; Out: <span class="red">${fmtK(exp)}</span></span><button class="btn btn-g btn-sm" onclick="exportCSV()">&#128196; CSV</button><button class="btn ${selectMode?"btn-p":"btn-g"} btn-sm" onclick="toggleSelectMode()">${selectMode?"Cancel":"Select"}</button></div></div>
-  <div class="card" style="padding:0;overflow:hidden">${dates.length?dates.map(d=>{const dayInc=groups[d].filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);const dayExp=groups[d].filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);return`<div class="date-hdr flex-b"><span>${fmtD(d)}</span><span class="date-hdr-tot"><span class="green">${fmtK(dayInc)}</span><span class="red">${fmtK(dayExp)}</span></span></div>${groups[d].map(t=>{
+  <div class="card" style="padding:0;overflow:hidden">${dates.length?dates.map(d=>{const dayInc=groups[d].filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);const dayExp=groups[d].filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);const dayItems=selectMode?groups[d]:groupSplits(groups[d]);return`<div class="date-hdr flex-b"><span>${fmtD(d)}</span><span class="date-hdr-tot"><span class="green">${fmtK(dayInc)}</span><span class="red">${fmtK(dayExp)}</span></span></div>${dayItems.map(t=>{
+    if(t.split){
+      const total=t.items.reduce((s,x)=>s+x.amount,0);const isOpen=expandedSplit===t.groupId;
+      return`<div class="tx-row" onclick="expandedSplit=expandedSplit==='${t.groupId}'?null:'${t.groupId}';render()"><div class="tx-icon" style="background:rgba(var(--accent-rgb),.1);color:var(--accent)">&#128203;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Split transaction")}</div><div class="fz9 muted">Split &#183; ${t.items.length} categories ${isOpen?"&#9650;":"&#9660;"}</div></div><span class="cat-badge" style="background:rgba(var(--accent-rgb),.15);color:var(--accent)">Split</span><div class="fz12 fw7 ${t.type==="income"?"green":"red"}" style="min-width:58px;text-align:right">${t.type==="income"?"+":"-"}${fmt(total)}</div></div>${isOpen?`<div style="padding:2px 12px 8px 46px;background:var(--bg)">${t.items.map(x=>`<div class="flex-b" style="padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="event.stopPropagation();showModal('edit','${x.id}')"><span class="fz10 muted">${esc(x.category)}${x.subcategory?" · "+esc(x.subcategory):""}</span><span class="fz11 fw6">${fmt(x.amount)}</span></div>`).join("")}</div>`:""}`;
+    }
     if(t.type==="transfer")return`<div class="tx-row" onclick="${rowClick(t)}">${checkHTML(t)}<div class="tx-icon" style="background:rgba(var(--accent-rgb),.1);color:var(--accent)">&#8646;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Transfer")}</div><div class="fz9 muted">${esc(accName(t.fromAccountId))} &#8594; ${esc(accName(t.toAccountId))}</div></div><span class="cat-badge" style="background:rgba(var(--accent-rgb),.15);color:var(--accent)">Transfer</span><div class="fz12 fw7 accent" style="min-width:58px;text-align:right">${fmt(t.amount)}</div></div>`;
     const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="${rowClick(t)}">${checkHTML(t)}<div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}</div><div class="fz9 muted">${esc(acc?acc.name:"")} ${t.subcategory?"· "+esc(t.subcategory):""}</div></div><span class="cat-badge" style="background:${clr(t.category)}22;color:${clr(t.category)}">${esc(t.category)}</span><div class="fz12 fw7 ${t.type==="income"?"green":"red"}" style="min-width:58px;text-align:right">${t.type==="income"?"+":"-"}${fmt(t.amount)}</div></div>`;}).join("")}`;}).join(""):'<div class="muted fz12 tac" style="padding:40px">No transactions found</div>'}</div>`;
   const si=$("si");if(si&&search){si.focus();si.setSelectionRange(search.length,search.length);}
