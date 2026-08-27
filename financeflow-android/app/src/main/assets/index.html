@@ -625,6 +625,7 @@ function save(){
   localStorage.setItem("ffd_reminders",JSON.stringify(remindersEnabled));
   localStorage.setItem("ffd_onboard",JSON.stringify(onboardComplete));
   if(remindersEnabled)syncUpcomingBills();
+  syncWidgetData();
 }
 function load(){
   try{const t=localStorage.getItem("ffd_tx");if(t)txns=JSON.parse(t);}catch(e){}
@@ -1571,6 +1572,30 @@ function syncUpcomingBills(){
     .map(r=>({desc:r.description||r.category,amount:r.amount,type:r.type,due:r.nextDue}));
   try{window.Android.syncUpcomingBills(JSON.stringify(due));}catch(e){}
 }
+// Pushes a balance/budget summary to the native home-screen widget (see BalanceWidgetProvider,
+// MainActivity.syncWidgetData). The widget can't run this WebView in the background, so it can
+// only ever show "as of the last time the app was open" — this keeps that as fresh as possible
+// by re-syncing on every save().
+function syncWidgetData(){
+  if(!(window.Android&&window.Android.syncWidgetData))return;
+  try{
+    const tb=accounts.reduce((s,a)=>{const eq=acctPrimaryEquiv(a);return eq===null?s:s+eq;},0);
+    const now=new Date();
+    const activeBudgets=budgets.map(b=>{const bp=b.period||"month";return{b,bp,effLimit:budgetEffLimit(b,bp,now)};}).filter(x=>x.effLimit>0);
+    const totalLimit=activeBudgets.reduce((s,x)=>s+x.effLimit,0);
+    const totalSpent=activeBudgets.reduce((s,x)=>s+budgetSpent(x.b,x.bp,now),0);
+    const budgetText=totalLimit>0?Math.round(Math.min(totalSpent/totalLimit*100,999))+"% of budget used":"No budgets set";
+    window.Android.syncWidgetData(JSON.stringify({balance:fmt(tb),budget:budgetText}));
+  }catch(e){}
+}
+// Called by MainActivity.dispatchPendingShortcut() when the app is opened via the Quick
+// Settings tile or the widget's "+ Add" button.
+window.handleShortcutAction=function(action){
+  if(action==="addtx"){
+    if(settingsOpen)closeSettings();
+    render();showModal("addtx");
+  }
+};
 function getPendingBankAlerts(){
   if(!window.Android||!window.Android.getPendingBankAlerts)return[];
   try{return JSON.parse(window.Android.getPendingBankAlerts()||"[]");}catch(e){return[];}
@@ -2263,6 +2288,7 @@ load();
 processRecurring();
 render();
 relock(); // cold-start lock check; subsequent checks come from native onResume via relock() too
+syncWidgetData(); // widget should reflect current data as soon as the app opens, not just on next save()
 // Surface any bank alerts detected while the app was closed
 if(bankAlertsEnabled){const pend=getPendingBankAlerts();if(pend.length)showToast("🔔 "+pend.length+" bank alert"+(pend.length>1?"s":"")+" detected — review in Settings","warn");}
 

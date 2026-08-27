@@ -63,6 +63,14 @@ public class MainActivity extends AppCompatActivity {
     private boolean suppressNextLock = false;
     private boolean awaitingLockCheck = false;
 
+    // ── Quick Settings tile / home-screen widget "+ Add" button ──
+    // Both launch MainActivity with this intent extra; JS's handleShortcutAction() is invoked
+    // once the page has actually finished loading (immediately if it already had, via
+    // dispatchPendingShortcut() below — otherwise queued until onPageFinished fires).
+    public static final String EXTRA_SHORTCUT_ACTION = "shortcut_action";
+    private boolean pageLoaded = false;
+    private String pendingShortcutAction;
+
     // Web <input type=file> support (CSV/JSON upload, Google Drive included via document providers)
     private ValueCallback<Uri[]> filePathCallback;
     private ActivityResultLauncher<Intent> fileChooserLauncher;
@@ -96,7 +104,14 @@ public class MainActivity extends AppCompatActivity {
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
         webView.addJavascriptInterface(new AndroidBridge(), "Android");
-        webView.setWebViewClient(new WebViewClient());
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                pageLoaded = true;
+                dispatchPendingShortcut();
+            }
+        });
         webView.setWebChromeClient(new WebChromeClient() {
             // The base WebChromeClient silently swallows JS alert()/confirm() dialogs —
             // without these overrides, every validation alert and delete confirmation in
@@ -146,6 +161,32 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         webView.loadUrl("file:///android_asset/index.html");
+        handleIntentExtras(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIntentExtras(intent);
+    }
+
+    private void handleIntentExtras(Intent intent) {
+        if (intent == null) return;
+        String action = intent.getStringExtra(EXTRA_SHORTCUT_ACTION);
+        if (action != null) {
+            pendingShortcutAction = action;
+            dispatchPendingShortcut();
+        }
+    }
+
+    private void dispatchPendingShortcut() {
+        if (pendingShortcutAction != null && pageLoaded && webView != null) {
+            String js = "if(typeof handleShortcutAction==='function')handleShortcutAction('"
+                + pendingShortcutAction.replace("'", "") + "');";
+            webView.evaluateJavascript(js, null);
+            pendingShortcutAction = null;
+        }
     }
 
     private void registerLaunchers() {
@@ -430,6 +471,23 @@ public class MainActivity extends AppCompatActivity {
         public void syncUpcomingBills(String json) {
             getSharedPreferences(ReminderReceiver.PREFS, Context.MODE_PRIVATE)
                 .edit().putString(ReminderReceiver.KEY_UPCOMING_BILLS, json).apply();
+        }
+
+        // Pushes a balance/budget summary to the home-screen widget's SharedPreferences and
+        // asks it to redraw. Called from JS on every save() — see syncWidgetData() in
+        // index.html — so the widget is only ever stale by "since I last had the app open",
+        // never further, but genuinely can't be live: it can't run the WebView in the background.
+        @JavascriptInterface
+        public void syncWidgetData(String json) {
+            try {
+                JSONObject o = new JSONObject(json);
+                getSharedPreferences(BalanceWidgetProvider.PREFS, Context.MODE_PRIVATE).edit()
+                    .putString(BalanceWidgetProvider.KEY_BALANCE, o.optString("balance", "—"))
+                    .putString(BalanceWidgetProvider.KEY_BUDGET, o.optString("budget", ""))
+                    .apply();
+            } catch (Exception ignored) {
+            }
+            BalanceWidgetProvider.updateAll(MainActivity.this);
         }
 
         /** Fires a reminder immediately so the user can confirm notifications actually arrive. */

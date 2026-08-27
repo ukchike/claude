@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home-screen widget: shows the last-synced balance/budget summary (the widget can't run the
+     WebView in the background, so this is "as of the last time you opened the app", refreshed
+     whenever the app saves data and opportunistically every 30 minutes if it's running). -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget_balance"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />
