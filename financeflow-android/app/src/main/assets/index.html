@@ -150,6 +150,13 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
 /* Feature 2: Recurring badge */
 .rec-badge{background:rgba(var(--accent-rgb),.15);color:var(--accent);border:1px solid rgba(var(--accent-rgb),.3);border-radius:4px;padding:1px 5px;font-size:8px;font-weight:700}
 .tag-chip{display:inline-block;background:var(--active);color:var(--muted);border-radius:8px;padding:1px 6px;font-size:8px;font-weight:600;margin-left:3px;cursor:pointer}
+.suggest-box{position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--card);border:1px solid var(--border);border-radius:10px;max-height:180px;overflow-y:auto;z-index:50;box-shadow:0 4px 16px rgba(0,0,0,.35);display:none}
+.suggest-item{padding:9px 12px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border)}
+.suggest-item:last-child{border:none}
+.suggest-item:active{background:var(--active)}
+.tag-picker{display:flex;flex-wrap:wrap;gap:6px}
+.tag-opt{background:var(--bg);border:1px solid var(--border);color:var(--muted);border-radius:14px;padding:5px 11px;font-size:11px;font-weight:600;cursor:pointer}
+.tag-opt.sel{background:rgba(var(--accent-rgb),.15);border-color:var(--accent);color:var(--accent)}
 /* Insight card */
 .insight-row{display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)}
 .insight-row:last-child{border:none}
@@ -237,8 +244,6 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
 <button class="fab" id="fabAdd" onclick="showModal('addtx')" title="Add Transaction">+</button>
 <nav class="bnav" id="bnav"></nav>
 <div id="modal-container"></div>
-<datalist id="payeeList"></datalist>
-<datalist id="tagList"></datalist>
 <script>
 
 // ── CATEGORIES ──
@@ -303,10 +308,24 @@ let bankAlertsEnabled=false; // Feature: auto-detect bank transactions from noti
 let appFlavor="full"; // "full" (Bank Alerts available) or "standard" (no notification access at all); detected from the native bridge
 let selectMode=false,selectedTxIds=new Set(); // Transactions multi-select for bulk edit
 let homeChartMode="week"; // Daily income/expense trend card: week or month view
-let homeLayout=["networth","goals","stats","chart","trend","insights","budget","recent"]; // Home section order
+// "networth" used to be one bundled Home section (balance card + account deck + net worth
+// chart) that could only be moved as a single block. Split into 3 independently orderable keys
+// so each can be placed anywhere on Home — or turned off Home entirely (see showBalanceHome
+// etc. below) and shown under Profile instead.
+let homeLayout=["balance","accounts","networthchart","goals","stats","chart","trend","insights","budget","recent"]; // Home section order
+let showBalanceHome=true,showAccountsHome=true,showNetworthChartHome=true;
+// Migrates a homeLayout array saved before the balance/accounts/net-worth-chart split: replaces
+// the old single "networth" key with the 3 new ones at the same position, so a returning user's
+// custom ordering position for that block is preserved rather than being reset to the front.
+function expandNetworthKey(arr){
+  const i=arr.indexOf("networth");
+  if(i<0)return arr;
+  const out=arr.slice();out.splice(i,1,"balance","accounts","networthchart");return out;
+}
 let homeCustomize=false;
 let catOrder={expense:[],income:[]}; // custom display order for categories (falls back to natural order)
 let goals=[]; // Savings goals: {id,name,target,saved,color,accountId,targetDate}
+let userTags=[]; // Predefined tag vocabulary, managed in Settings > Tags
 let pinHash=""; // PIN/passcode fallback lock — SHA-256 hex of the PIN, empty = not set
 let pinLockActive=false; // true while the app is showing the PIN/biometric lock screen this session
 let remindersEnabled=false; // daily 6am/6pm "log your transactions" + upcoming-bill reminders
@@ -621,6 +640,8 @@ function save(){
   localStorage.setItem("ffd_homelayout",JSON.stringify(homeLayout));
   localStorage.setItem("ffd_catorder",JSON.stringify(catOrder));
   localStorage.setItem("ffd_goals",JSON.stringify(goals));
+  localStorage.setItem("ffd_usertags",JSON.stringify(userTags));
+  localStorage.setItem("ffd_homecards",JSON.stringify({balance:showBalanceHome,accounts:showAccountsHome,networthchart:showNetworthChartHome}));
   localStorage.setItem("ffd_pin",pinHash);
   localStorage.setItem("ffd_reminders",JSON.stringify(remindersEnabled));
   localStorage.setItem("ffd_onboard",JSON.stringify(onboardComplete));
@@ -642,9 +663,11 @@ function load(){
   try{const cc=localStorage.getItem("ffd_currency");if(cc){const found=CURRENCIES.find(c=>c.code===cc);if(found)currency=found;}}catch(e){}
   try{const hc=localStorage.getItem("ffd_hidecats");if(hc)hiddenDefaultCats=JSON.parse(hc);}catch(e){}
   try{const ba=localStorage.getItem("ffd_bankalerts");if(ba)bankAlertsEnabled=JSON.parse(ba);}catch(e){}
-  try{const hl=localStorage.getItem("ffd_homelayout");if(hl){const arr=JSON.parse(hl);const valid=["networth","goals","stats","chart","trend","insights","budget","recent"];if(Array.isArray(arr)&&arr.every(x=>valid.includes(x))&&arr.length>=6){valid.forEach(k=>{if(!arr.includes(k))arr.unshift(k);});homeLayout=arr;}}}catch(e){}
+  try{const hl=localStorage.getItem("ffd_homelayout");if(hl){let arr=expandNetworthKey(JSON.parse(hl));const valid=["balance","accounts","networthchart","goals","stats","chart","trend","insights","budget","recent"];if(Array.isArray(arr)&&arr.every(x=>valid.includes(x))&&arr.length>=6){valid.forEach(k=>{if(!arr.includes(k))arr.unshift(k);});homeLayout=arr;}}}catch(e){}
   try{const co=localStorage.getItem("ffd_catorder");if(co)catOrder=JSON.parse(co);}catch(e){}
   try{const g=localStorage.getItem("ffd_goals");if(g)goals=JSON.parse(g);}catch(e){}
+  try{const ut=localStorage.getItem("ffd_usertags");if(ut)userTags=JSON.parse(ut);}catch(e){}
+  try{const hc=localStorage.getItem("ffd_homecards");if(hc){const p=JSON.parse(hc);showBalanceHome=p.balance!==false;showAccountsHome=p.accounts!==false;showNetworthChartHome=p.networthchart!==false;}}catch(e){}
   try{pinHash=localStorage.getItem("ffd_pin")||"";}catch(e){}
   try{const rm=localStorage.getItem("ffd_reminders");if(rm)remindersEnabled=JSON.parse(rm);}catch(e){}
   try{const ob=localStorage.getItem("ffd_onboard");onboardComplete=ob!==null?JSON.parse(ob):!!profile.name;}catch(e){onboardComplete=!!profile.name;}
@@ -659,6 +682,12 @@ function applyTheme(){document.documentElement.setAttribute("data-theme",theme);
 function applyAccent(){document.documentElement.style.setProperty("--accent",accentColor.h);document.documentElement.style.setProperty("--accent-rgb",accentColor.rgb);}
 function setAccentColor(hex){const found=ACCENT_COLORS.find(c=>c.h===hex);if(found){accentColor=found;applyAccent();save();render();}}
 function toggleTheme(t){theme=t;applyTheme();save();render();}
+function toggleHomeCard(which,on){
+  if(which==="showBalanceHome")showBalanceHome=on;
+  else if(which==="showAccountsHome")showAccountsHome=on;
+  else if(which==="showNetworthChartHome")showNetworthChartHome=on;
+  save();render();
+}
 function setCurrency(code){const found=CURRENCIES.find(c=>c.code===code);if(found){currency=found;save();render();showToast("💱 Currency set to "+found.code,"green");}}
 
 // ── PERIOD ──
@@ -688,20 +717,41 @@ function toggleCat(n){exCats[n]=!exCats[n];render();}
 function getCatMap(mode,date,type){const range=getRangeFor(mode,date);const cat={},sub={};txns.filter(t=>t.date>=range.startStr&&t.date<=range.endStr&&t.type===type).forEach(t=>{cat[t.category]=(cat[t.category]||0)+t.amount;if(t.subcategory){const k=t.category+"|||"+t.subcategory;sub[k]=(sub[k]||0)+t.amount;}});return{cat,sub};}
 function getSpent(mode,date,catName,subName){const range=getRangeFor(mode,date);return txns.filter(t=>t.date>=range.startStr&&t.date<=range.endStr&&t.type==="expense"&&t.category===catName&&(!subName||t.subcategory===subName)).reduce((s,t)=>s+t.amount,0);}
 function getF(){const range=getRangeFor(pMode,pDate);return txns.filter(t=>{if(t.date<range.startStr||t.date>range.endStr)return false;if(fType!=="all"&&t.type!==fType)return false;if(fCat!=="all"&&t.category!==fCat)return false;if(fAcc!=="all"){const touches=t.type==="transfer"?(t.fromAccountId===fAcc||t.toAccountId===fAcc):t.accountId===fAcc;if(!touches)return false;}if(search){const s=search.toLowerCase();const inTags=(t.tags||[]).some(tag=>tag.toLowerCase().includes(s));if(!inTags&&!(t.description||"").toLowerCase().includes(s)&&!(t.category||"").toLowerCase().includes(s)&&!(t.subcategory||"").toLowerCase().includes(s))return false;}return true;});}
-// Tags/labels: free-text, orthogonal to category — e.g. "work travel", "tax deductible" — for
-// grouping transactions a single category can't express. Stored as t.tags (string array).
-function parseTags(str){
-  const seen=new Set();
-  return String(str||"").split(",").map(s=>s.trim()).filter(s=>{if(!s||seen.has(s.toLowerCase()))return false;seen.add(s.toLowerCase());return true;}).slice(0,10);
+// Tags/labels: orthogonal to category — e.g. "work travel", "tax deductible" — for grouping
+// transactions a single category can't express. Predefined in Settings > Tags (userTags) and
+// picked per-transaction as chips (window._txTags/_eTags — see tagPickerHTML), rather than
+// freeform typing: a fixed vocabulary is what makes tags useful as a filter later.
+function addUserTag(name){
+  name=(name||"").trim();if(!name)return false;
+  if(userTags.some(t=>t.toLowerCase()===name.toLowerCase()))return false;
+  userTags.push(name);save();return true;
 }
-function tagsToInput(tags){return(tags||[]).join(", ");}
-function refreshTagList(){
-  const dl=$("tagList");if(!dl)return;
-  const seen=new Set(),opts=[];
-  for(let i=txns.length-1;i>=0&&opts.length<40;i--){
-    (txns[i].tags||[]).forEach(tag=>{if(tag&&!seen.has(tag.toLowerCase())){seen.add(tag.toLowerCase());opts.push(tag);}});
-  }
-  dl.innerHTML=opts.map(t=>`<option value="${esc(t)}">`).join("");
+function removeUserTag(name){userTags=userTags.filter(t=>t.toLowerCase()!==name.toLowerCase());save();render();}
+function addNewTagFromSettings(){
+  const inp=$("newTagInput");const name=(inp?.value||"").trim();
+  if(!name)return alert("Enter a tag name");
+  if(!addUserTag(name))return alert("That tag already exists");
+  if(inp)inp.value="";
+  render();
+}
+function tagPickerHTML(varName,prefix){
+  const selected=window[varName]||[];
+  const chips=userTags.map(t=>`<span class="tag-opt ${selected.includes(t)?"sel":""}" onclick="toggleTagSel('${varName}','${prefix}','${escJs(t)}')">#${esc(t)}</span>`).join("");
+  return`${userTags.length?`<div class="tag-picker mb8">${chips}</div>`:`<div class="fz10 muted mb8">No tags yet.</div>`}<div class="flex g6"><input class="inp" id="${prefix}NewTag" placeholder="New tag" style="flex:1;font-size:11px;padding:7px 10px" onkeydown="if(event.key==='Enter'){event.preventDefault();addTagInline('${varName}','${prefix}');}"><button type="button" class="btn btn-g btn-sm" onclick="addTagInline('${varName}','${prefix}')">+ Add</button></div>`;
+}
+function toggleTagSel(varName,prefix,tag){
+  const arr=window[varName]||(window[varName]=[]);
+  const i=arr.indexOf(tag);
+  if(i>=0)arr.splice(i,1);else arr.push(tag);
+  const box=$(prefix+"TagsBox");if(box)box.innerHTML=tagPickerHTML(varName,prefix);
+}
+function addTagInline(varName,prefix){
+  const inp=$(prefix+"NewTag");const name=(inp?.value||"").trim();if(!name)return;
+  addUserTag(name);
+  const arr=window[varName]||(window[varName]=[]);
+  if(!arr.some(t=>t.toLowerCase()===name.toLowerCase()))arr.push(name);
+  if(inp)inp.value="";
+  const box=$(prefix+"TagsBox");if(box)box.innerHTML=tagPickerHTML(varName,prefix);
 }
 function tagChipsHTML(tags){return(tags&&tags.length)?tags.map(tag=>`<span class="tag-chip" onclick="event.stopPropagation();viewTagTx('${escJs(tag)}')">#${esc(tag)}</span>`).join(""):"";}
 function viewTagTx(tag){closePP();fCat="all";fType="all";fAcc="all";search=tag;V="transactions";render();}
@@ -982,6 +1032,50 @@ function netWorthTrendSVG(){
     ${labels}
   </svg>`;
 }
+// The 3 pieces of what used to be one bundled "networth" Home section — factored into their own
+// functions so each can be shown on Home (independently placeable/orderable) OR, when its
+// showXHome flag is off, rendered inline under Settings > Profile instead. See rDash's
+// `sections.balance/accounts/networthchart` and the Profile tab body.
+function totalBalanceCardHTML(tb,netChange,foreignAccCount){
+  return`<div class="nw-card"><div class="fz10" style="opacity:.85">Total Balance (${esc(currency.code)})</div><div class="nw-val">${fmt(tb)}</div><div class="nw-chg" style="color:${netChange>=0?"#bbf7d0":"#fecaca"}">${netChange>=0?"&#9650;":"&#9660;"} ${fmt(Math.abs(netChange))} this period</div>${foreignAccCount?`<div class="fz9 mt4" style="opacity:.8">+ ${foreignAccCount} account${foreignAccCount>1?"s":""} in other currencies excluded</div>`:""}</div>`;
+}
+function accountDeckHTML(tb){
+  if(!accounts.length)return"";
+  return`<div class="acc-deck">${accounts.map(a=>{const bal=getAccountBalance(a.id);const acCode=a.currency||currency.code;const pct=tb!==0?Math.min(Math.abs(bal/tb*100),100):0;return`<div class="acc-deck-card" style="border-color:${a.color}44"><div class="flex g6 mb8"><div style="width:26px;height:26px;border-radius:7px;background:${a.color}22;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:13px">${a.type==="cash"?"&#128181;":"&#127981;"}</div><span class="fz11 fw7 ellip" style="flex:1">${esc(a.name)}</span></div><div class="fz14 fw8 mb6">${fmtCur(bal,acCode)}</div><div class="bar-track" style="height:5px"><div class="bar-fill" style="width:${acCode===currency.code?pct:100}%;background:${a.color}"></div></div></div>`;}).join("")}</div>`;
+}
+function networthChartCardHTML(){
+  return`<div class="card" style="margin:0"><div class="fz11 fw7 mb6">Net Worth — Last 6 Months</div>${netWorthTrendSVG()}</div>`;
+}
+
+// Stats category donut — was a pure CSS conic-gradient circle with no labels of its own at all
+// (you had to read the list below to know what a slice was). Rebuilt as an SVG stroke-dasharray
+// donut, bigger, with each large-enough slice's name and share labelled just outside the ring.
+function categoryDonutSVG(catArr,total,centerTop,centerBottom){
+  const W=300,H=300,cx=150,cy=150,r=82,strokeW=36;
+  const circumference=2*Math.PI*r;
+  let cum=0;
+  const segs=catArr.map(([name,val])=>{
+    const pct=total?val/total:0;const start=cum;cum+=pct;
+    return{name,val,pct,start,c:clr(name)};
+  });
+  const arcs=segs.length?segs.map(s=>{
+    const dash=Math.max(s.pct*circumference,0.01);
+    const offset=-s.start*circumference;
+    return`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.c}" stroke-width="${strokeW}" stroke-dasharray="${dash.toFixed(2)} ${(circumference-dash).toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
+  }).join(""):`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--border)" stroke-width="${strokeW}"/>`;
+  // Only labels for slices with real breathing room (>=6%) — smaller ones would just collide;
+  // the list below the chart still has every category regardless.
+  const labels=segs.filter(s=>s.pct>=0.06).map(s=>{
+    const ang=(s.start+s.pct/2)*2*Math.PI-Math.PI/2;
+    const lr=r+strokeW/2+14;
+    const lx=cx+lr*Math.cos(ang),ly=cy+lr*Math.sin(ang);
+    const anchor=Math.cos(ang)>0.25?"start":Math.cos(ang)<-0.25?"end":"middle";
+    const name=s.name.length>12?s.name.slice(0,11)+"…":s.name;
+    return`<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" font-size="10.5" font-weight="700" text-anchor="${anchor}" dominant-baseline="middle" style="fill:${s.c}">${esc(name)} ${Math.round(s.pct*100)}%</text>`;
+  }).join("");
+  const centerHTML=centerTop!==undefined?`<text x="${cx}" y="${cy-7}" font-size="11" text-anchor="middle" style="fill:var(--muted)">${esc(centerTop)}</text><text x="${cx}" y="${cy+15}" font-size="18" font-weight="800" text-anchor="middle" style="fill:var(--text)">${esc(centerBottom)}</text>`:"";
+  return`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:300px;display:block;margin:0 auto;overflow:visible">${arcs}${labels}${centerHTML}</svg>`;
+}
 
 function buildInsights(f,inc,exp){
   const insights=[];
@@ -1047,7 +1141,9 @@ function rDash(f,inc,exp){
 
   const netChange=inc-exp;
   const sections={
-    networth:`<div class="nw-card"><div class="fz10" style="opacity:.85">Total Balance (${esc(currency.code)})</div><div class="nw-val">${fmt(tb)}</div><div class="nw-chg" style="color:${netChange>=0?"#bbf7d0":"#fecaca"}">${netChange>=0?"&#9650;":"&#9660;"} ${fmt(Math.abs(netChange))} this period</div>${foreignAccCount?`<div class="fz9 mt4" style="opacity:.8">+ ${foreignAccCount} account${foreignAccCount>1?"s":""} in other currencies below</div>`:""}</div>${accounts.length?`<div class="acc-deck">${accounts.map(a=>{const bal=getAccountBalance(a.id);const acCode=a.currency||currency.code;const pct=tb!==0?Math.min(Math.abs(bal/tb*100),100):0;return`<div class="acc-deck-card" style="border-color:${a.color}44"><div class="flex g6 mb8"><div style="width:26px;height:26px;border-radius:7px;background:${a.color}22;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:13px">${a.type==="cash"?"&#128181;":"&#127981;"}</div><span class="fz11 fw7 ellip" style="flex:1">${esc(a.name)}</span></div><div class="fz14 fw8 mb6">${fmtCur(bal,acCode)}</div><div class="bar-track" style="height:5px"><div class="bar-fill" style="width:${acCode===currency.code?pct:100}%;background:${a.color}"></div></div></div>`;}).join("")}</div>`:""}<div class="card" style="margin-top:10px"><div class="fz11 fw7 mb6">Net Worth — Last 6 Months</div>${netWorthTrendSVG()}</div>`,
+    balance:showBalanceHome?totalBalanceCardHTML(tb,netChange,foreignAccCount):"",
+    accounts:showAccountsHome?accountDeckHTML(tb):"",
+    networthchart:showNetworthChartHome?networthChartCardHTML():"",
     goals:goals.length?`<div class="card"><div class="flex-b mb8"><span class="fz12 fw7">&#127942; Goals</span><button class="btn btn-g btn-sm" onclick="openSettings('goals')">Manage</button></div>${goals.slice(0,3).map(g=>{const pct=g.target>0?Math.min((g.saved/g.target)*100,100):0;const reached=g.saved>=g.target;return`<div class="mb8"><div class="flex-b fz10"><span class="fw6">${esc(g.name)}</span><span class="muted">${fmtK(g.saved)}/${fmtK(g.target)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${reached?"var(--green)":g.color}"></div></div></div>`;}).join("")}</div>`:"",
     stats:`<div class="stat-row">
       <div class="stat"><div class="stat-label">Income</div><div class="stat-val green">${fmtK(inc)}</div></div>
@@ -1104,8 +1200,8 @@ function rStats(inc,exp){
     const names=[...new Set([...Object.keys(mA.cat),...Object.keys(mB.cat)])].sort((a,b)=>(mA.cat[b]||0)-(mA.cat[a]||0));
     $("main").innerHTML=tabs+cmpPickerHdr()+`<div class="card" style="padding:12px"><div class="flex-b mb6"><span class="fz11 fw7">Category Comparison</span><span class="fz9 muted">${lA} vs ${lB}</span></div><div class="flex-b fz10 mb6" style="padding:0 6px;border-bottom:1px solid var(--border);padding-bottom:6px"><span class="muted fw6">TOTAL</span><span style="color:var(--accent);font-weight:700">${fmt(totalA)}</span><span class="muted">${fmt(totalB)}</span><span>${chgBadge(totalA,totalB,isExp)}</span></div><table class="cmp-tbl"><thead><tr><th>Category</th><th style="color:var(--accent)">${lA}</th><th class="muted">${lB}</th><th>&#916;</th></tr></thead><tbody>${names.map(name=>{const vA=mA.cat[name]||0,vB=mB.cat[name]||0;const c=clr(name);const pct=totalA&&vA?(vA/totalA*100).toFixed(0):0;const isE=exCats[name];const subNames=[...new Set([...Object.keys(mA.sub).filter(k=>k.startsWith(name+"|||")),...Object.keys(mB.sub).filter(k=>k.startsWith(name+"|||"))].map(k=>k.split("|||")[1]))];return`<tr style="cursor:${subNames.length?"pointer":"default"}" onclick="${subNames.length?`toggleCat('${escJs(name)}')`:""}""><td><div class="flex g6"><div class="cat-dot" style="background:${c}"></div><span style="color:${c};font-size:11px">${esc(name)}</span><span class="fz9 muted">${pct}%</span>${subNames.length?`<span class="fz9 muted">${isE?"&#9650;":"&#9660;"}</span>`:""}</div></td><td class="fw7" style="color:var(--accent)">${fmtK(vA)}</td><td class="muted">${fmtK(vB)}</td><td>${chgBadge(vA,vB,isExp)}</td></tr>${isE?subNames.map(sn=>{const sA=mA.sub[name+"|||"+sn]||0,sB=mB.sub[name+"|||"+sn]||0;return`<tr style="background:var(--bg);cursor:pointer" onclick="viewSubTx('${escJs(name)}','${escJs(sn)}')"><td style="padding-left:22px;color:var(--muted);font-size:10px">${esc(sn)}</td><td class="fz10" style="color:var(--accent)">${fmtK(sA)}</td><td class="fz10 muted">${fmtK(sB)}</td><td>${chgBadge(sA,sB,isExp)}</td></tr>`;}).join(""):""}`;}).join("")}</tbody></table></div>`;
   }else{
-    const catArr=Object.entries(mA.cat).sort((a,b)=>b[1]-a[1]);let gp=[],cum=0;catArr.forEach(([n,v])=>{const p=(v/totalA)*100;gp.push(`${clr(n)} ${cum}% ${cum+p}%`);cum+=p;});const pie=gp.length?`conic-gradient(${gp.join(",")})`: "conic-gradient(var(--border) 0% 100%)";
-    $("main").innerHTML=ppHTML()+tabs+`<div class="card anim-card"><div class="pie-wrap anim-pop" style="background:${pie}"><div class="pie-hole"><div class="fz9 muted">${isExp?"Expenses":"Income"}</div><div class="fz13 fw8">${fmt(totalA)}</div></div></div>${catArr.length?catArr.map(([name,val],ci)=>{const pct=totalA?(val/totalA*100).toFixed(1):0;const c=clr(name);const isE=exCats[name];const subs=Object.entries(mA.sub).filter(([k])=>k.startsWith(name+"|||")).map(([k,v])=>({name:k.split("|||")[1],val:v})).sort((a,b)=>b.val-a.val);return`<div class="exp-cat anim-card" style="animation-delay:${ci*40}ms"><div class="exp-cat-hdr" onclick="toggleCat('${escJs(name)}')"><div class="cat-dot" style="background:${c}"></div><span class="pct-badge" style="background:${c}33;color:${c}">${Math.round(pct)}%</span><span class="fz12 fw6" style="flex:1">${esc(name)}</span><span class="fz12 fw7">${fmt(val)}</span><span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span></div>${isE?`<div class="exp-cat-subs"><div class="fz9 muted mb4">Last 8 months</div>${catMonthlyTrendSVG(name)}${subs.length?subs.map(s=>{const subKey=name+"|||"+s.name;const subOpen=exCats[subKey];return`<div><div class="exp-sub-row" style="cursor:pointer" onclick="event.stopPropagation();toggleCat('${escJs(subKey)}')"><span class="muted">${esc(s.name)} ${subOpen?"&#9650;":"&#9660;"}</span><span class="flex g6"><span class="fw6">${fmt(s.val)}</span><span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();viewSubTx('${escJs(name)}','${escJs(s.name)}')" title="View transactions">&#8250;</span></span></div>${subOpen?`<div style="padding:0 0 8px 12px"><div class="fz9 muted mb4">${esc(s.name)} — last 8 months</div>${catMonthlyTrendSVG(name,s.name)}</div>`:""}</div>`;}).join(""):""}</div>`:""}</div>`;}).join(""):'<div class="muted fz12 tac" style="padding:20px">No data this period</div>'}</div>`;
+    const catArr=Object.entries(mA.cat).sort((a,b)=>b[1]-a[1]);
+    $("main").innerHTML=ppHTML()+tabs+`<div class="card anim-card"><div class="anim-pop">${categoryDonutSVG(catArr,totalA,isExp?"Expenses":"Income",fmt(totalA))}</div>${catArr.length?catArr.map(([name,val],ci)=>{const pct=totalA?(val/totalA*100).toFixed(1):0;const c=clr(name);const isE=exCats[name];const subs=Object.entries(mA.sub).filter(([k])=>k.startsWith(name+"|||")).map(([k,v])=>({name:k.split("|||")[1],val:v})).sort((a,b)=>b.val-a.val);return`<div class="exp-cat anim-card" style="animation-delay:${ci*40}ms"><div class="exp-cat-hdr" onclick="toggleCat('${escJs(name)}')"><div class="cat-dot" style="background:${c}"></div><span class="pct-badge" style="background:${c}33;color:${c}">${Math.round(pct)}%</span><span class="fz12 fw6" style="flex:1">${esc(name)}</span><span class="fz12 fw7">${fmt(val)}</span><span class="fz10 muted">${isE?"&#9650;":"&#9660;"}</span></div>${isE?`<div class="exp-cat-subs"><div class="fz9 muted mb4">Last 8 months</div>${catMonthlyTrendSVG(name)}${subs.length?subs.map(s=>{const subKey=name+"|||"+s.name;const subOpen=exCats[subKey];return`<div><div class="exp-sub-row" style="cursor:pointer" onclick="event.stopPropagation();toggleCat('${escJs(subKey)}')"><span class="muted">${esc(s.name)} ${subOpen?"&#9650;":"&#9660;"}</span><span class="flex g6"><span class="fw6">${fmt(s.val)}</span><span style="cursor:pointer;color:var(--accent)" onclick="event.stopPropagation();viewSubTx('${escJs(name)}','${escJs(s.name)}')" title="View transactions">&#8250;</span></span></div>${subOpen?`<div style="padding:0 0 8px 12px"><div class="fz9 muted mb4">${esc(s.name)} — last 8 months</div>${catMonthlyTrendSVG(name,s.name)}</div>`:""}</div>`;}).join(""):""}</div>`:""}</div>`;}).join(""):'<div class="muted fz12 tac" style="padding:20px">No data this period</div>'}</div>`;
   }
 }
 
@@ -1207,6 +1303,7 @@ const SETTINGS_ITEMS=[
   {id:"accounts",icon:"&#127974;",label:"Accounts"},
   {id:"budgets",icon:"&#127919;",label:"Budgets"},
   {id:"goals",icon:"&#127942;",label:"Goals"},
+  {id:"tags",icon:"&#127991;",label:"Tags"},
   {id:"categories",icon:"&#127991;&#65039;",label:"Categories"},
   {id:"appearance",icon:"&#127912;",label:"Appearance"},
   {id:"security",icon:"&#128274;",label:"Security"},
@@ -1220,6 +1317,7 @@ function settingsItemSub(id){
   if(id==="accounts")return accounts.length+" account"+(accounts.length!==1?"s":"");
   if(id==="budgets")return budgets.length+" budget"+(budgets.length!==1?"s":"");
   if(id==="goals")return goals.length?goals.length+" goal"+(goals.length!==1?"s":""):"Set a savings target";
+  if(id==="tags")return userTags.length?userTags.length+" tag"+(userTags.length!==1?"s":""):"Predefine tags for transactions";
   if(id==="categories")return"Rename, add & organize";
   if(id==="appearance")return(theme==="dark"?"Dark":"Light")+" · "+accentColor.n+" accent";
   if(id==="security")return(biometricEnabled?"Biometric on":"")+(biometricEnabled&&pinHash?" · ":"")+(pinHash?"PIN set":"")||"No lock set";
@@ -1237,6 +1335,11 @@ function renderSettings(){
     body=`<div class="st-section"><div class="settings-grid">${SETTINGS_ITEMS.map(it=>`<button class="settings-card" onclick="setSTTab('${it.id}')"><div class="settings-card-icon">${it.icon}</div><div class="settings-card-label">${it.label}</div><div class="settings-card-sub ellip">${settingsItemSub(it.id)}</div></button>`).join("")}</div></div>`;
   }
   if(settingsTab==="profile"){
+    const pf=getPeriodTx();
+    const pInc=pf.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
+    const pExp=pf.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
+    const pTb=accounts.reduce((s,a)=>{const eq=acctPrimaryEquiv(a);return eq===null?s:s+eq;},0);
+    const pForeign=accounts.filter(a=>acctPrimaryEquiv(a)===null).length;
     body=`<div class="st-section">
       <div class="profile-avatar">${av}</div>
       <div class="tac mb12"><div class="fz14 fw7">${esc(profile.name)||"Set your name"}</div></div>
@@ -1247,6 +1350,17 @@ function renderSettings(){
       <span class="st-label">Currency</span>
       <select class="inp" id="currencySel" onchange="setCurrency(this.value)">${CURRENCIES.map(c=>`<option value="${c.code}" ${c.code===currency.code?"selected":""}>${c.symbol} ${c.code} — ${c.label}</option>`).join("")}</select>
       <div class="fz9 muted mt6">Not based in Nigeria? Switch currencies here — every amount in the app updates immediately.</div>
+      <div class="divider"></div>
+      <span class="st-label">Home Display</span>
+      <div class="fz9 muted mb8">Choose which of these show on Home. Turned off, they show right here instead.</div>
+      <div style="background:var(--bg);border-radius:10px;padding:4px 12px;border:1px solid var(--border);margin-bottom:12px">
+        <div class="toggle-wrap"><span class="fz12 fw6">Total Balance card</span><label class="toggle"><input type="checkbox" ${showBalanceHome?"checked":""} onchange="toggleHomeCard('showBalanceHome',this.checked)"><span class="toggle-slider"></span></label></div>
+        <div class="toggle-wrap"><span class="fz12 fw6">Individual accounts</span><label class="toggle"><input type="checkbox" ${showAccountsHome?"checked":""} onchange="toggleHomeCard('showAccountsHome',this.checked)"><span class="toggle-slider"></span></label></div>
+        <div class="toggle-wrap"><span class="fz12 fw6">Net Worth chart</span><label class="toggle"><input type="checkbox" ${showNetworthChartHome?"checked":""} onchange="toggleHomeCard('showNetworthChartHome',this.checked)"><span class="toggle-slider"></span></label></div>
+      </div>
+      ${!showBalanceHome?totalBalanceCardHTML(pTb,pInc-pExp,pForeign):""}
+      ${!showAccountsHome&&accounts.length?`<div class="mb10">${accountDeckHTML(pTb)}</div>`:""}
+      ${!showNetworthChartHome?networthChartCardHTML():""}
     </div>`;
   }
   if(settingsTab==="accounts"){
@@ -1341,6 +1455,16 @@ function renderSettings(){
   }
   if(settingsTab==="goals"){
     body=`<div class="st-section">${goalsManageHTML()}</div>`;
+  }
+  if(settingsTab==="tags"){
+    body=`<div class="st-section">
+      <span class="st-label">Your Tags</span>
+      <div class="fz10 muted mb10">Tags are picked from this fixed list on every transaction — predefine the ones you actually use so they stay consistent (and useful as filters) instead of typing something slightly different each time.</div>
+      ${userTags.length?`<div class="tag-picker mb12">${userTags.map(t=>`<span class="tag-opt sel">#${esc(t)} <span style="cursor:pointer" onclick="removeUserTag('${escJs(t)}')">&#10005;</span></span>`).join("")}</div>`:`<div class="fz11 muted tac" style="padding:12px">No tags yet.</div>`}
+      <div class="divider"></div>
+      <span class="st-label">New Tag</span>
+      <div class="flex g6"><input class="inp" id="newTagInput" placeholder="e.g. work travel" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addNewTagFromSettings();}"><button class="btn btn-p btn-sm" onclick="addNewTagFromSettings()">+ Add</button></div>
+    </div>`;
   }
   if(settingsTab==="categories"){
     const ecRef=getEC(),icRef=getIC();const catRef=settingsSubTab==="expense"?ecRef:icRef;
@@ -1864,14 +1988,15 @@ function exportData(){
   const content=JSON.stringify({
     version:2,exportedAt:new Date().toISOString(),
     txns,budgets,accounts,userEC,userIC,profile,recurring,
-    goals,catOrder,homeLayout,hiddenDefaultCats,
+    goals,catOrder,homeLayout,hiddenDefaultCats,userTags,
+    homeCards:{balance:showBalanceHome,accounts:showAccountsHome,networthchart:showNetworthChartHome},
     theme,accent:accentColor.h,currency:currency.code,remindersEnabled
   });
   saveOrDownload("financeflow_"+toLocalISODate(new Date())+".json",content,"application/json");
 }
 
 // ── DATA ACTIONS ──
-function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts","ffd_homelayout","ffd_catorder","ffd_goals","ffd_pin","ffd_reminders","ffd_onboard"].forEach(k=>localStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e",currency:currency.code}];userEC={};userIC={};profile={name:""};recurring=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;homeLayout=["networth","goals","stats","chart","trend","insights","budget","recent"];catOrder={expense:[],income:[]};goals=[];pinHash="";pinLockActive=false;remindersEnabled=false;onboardComplete=false;onboardStep=0;if(window.Android&&window.Android.cancelReminders)window.Android.cancelReminders();save();closeSettings();}}
+function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts","ffd_homelayout","ffd_catorder","ffd_goals","ffd_pin","ffd_reminders","ffd_onboard","ffd_usertags"].forEach(k=>localStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e",currency:currency.code}];userEC={};userIC={};profile={name:""};recurring=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;homeLayout=["balance","accounts","networthchart","goals","stats","chart","trend","insights","budget","recent"];showBalanceHome=true;showAccountsHome=true;showNetworthChartHome=true;catOrder={expense:[],income:[]};goals=[];userTags=[];pinHash="";pinLockActive=false;remindersEnabled=false;onboardComplete=false;onboardStep=0;if(window.Android&&window.Android.cancelReminders)window.Android.cancelReminders();save();closeSettings();}}
 function importData(file){if(!file)return;file.text().then(t=>{
   const d=JSON.parse(t);
   txns=d.txns||[];
@@ -1881,14 +2006,17 @@ function importData(file){if(!file)return;file.text().then(t=>{
   // These four were previously dropped on restore. hiddenDefaultCats especially: without it,
   // every renamed default category came back as a duplicate alongside its new name.
   goals=Array.isArray(d.goals)?d.goals:[];
+  userTags=Array.isArray(d.userTags)?d.userTags:[];
   catOrder=d.catOrder&&typeof d.catOrder==="object"?d.catOrder:{expense:[],income:[]};
   hiddenDefaultCats=d.hiddenDefaultCats&&typeof d.hiddenDefaultCats==="object"?d.hiddenDefaultCats:{expense:[],income:[]};
   if(!Array.isArray(hiddenDefaultCats.expense))hiddenDefaultCats.expense=[];
   if(!Array.isArray(hiddenDefaultCats.income))hiddenDefaultCats.income=[];
-  const validSecs=["networth","goals","stats","chart","trend","insights","budget","recent"];
-  if(Array.isArray(d.homeLayout)&&d.homeLayout.every(x=>validSecs.includes(x))){
-    const arr=[...d.homeLayout];validSecs.forEach(k=>{if(!arr.includes(k))arr.push(k);});homeLayout=arr;
+  const validSecs=["balance","accounts","networthchart","goals","stats","chart","trend","insights","budget","recent"];
+  if(Array.isArray(d.homeLayout)){
+    const arr=expandNetworthKey(d.homeLayout);
+    if(arr.every(x=>validSecs.includes(x))){validSecs.forEach(k=>{if(!arr.includes(k))arr.push(k);});homeLayout=arr;}
   }
+  if(d.homeCards&&typeof d.homeCards==="object"){showBalanceHome=d.homeCards.balance!==false;showAccountsHome=d.homeCards.accounts!==false;showNetworthChartHome=d.homeCards.networthchart!==false;}
   if(d.theme==="light"||d.theme==="dark")theme=d.theme;
   const ac=ACCENT_COLORS.find(c=>c.h===d.accent);if(ac)accentColor=ac;
   const cu=CURRENCIES.find(c=>c.code===d.currency);if(cu)currency=cu;
@@ -1906,22 +2034,35 @@ function duplicateTx(id){
 
 // ── MODALS ──
 // Payee/merchant autocomplete: the description field had no memory, so typing "Shoprite" was
-// full free-text friction every single time. Populates the shared <datalist> from past
-// descriptions, most-recent-first, so the on-screen keyboard offers a suggestion after 1-2
-// keystrokes. Refreshed each time an Add/Edit Transaction modal opens (cheap — capped at 40).
+// full free-text friction every single time. This used to rely on a native <datalist> — Android
+// WebView's datalist filtering is unreliable (it showed every past description regardless of
+// what was typed, unfiltered), so it's a small custom dropdown instead: payeeOptions holds the
+// candidate list (most-recent-first, capped at 200) and onDescInput() filters it live against
+// whatever's actually been typed so far.
+let payeeOptions=[];
 function refreshPayeeList(){
-  const dl=$("payeeList");if(!dl)return;
-  const seen=new Set(),opts=[];
-  for(let i=txns.length-1;i>=0&&opts.length<40;i--){
+  const seen=new Set();payeeOptions=[];
+  for(let i=txns.length-1;i>=0&&payeeOptions.length<200;i--){
     const d=(txns[i].description||"").trim();
-    if(d&&!seen.has(d.toLowerCase())){seen.add(d.toLowerCase());opts.push(d);}
+    if(d&&!seen.has(d.toLowerCase())){seen.add(d.toLowerCase());payeeOptions.push(d);}
   }
-  dl.innerHTML=opts.map(d=>`<option value="${esc(d)}">`).join("");
+}
+function onDescInput(prefix){
+  const inp=$(prefix+"Desc"),box=$(prefix+"DescSuggest");if(!inp||!box)return;
+  const v=inp.value.trim().toLowerCase();
+  if(!v){box.innerHTML="";box.style.display="none";return;}
+  const matches=payeeOptions.filter(d=>d.toLowerCase().includes(v)&&d.toLowerCase()!==v).slice(0,6);
+  box.innerHTML=matches.map(d=>`<div class="suggest-item" onclick="selectDesc('${prefix}','${escJs(d)}')">${esc(d)}</div>`).join("");
+  box.style.display=matches.length?"block":"none";
+}
+function selectDesc(prefix,val){
+  const inp=$(prefix+"Desc");if(inp)inp.value=val;
+  const box=$(prefix+"DescSuggest");if(box){box.innerHTML="";box.style.display="none";}
 }
 function showModal(type,id){
   const mc=$("modal-container");if(type==="close"){mc.innerHTML="";return;}
   const EC=getEC(),IC=getIC();
-  if(type==="edit"||type==="addtx"){refreshPayeeList();refreshTagList();}
+  if(type==="edit"||type==="addtx")refreshPayeeList();
 
   if(type==="edit"&&id){const t=txns.find(x=>x.id===id);if(t&&t.type==="transfer"){
     window._tfFrom=t.fromAccountId;window._tfTo=t.toAccountId;
@@ -1939,12 +2080,12 @@ function showModal(type,id){
     return;}}
 
   if(type==="edit"){const t=txns.find(x=>x.id===id);if(!t)return;
-    window._eType=t.type;window._eCat=t.category;window._eSub=t.subcategory||"";window._eAcc=t.accountId;window._eReceipt=t.receipt||null;
+    window._eType=t.type;window._eCat=t.category;window._eSub=t.subcategory||"";window._eAcc=t.accountId;window._eReceipt=t.receipt||null;window._eTags=(t.tags||[]).slice();
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Edit Transaction</span><div class="flex g6"><button class="btn btn-sm btn-g" onclick="duplicateTx('${t.id}')" title="Duplicate">&#128203;</button><button class="btn btn-sm btn-rd" onclick="deleteTx('${t.id}');showModal('close')">&#128465;</button><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div></div>
     <div style="display:grid;gap:12px"><div><span class="edit-label">Type</span><div class="flex g4"><button class="btn w100" id="eExp" style="border:1px solid ${t.type==="expense"?"var(--red)":"var(--border)"};background:${t.type==="expense"?"rgba(239,68,68,.1)":"transparent"};color:${t.type==="expense"?"var(--red)":"var(--muted)"};padding:11px" onclick="eSetType('expense')">Expense</button><button class="btn w100" id="eInc" style="border:1px solid ${t.type==="income"?"var(--green)":"var(--border)"};background:${t.type==="income"?"rgba(34,197,94,.1)":"transparent"};color:${t.type==="income"?"var(--green)":"var(--muted)"};padding:11px" onclick="eSetType('income')">Income</button><button class="btn w100 btn-g" style="padding:11px" onclick="convertToTransfer('${t.id}')">&#8646; Transfer</button></div></div>
     <div><span class="edit-label">Date</span><input class="inp" type="date" id="eDate" value="${t.date}"></div>
-    <div><span class="edit-label">Description</span><input class="inp" id="eDesc" value="${esc(t.description)}" list="payeeList"></div>
-    <div><span class="edit-label">Tags (comma separated)</span><input class="inp" id="eTags" value="${esc(tagsToInput(t.tags))}" placeholder="e.g. work travel, tax deductible" list="tagList"></div>
+    <div style="position:relative"><span class="edit-label">Description</span><input class="inp" id="eDesc" value="${esc(t.description)}" autocomplete="off" oninput="onDescInput('e')"><div class="suggest-box" id="eDescSuggest"></div></div>
+    <div><span class="edit-label">Tags</span><div id="eTagsBox">${tagPickerHTML("_eTags","e")}</div></div>
     <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="eAmt" value="${t.amount.toLocaleString("en-US",{maximumFractionDigits:2})}" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('eAmt')" title="Calculator">&#129518;</button></div></div>
     <div><span class="edit-label">Category</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openCatPicker('_eType','_eCat','_eSub','eCatLabel')"><span id="eCatLabel"></span><span class="muted">&#8250;</span></button></div>
     <div><span class="edit-label">Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_eAcc','eAccLabel')"><span id="eAccLabel"></span><span class="muted">&#8250;</span></button></div>
@@ -1965,15 +2106,15 @@ function showModal(type,id){
     window._txFromBankAlert=false;
     // toggleSplitMode() sets _skipSplitReset before re-invoking this same branch, so flipping
     // the toggle doesn't wipe the split lines the user was mid-way through building.
-    if(!window._skipSplitReset){window._txSplitMode=false;window._txSplits=[];}
+    if(!window._skipSplitReset){window._txSplitMode=false;window._txSplits=[];window._txTags=[];}
     window._skipSplitReset=false;
     const sm=window._txSplitMode;
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Add Transaction</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div>
     <div class="flex g4 mb14"><button class="btn w100" id="typeExp" style="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red);padding:11px" onclick="setTT('expense')">Expense</button><button class="btn w100" id="typeInc" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="setTT('income')">Income</button><button class="btn w100" id="typeTrf" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="showModal('transfer')">&#8646; Transfer</button></div>
     <div style="display:grid;gap:12px">
       <div><span class="edit-label">Date</span><input class="inp" type="date" id="txDate" value="${toLocalISODate(new Date())}"></div>
-      <div><span class="edit-label">Description</span><input class="inp" id="txDesc" placeholder="e.g. Grocery run" list="payeeList"></div>
-      <div><span class="edit-label">Tags (comma separated)</span><input class="inp" id="txTags" placeholder="e.g. work travel, tax deductible" list="tagList"></div>
+      <div style="position:relative"><span class="edit-label">Description</span><input class="inp" id="txDesc" placeholder="e.g. Grocery run" autocomplete="off" oninput="onDescInput('tx')"><div class="suggest-box" id="txDescSuggest"></div></div>
+      <div><span class="edit-label">Tags</span><div id="txTagsBox">${tagPickerHTML("_txTags","tx")}</div></div>
       ${sm?`<div><div class="flex-b"><span class="edit-label" style="margin:0">Split across categories</span><button type="button" class="btn" style="background:none;border:none;color:var(--accent);font-size:11px;padding:0" onclick="toggleSplitMode()">Use one category instead</button></div><div id="txSplitBox">${splitLinesHTML()}</div></div>`:`
       <div><span class="edit-label">Amount (${esc(currency.symbol)})</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="txAmt" placeholder="0.00" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('txAmt')" title="Calculator">&#129518;</button></div></div>
       <div><span class="edit-label">Category</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openCatPicker('_txT','_txCat','_txSub','txCatLabel')"><span id="txCatLabel"></span><span class="muted">&#8250;</span></button></div>
@@ -2022,7 +2163,7 @@ function eSetType(t){
   if(t==="expense"){e.style.cssText="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red)";i.style.cssText="border:1px solid var(--border);background:transparent;color:var(--muted)";}
   else{i.style.cssText="border:1px solid var(--green);background:rgba(34,197,94,.1);color:var(--green)";e.style.cssText="border:1px solid var(--border);background:transparent;color:var(--muted)";}
 }
-function saveTx(id){const t=txns.find(x=>x.id===id);if(!t)return;const a=parseAmount($("eAmt")?.value);if(!a)return alert("Enter amount");t.date=$("eDate").value;t.description=$("eDesc").value;t.amount=a;t.type=window._eType||t.type;t.category=window._eCat;t.subcategory=window._eSub||"";t.accountId=window._eAcc;t.receipt=window._eReceipt||null;t.cleared=!!$("eCleared")?.checked;t.tags=parseTags($("eTags")?.value);save();showModal("close");render();}
+function saveTx(id){const t=txns.find(x=>x.id===id);if(!t)return;const a=parseAmount($("eAmt")?.value);if(!a)return alert("Enter amount");t.date=$("eDate").value;t.description=$("eDesc").value;t.amount=a;t.type=window._eType||t.type;t.category=window._eCat;t.subcategory=window._eSub||"";t.accountId=window._eAcc;t.receipt=window._eReceipt||null;t.cleared=!!$("eCleared")?.checked;t.tags=(window._eTags||[]).slice();save();showModal("close");render();}
 // Convert between income/expense and transfer while editing, without losing date/amount/description
 function convertToTransfer(id){
   const t=txns.find(x=>x.id===id);if(!t)return;
@@ -2058,17 +2199,16 @@ function setTT(t){
 // handle them correctly — they already sum however many transactions land in a category. The
 // only new code is generating the group on save and collapsing it back into one row for display.
 function toggleSplitMode(){
-  const keepDate=$("txDate")?.value,keepDesc=$("txDesc")?.value,keepTags=$("txTags")?.value,keepAcc=window._txAcc,keepT=window._txT;
+  const keepDate=$("txDate")?.value,keepDesc=$("txDesc")?.value,keepAcc=window._txAcc,keepT=window._txT;
   window._txSplitMode=!window._txSplitMode;
   if(window._txSplitMode&&(!window._txSplits||!window._txSplits.length)){
     const EC=getEC();const firstCat=Object.keys(EC)[0]||"";
     window._txSplits=[{category:firstCat,subcategory:(EC[firstCat]||[])[0]||"",amount:""},{category:firstCat,subcategory:(EC[firstCat]||[])[0]||"",amount:""}];
   }
-  window._skipSplitReset=true;
+  window._skipSplitReset=true; // also keeps window._txTags — see the addtx branch of showModal()
   showModal("addtx");
   if(keepDate)$("txDate").value=keepDate;
   if(keepDesc!==undefined&&$("txDesc"))$("txDesc").value=keepDesc;
-  if(keepTags!==undefined&&$("txTags"))$("txTags").value=keepTags;
   window._txAcc=keepAcc;if(keepT==="income")setTT("income");
   $("txAccLabel").textContent=accName(keepAcc);
 }
@@ -2101,7 +2241,7 @@ function splitTotal(){return(window._txSplits||[]).reduce((s,x)=>s+(parseAmount(
 function addSplitTx(keepOpen){
   const lines=(window._txSplits||[]).map(s=>({category:s.category,subcategory:s.subcategory||"",amount:parseAmount(s.amount)})).filter(s=>s.amount>0);
   if(lines.length<2)return alert("Add at least 2 categories with amounts (or switch back to a single category)");
-  const date=$("txDate").value,desc=$("txDesc").value,tags=parseTags($("txTags")?.value),acc=window._txAcc,type=window._txT||"expense";
+  const date=$("txDate").value,desc=$("txDesc").value,tags=(window._txTags||[]).slice(),acc=window._txAcc,type=window._txT||"expense";
   if(!date)return alert("Choose a date");
   const groupId=uid();
   const created=lines.map(s=>({id:uid(),date,description:desc,tags,amount:s.amount,type,category:s.category,subcategory:s.subcategory,accountId:acc,source:"Manual",splitGroupId:groupId,cleared:!!window._txFromBankAlert}));
@@ -2121,7 +2261,7 @@ function addSplitTx(keepOpen){
 function addTx(keepOpen){
   if(window._txSplitMode)return addSplitTx(keepOpen);
   const a=parseAmount($("txAmt")?.value);if(!a)return alert("Enter an amount");
-  const newTx={id:uid(),date:$("txDate").value,description:$("txDesc").value,tags:parseTags($("txTags")?.value),amount:a,type:window._txT||"expense",category:window._txCat,subcategory:window._txSub||"",accountId:window._txAcc,source:"Manual",receipt:window._txReceipt||null,cleared:!!window._txFromBankAlert};
+  const newTx={id:uid(),date:$("txDate").value,description:$("txDesc").value,tags:(window._txTags||[]).slice(),amount:a,type:window._txT||"expense",category:window._txCat,subcategory:window._txSub||"",accountId:window._txAcc,source:"Manual",receipt:window._txReceipt||null,cleared:!!window._txFromBankAlert};
   txns.push(newTx);
   // Feature 2: recurring
   if($("txRec")?.checked){
@@ -2136,8 +2276,7 @@ function addTx(keepOpen){
   if(keepOpen){
     const keepDate=$("txDate").value,keepAcc=window._txAcc,keepT=window._txT,keepCat=window._txCat,keepSub=window._txSub;
     render();showModal("addtx");
-    $("txDate").value=keepDate;window._txAcc=keepAcc;
-    if($("txTags"))$("txTags").value=""; // tags describe THIS purchase, not carried to the next one
+    $("txDate").value=keepDate;window._txAcc=keepAcc; // showModal("addtx") above already reset window._txTags for this fresh entry
     if(keepT==="income")setTT("income");
     window._txCat=keepCat;window._txSub=keepSub;
     const lbl=$("txCatLabel");if(lbl)lbl.textContent=keepSub?keepCat+" / "+keepSub:keepCat;
@@ -2185,8 +2324,8 @@ function rTx(f,inc,exp){
       const total=t.items.reduce((s,x)=>s+x.amount,0);const isOpen=expandedSplit===t.groupId;
       return`<div class="tx-row" onclick="expandedSplit=expandedSplit==='${t.groupId}'?null:'${t.groupId}';render()"><div class="tx-icon" style="background:rgba(var(--accent-rgb),.1);color:var(--accent)">&#128203;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Split transaction")}</div><div class="fz9 muted">Split &#183; ${t.items.length} categories ${isOpen?"&#9650;":"&#9660;"}</div></div><span class="cat-badge" style="background:rgba(var(--accent-rgb),.15);color:var(--accent)">Split</span><div class="fz12 fw7 ${t.type==="income"?"green":"red"}" style="min-width:58px;text-align:right">${t.type==="income"?"+":"-"}${fmt(total)}</div></div>${isOpen?`<div style="padding:2px 12px 8px 46px;background:var(--bg)">${t.items.map(x=>`<div class="flex-b" style="padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="event.stopPropagation();showModal('edit','${x.id}')"><span class="fz10 muted">${esc(x.category)}${x.subcategory?" · "+esc(x.subcategory):""}</span><span class="fz11 fw6">${fmt(x.amount)}</span></div>`).join("")}</div>`:""}`;
     }
-    if(t.type==="transfer")return`<div class="tx-row" onclick="${rowClick(t)}">${checkHTML(t)}<div class="tx-icon" style="background:rgba(var(--accent-rgb),.1);color:var(--accent)">&#8646;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Transfer")}</div><div class="fz9 muted">${esc(accName(t.fromAccountId))} &#8594; ${esc(accName(t.toAccountId))}</div></div><span class="cat-badge" style="background:rgba(var(--accent-rgb),.15);color:var(--accent)">Transfer</span><div class="fz12 fw7 accent" style="min-width:58px;text-align:right">${fmt(t.amount)}</div></div>`;
-    const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="${rowClick(t)}">${checkHTML(t)}<div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}${tagChipsHTML(t.tags)}</div><div class="fz9 muted">${esc(acc?acc.name:"")} ${t.subcategory?"· "+esc(t.subcategory):""}</div></div><span class="cat-badge" style="background:${clr(t.category)}22;color:${clr(t.category)}">${esc(t.category)}</span><div class="fz12 fw7 ${t.type==="income"?"green":"red"}" style="min-width:58px;text-align:right">${t.type==="income"?"+":"-"}${fmt(t.amount)}</div></div>`;}).join("")}`;}).join(""):'<div class="muted fz12 tac" style="padding:40px">No transactions found</div>'}</div>`;
+    if(t.type==="transfer")return`<div class="tx-row" onclick="${rowClick(t)}">${checkHTML(t)}<div class="tx-icon" style="background:rgba(var(--accent-rgb),.1);color:var(--accent)">&#8646;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Transfer")}</div><div class="fz9 muted">${esc(accName(t.fromAccountId))} &#8594; ${esc(accName(t.toAccountId))}</div></div><span class="cat-badge" style="background:rgba(var(--accent-rgb),.15);color:var(--accent)">Transfer</span><div class="fz12 fw7 accent tar" style="min-width:70px">${clearedDotHTML(t)}${fmt(t.amount)}</div></div>`;
+    const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="${rowClick(t)}">${checkHTML(t)}<div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}${tagChipsHTML(t.tags)}</div><div class="fz9 muted">${esc(acc?acc.name:"")} ${t.subcategory?"· "+esc(t.subcategory):""}</div></div><span class="cat-badge" style="background:${clr(t.category)}22;color:${clr(t.category)}">${esc(t.category)}</span><div class="fz12 fw7 ${t.type==="income"?"green":"red"} tar" style="min-width:70px">${clearedDotHTML(t)}${t.type==="income"?"+":"-"}${fmt(t.amount)}</div></div>`;}).join("")}`;}).join(""):'<div class="muted fz12 tac" style="padding:40px">No transactions found</div>'}</div>`;
   const si=$("si");if(si&&search){si.focus();si.setSelectionRange(search.length,search.length);}
   if(selectMode&&selectedTxIds.size){
     const bar=document.createElement("div");bar.id="selectBar";bar.className="select-bar";
@@ -2282,7 +2421,12 @@ function bulkDeleteSelected(){
 function fmtD(d){const[y,m,day]=String(d).split("-").map(Number);const dt=new Date(y,(m||1)-1,day||1);const n=new Date();const td=new Date(n.getFullYear(),n.getMonth(),n.getDate());const df=Math.round((td-dt)/864e5);if(df===0)return"Today";if(df===1)return"Yesterday";return dt.toLocaleDateString("en-NG",{weekday:"short",day:"numeric",month:"short"});}
 let _st;function doS(v){clearTimeout(_st);_st=setTimeout(()=>{search=v;render();},250);}
 
-document.addEventListener("click",()=>{if(ppOpen||ppBOpen){closePP();render();}});
+document.addEventListener("click",(e)=>{
+  if(ppOpen||ppBOpen){closePP();render();}
+  document.querySelectorAll(".suggest-box").forEach(box=>{
+    if(box.style.display!=="none"&&e.target!==box.previousElementSibling&&!box.contains(e.target)){box.innerHTML="";box.style.display="none";}
+  });
+});
 
 load();
 processRecurring();
