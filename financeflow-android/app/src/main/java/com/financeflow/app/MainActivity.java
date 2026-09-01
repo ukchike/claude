@@ -484,6 +484,8 @@ public class MainActivity extends AppCompatActivity {
                 getSharedPreferences(BalanceWidgetProvider.PREFS, Context.MODE_PRIVATE).edit()
                     .putString(BalanceWidgetProvider.KEY_BALANCE, o.optString("balance", "—"))
                     .putString(BalanceWidgetProvider.KEY_BUDGET, o.optString("budget", ""))
+                    .putString(BalanceWidgetProvider.KEY_INCOME, o.optString("income", "In —"))
+                    .putString(BalanceWidgetProvider.KEY_EXPENSE, o.optString("expense", "Out —"))
                     .apply();
             } catch (Exception ignored) {
             }

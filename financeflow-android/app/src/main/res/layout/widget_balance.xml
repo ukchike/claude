@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- RemoteViews only support a limited view subset (no custom views, no CSS) — kept deliberately
-     plain: title, balance, one budget line, and a small "+ Add" button pinned bottom-right. -->
+<!-- RemoteViews only support a limited view subset (no custom views, no CSS) — deliberately
+     plain: title, balance, income/expense this period, a budget-usage line, and two buttons
+     ("Budgets" / "+ Add") pinned bottom-right. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -26,6 +27,37 @@
         android:textSize="22sp"
         android:textStyle="bold" />
 
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp">
+
+        <TextView
+            android:id="@+id/widget_income"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="In —"
+            android:textColor="#22c55e"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="   "
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/widget_expense"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Out —"
+            android:textColor="#ef4444"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
     <TextView
         android:id="@+id/widget_budget"
         android:layout_width="wrap_content"
@@ -40,20 +72,43 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <Button
-        android:id="@+id/widget_add_btn"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="end"
-        android:text="+ Add"
-        android:textAllCaps="false"
-        android:textSize="11sp"
-        android:textColor="#ffffff"
-        android:background="@drawable/widget_btn_bg"
-        android:minWidth="0dp"
-        android:minHeight="0dp"
-        android:paddingLeft="14dp"
-        android:paddingRight="14dp"
-        android:paddingTop="6dp"
-        android:paddingBottom="6dp" />
+        android:orientation="horizontal"
+        android:gravity="end">
+
+        <Button
+            android:id="@+id/widget_budgets_btn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Budgets"
+            android:textAllCaps="false"
+            android:textSize="11sp"
+            android:textColor="#f2f2f5"
+            android:background="@drawable/widget_btn_bg_muted"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingLeft="12dp"
+            android:paddingRight="12dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp" />
+
+        <Button
+            android:id="@+id/widget_add_btn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="+ Add"
+            android:textAllCaps="false"
+            android:textSize="11sp"
+            android:textColor="#ffffff"
+            android:background="@drawable/widget_btn_bg"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingLeft="14dp"
+            android:paddingRight="14dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp" />
+    </LinearLayout>
 </LinearLayout>
