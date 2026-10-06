@@ -451,16 +451,49 @@ public class MainActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public void clearBankAlert(String id) {
-            SharedPreferences prefs = getSharedPreferences(BankAlertListenerService.PREFS, Context.MODE_PRIVATE);
-            try {
-                JSONArray pending = new JSONArray(prefs.getString(BankAlertListenerService.KEY_PENDING, "[]"));
-                JSONArray kept = new JSONArray();
-                for (int i = 0; i < pending.length(); i++) {
-                    JSONObject entry = pending.getJSONObject(i);
-                    if (!entry.optString("id").equals(id)) kept.put(entry);
+            synchronized (BankAlertListenerService.LOCK) {
+                SharedPreferences prefs = getSharedPreferences(BankAlertListenerService.PREFS, Context.MODE_PRIVATE);
+                try {
+                    JSONArray pending = new JSONArray(prefs.getString(BankAlertListenerService.KEY_PENDING, "[]"));
+                    JSONArray kept = new JSONArray();
+                    for (int i = 0; i < pending.length(); i++) {
+                        JSONObject entry = pending.getJSONObject(i);
+                        if (!entry.optString("id").equals(id)) kept.put(entry);
+                    }
+                    prefs.edit().putString(BankAlertListenerService.KEY_PENDING, kept.toString()).apply();
+                } catch (Exception ignored) {
                 }
-                prefs.edit().putString(BankAlertListenerService.KEY_PENDING, kept.toString()).apply();
-            } catch (Exception ignored) {
+            }
+        }
+
+        @JavascriptInterface
+        public String getIgnoredBankSources() {
+            java.util.Set<String> ignored = getSharedPreferences(BankAlertListenerService.PREFS, Context.MODE_PRIVATE)
+                .getStringSet(BankAlertListenerService.KEY_IGNORED, java.util.Collections.emptySet());
+            return new JSONArray(new java.util.ArrayList<>(ignored)).toString();
+        }
+
+        @JavascriptInterface
+        public void setBankSourceIgnored(String pkg, boolean ignored) {
+            if (pkg == null || pkg.isEmpty()) return;
+            synchronized (BankAlertListenerService.LOCK) {
+                SharedPreferences prefs = getSharedPreferences(BankAlertListenerService.PREFS, Context.MODE_PRIVATE);
+                java.util.Set<String> sources = new java.util.HashSet<>(prefs.getStringSet(
+                    BankAlertListenerService.KEY_IGNORED, java.util.Collections.emptySet()));
+                if (ignored) sources.add(pkg); else sources.remove(pkg);
+                SharedPreferences.Editor edit = prefs.edit().putStringSet(BankAlertListenerService.KEY_IGNORED, sources);
+                if (ignored) {
+                    try {
+                        JSONArray pending = new JSONArray(prefs.getString(BankAlertListenerService.KEY_PENDING, "[]"));
+                        JSONArray kept = new JSONArray();
+                        for (int i=0; i<pending.length(); i++) {
+                            JSONObject entry=pending.getJSONObject(i);
+                            if (!pkg.equals(entry.optString("packageName"))) kept.put(entry);
+                        }
+                        edit.putString(BankAlertListenerService.KEY_PENDING, kept.toString());
+                    } catch (Exception e) { return; }
+                }
+                edit.apply();
             }
         }
 

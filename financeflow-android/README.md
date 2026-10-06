@@ -16,7 +16,7 @@
 From the repository root:
 
 ```sh
-node --test tests/financial-accuracy.test.cjs
+node --test tests/*.test.cjs
 ```
 
 GitHub Actions runs these tests before building both Android release flavours.
@@ -30,3 +30,21 @@ GitHub Actions runs these tests before building both Android release flavours.
 5. Skip an occurrence already recorded manually; verify the balance does not change.
 6. If you use foreign accounts, set a manual rate and check converted report totals. Verify a missing-rate warning and blocked cross-currency transfers.
 7. Export and restore a backup on a separate test installation to check pending occurrences.
+
+## Statement imports and bank-alert review
+
+Statement uploads support CSV, TSV and semicolon-delimited text, including quoted commas, escaped quotes and multiline descriptions. Excel and PDF parsing are not included.
+
+1. Select the target account and upload a statement (up to 4 MB / 10,000 rows).
+2. Check the detected header row and map the date, description and amount/direction columns. Choose day-first or month-first numeric dates.
+3. Debit/Credit columns determine direction. Amount-only statements require a Type column or an explicit positive/negative convention. Category suggestions never change debit/credit direction.
+4. Review all rows and selected inflow/outflow totals. Invalid/summary rows are unselected. Existing matches are unselected by default; individually include a flagged row only if it is a separate genuine transaction.
+5. Confirm the selected entries. The import can be undone immediately; recent batches appear under Backup & Restore and are included in JSON backups.
+
+Duplicate detection compares account, date, direction, amount and reference/description. Matches against manual entries, bank alerts, transfers and split totals receive review flags. This is a review aid: missing references, changed dates and different descriptions can prevent an exact match.
+
+The Full APK detects NGN bank-alert candidates locally. Both comma-formatted and uncommaed amounts are supported. Balance-labelled amounts are excluded; multiple candidate amounts and ambiguous directions need review. The source app and notification text are visible, and unwanted sources can be ignored and subsequently allowed again.
+
+Bank-alert confirmation requires selecting the NGN account; unknown direction requires an explicit Income/Expense choice. The date defaults to the notification date and must be checked. Existing matching amounts/records trigger an additional warning. Alerts remain unreconciled until you verify them against your bank statement. Notifications are never posted automatically. Detection is format-dependent; anonymised real-bank examples are needed for bank-specific acceptance testing.
+
+GitHub Actions also compiles and runs the pure Java BankAlertParserTest before building the APKs.

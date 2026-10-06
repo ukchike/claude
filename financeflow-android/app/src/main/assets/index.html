@@ -255,6 +255,7 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
 <nav class="bnav" id="bnav"></nav>
 <div id="modal-container"></div>
 <script src="finance-core.js"></script>
+<script src="statement-import.js"></script>
 <script>
 
 // ── CATEGORIES ──
@@ -281,6 +282,7 @@ const ACCENT_COLORS=[{n:"Blue",h:"#3b82f6",rgb:"59,130,246"},{n:"Green",h:"#22c5
 
 // ── STATE ──
 let txns=[],budgets=[],accounts=[],userEC={},userIC={},profile={name:""};
+let importHistory=[],statementReview=null,statementLoadToken=0;
 let scheduledPayments=[];
 let recurring=[];           // Feature 2: recurring transaction templates
 let biometricEnabled=false; // Feature 4: biometric lock setting
@@ -574,6 +576,8 @@ function pickAccountFor(id){
   window[_pickerVarName]=id;
   const acc=accounts.find(a=>a.id===id);
   const lbl=$(_pickerLabelId);if(lbl)lbl.textContent=acc?acc.name:"";
+  if(_pickerVarName==="_uploadAcc"&&statementReview)reviewStatement();
+  if(_pickerVarName==="_txAcc"&&window._bankAlertId)window._bankAccountConfirmed=true;
   closePicker();
 }
 function closePicker(){const ov=document.getElementById("pickerOverlay");if(ov)ov.innerHTML="";}
@@ -660,6 +664,7 @@ function save(){
   localStorage.setItem("ffd_pro",JSON.stringify(profile));
   localStorage.setItem("ffd_rec",JSON.stringify(recurring));
   localStorage.setItem("ffd_scheduled",JSON.stringify(scheduledPayments));
+  localStorage.setItem("ffd_imports",JSON.stringify(importHistory));
   localStorage.setItem("ffd_bio",JSON.stringify(biometricEnabled));
   localStorage.setItem("ffd_theme",theme);
   localStorage.setItem("ffd_accent",accentColor.h);
@@ -679,6 +684,7 @@ function save(){
   syncWidgetData();
 }
 function load(){
+  try{importHistory=JSON.parse(localStorage.getItem("ffd_imports")||"[]");if(!Array.isArray(importHistory))importHistory=[];}catch(e){importHistory=[];}
   try{scheduledPayments=JSON.parse(localStorage.getItem("ffd_scheduled")||"[]");if(!Array.isArray(scheduledPayments))scheduledPayments=[];}catch(e){scheduledPayments=[];}
   try{const t=localStorage.getItem("ffd_tx");if(t)txns=JSON.parse(t);}catch(e){}
   try{const b=localStorage.getItem("ffd_bd");if(b)budgets=JSON.parse(b);}catch(e){}
@@ -1444,6 +1450,7 @@ function renderSettings(){
         <div class="fz10 muted mb10">FinanceFlow doesn't talk to the internet directly — instead it uses Android's own "Save As" dialog, which lists Google Drive, OneDrive, Dropbox etc. as save locations if you have those apps installed. Pick one there to keep an off-device copy.</div>
         <button class="btn btn-p w100" style="justify-content:center" onclick="exportData()">&#9729;&#65039; Backup Now</button>
       </div>
+      <span class="st-label">Recent Statement Imports</span>${importHistory.slice(0,10).map(h=>`<div class="fz10 muted mb6">${esc(h.filename)} · ${h.count} entries · ${esc(accName(h.accountId))} · ${esc(h.importedAt.slice(0,10))}</div>`).join("")||'<div class="fz10 muted mb8">No imports recorded yet.</div>'}
       <span class="st-label">Export &amp; Restore</span>
       <div class="flex-w" style="gap:8px;margin-top:4px">
         <button class="btn btn-g btn-sm" onclick="exportData()">&#128228; Backup (JSON)</button>
@@ -1509,7 +1516,7 @@ function renderSettings(){
       <div class="fz9 muted mt6">FinanceFlow scans notification text for bank debit/credit alerts (e.g. "NGN5,000 credited") — nothing is sent off your device. Detected transactions appear below for you to confirm before they're added.</div>
       <div class="divider"></div>
       <div class="flex-b mb6"><span class="st-label" style="margin:0">Pending Detections${pending.length?` (${pending.length})`:""}</span>${pending.length?`<button class="btn btn-sm btn-rd" onclick="clearAllBankAlerts()">Clear All</button>`:""}</div>
-      ${pending.length?pending.map((p,i)=>`<div class="bud-item"><div class="flex-b mb6"><div><div class="fz12 fw6">${p.type==="income"?"+":"-"}${fmt(p.amount)}</div><div class="fz10 muted mt4 ellip" style="max-width:220px">${esc(p.text)}</div></div><span class="cat-badge" style="background:${p.type==="income"?"rgba(34,197,94,.15)":"rgba(239,68,68,.15)"};color:${p.type==="income"?"var(--green)":"var(--red)"}">${p.type}</span></div><div class="flex g6"><button class="btn btn-p btn-sm" style="flex:1;justify-content:center" onclick="confirmBankAlert(${i})">&#10003; Add Transaction</button><button class="btn btn-sm btn-rd" onclick="dismissBankAlert(${i})">&#10005;</button></div></div>`).join(""):`<div class="fz11 muted tac" style="padding:12px">No pending detections.</div>`}
+${bankAlertsHTML(pending)}
     </div>`;
   }
   if(settingsTab==="budgets"){
@@ -1798,21 +1805,39 @@ function getPendingBankAlerts(){
   if(!window.Android||!window.Android.getPendingBankAlerts)return[];
   try{return JSON.parse(window.Android.getPendingBankAlerts()||"[]");}catch(e){return[];}
 }
-// Referenced by index (not the raw notification-derived id) into the pending list — some
-// notification keys contain characters that broke the inline onclick string, leaving the
-// "stuck" entries reported: tapping Add/dismiss silently did nothing.
+function ignoredBankSources(){try{return window.Android?.getIgnoredBankSources?JSON.parse(Android.getIgnoredBankSources()):[];}catch(e){return [];}}
+function setIgnoredBankSource(pkg,ignored){if(!window.Android?.setBankSourceIgnored)return;if(ignored&&!confirm('Ignore future detections from '+pkg+' and remove its pending alerts?'))return;Android.setBankSourceIgnored(pkg,ignored);render();}
+function bankAlertsHTML(pending){
+  const ignored=ignoredBankSources();
+  return `<div class="fz10 muted mb8">Only NGN alert amounts are detected. Notifications are suggestions, not bank reconciliation. Verify the source app, date, amount, direction and account. The latest 100 detections are retained.</div>`+
+    (ignored.length?`<div class="fz10 muted mb8">Ignored sources: ${ignored.map(pkg=>`<button class="btn btn-g btn-sm" onclick="setIgnoredBankSource('${escJs(pkg)}',false)">Allow ${esc(pkg)}</button>`).join('')}</div>`:'')+
+    (pending.length?pending.map((p,i)=>`<div class="bud-item"><div class="fz12 fw6">${fmtCur(p.amount,'NGN')} · ${p.type==='income'?'Possible credit':p.type==='expense'?'Possible debit':'Direction needs review'}</div><div class="fz10 muted mt4">Source: ${esc(p.appName||p.packageName||'Unknown source (older detection)')} · ${p.timestamp?esc(toLocalISODate(new Date(p.timestamp))):'Check date'}</div>${p.amountUncertain?'<div class="msg msg-err fz10">Multiple amounts found — verify the transaction amount.</div>':''}<details class="fz10 muted mt6"><summary>View notification text</summary><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(p.text)}</div></details><div class="flex g6 mt8"><button class="btn btn-p btn-sm" onclick="confirmBankAlert(${i})">Review &amp; Add</button><button class="btn btn-rd btn-sm" onclick="dismissBankAlert(${i})">Dismiss</button>${p.packageName?`<button class="btn btn-g btn-sm" onclick="setIgnoredBankSource('${escJs(p.packageName)}',true)">Ignore source</button>`:''}</div></div>`).join(''):'<div class="fz11 muted tac" style="padding:12px">No pending detections.</div>');
+}
 function confirmBankAlert(idx){
-  const list=getPendingBankAlerts();
-  const a=list[idx];
-  if(!a)return;
-  showModal("addtx");
-  window._bankAlertId=a.id;
-  window._txFromBankAlert=true; // straight from the bank's own notification — mark reconciled by default
-  setTimeout(()=>{
-    setAmountValue("txAmt",a.amount);
-    if($("txDesc"))$("txDesc").value=(a.text||"").slice(0,60);
-    setTT(a.type==="income"?"income":"expense");
-  },30);
+  const a=getPendingBankAlerts()[idx];if(!a)return;
+  if(txns.some(t=>t.bankAlertId===a.id)){dismissBankAlert(idx);return alert('This alert has already been recorded.');}
+  showModal('addtx');
+  window._bankAlertId=a.id;window._bankAlertMeta=a;window._txFromBankAlert=false;
+  const account=accounts.find(a=>(a.currency||currency.code)==='NGN');
+  window._txAcc=account?.id||null;window._bankAccountConfirmed=false;
+  if($('txAccLabel'))$('txAccLabel').textContent=account?account.name+' (NGN) — tap to confirm account':'Select a NGN account';
+  setAmountValue('txAmt',a.amount);
+  if($('txDesc'))$('txDesc').value=a.text||'';
+  if($('txDate')&&a.timestamp)$('txDate').value=toLocalISODate(new Date(a.timestamp));
+  setTT(a.type==='income'?'income':'expense');
+  window._bankTypeConfirmed=a.parserVersion===2&&(a.type==='income'||a.type==='expense');
+  const note=document.createElement('div');note.className='msg msg-err fz11';note.textContent='Verify this notification before recording. Tap Account to confirm its destination. '+(!window._bankTypeConfirmed?'Select Income or Expense explicitly. ':'')+(a.amountUncertain?'Several amounts were found; check the amount. ':'')+'Date is notification date; correct it if necessary. Entry will remain unreconciled.';
+  $('txAmt')?.closest('.modal')?.insertBefore(note,$('txAmt').closest('.modal').children[2]);
+}
+function validateBankAlertEntry(t){
+  if(!window._bankAlertId)return true;
+  const a=window._bankAlertMeta;
+  if(!window._bankAccountConfirmed){alert('Tap Account and select the bank account for this alert.');return false;}
+  if(!window._bankTypeConfirmed){alert('Select Income or Expense to confirm the direction.');return false;}
+  if(txnCurrency(t)!=='NGN'){alert('This alert is in NGN. Select a NGN account.');return false;}
+  if(txns.some(x=>x.bankAlertId===window._bankAlertId)){alert('This alert is already recorded.');return false;}
+  const match=StatementImport.possible(t,txns);
+  return confirm((match?'A matching account/date/amount or transfer already exists. Cancel and dismiss this alert if it is the same transaction.\n\n':'')+`Record ${t.type==='income'?'income':'expense'} ${fmtTxn(t)} in ${accName(t.accountId)} on ${t.date}?`);
 }
 function dismissBankAlert(idx){
   const list=getPendingBankAlerts();
@@ -2072,7 +2097,7 @@ function exportData(){
   // and restoring a lock the user can no longer satisfy would lock them out of their own data.
   const content=JSON.stringify({
     version:3,exportedAt:new Date().toISOString(),
-    txns,budgets,accounts,userEC,userIC,profile,recurring,scheduledPayments,
+    txns,budgets,accounts,userEC,userIC,profile,recurring,scheduledPayments,importHistory,
     goals,catOrder,homeLayout,hiddenDefaultCats,userTags,
     homeCards:{balance:showBalanceHome,accounts:showAccountsHome,networthchart:showNetworthChartHome},
     hiddenHomeSections,
@@ -2082,13 +2107,13 @@ function exportData(){
 }
 
 // ── DATA ACTIONS ──
-function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts","ffd_homelayout","ffd_catorder","ffd_goals","ffd_pin","ffd_reminders","ffd_onboard","ffd_usertags","ffd_homecards","ffd_hiddensections"].forEach(k=>localStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e",currency:currency.code}];userEC={};userIC={};profile={name:""};recurring=[];scheduledPayments=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;homeLayout=["balance","accounts","networthchart","goals","stats","chart","trend","insights","budget","recent"];showBalanceHome=true;showAccountsHome=true;showNetworthChartHome=true;hiddenHomeSections=[];catOrder={expense:[],income:[]};goals=[];userTags=[];pinHash="";pinLockActive=false;remindersEnabled=false;onboardComplete=false;onboardStep=0;if(window.Android&&window.Android.cancelReminders)window.Android.cancelReminders();save();closeSettings();}}
+function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts","ffd_homelayout","ffd_catorder","ffd_goals","ffd_pin","ffd_reminders","ffd_onboard","ffd_usertags","ffd_homecards","ffd_hiddensections"].forEach(k=>localStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e",currency:currency.code}];userEC={};userIC={};profile={name:""};recurring=[];scheduledPayments=[];importHistory=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;homeLayout=["balance","accounts","networthchart","goals","stats","chart","trend","insights","budget","recent"];showBalanceHome=true;showAccountsHome=true;showNetworthChartHome=true;hiddenHomeSections=[];catOrder={expense:[],income:[]};goals=[];userTags=[];pinHash="";pinLockActive=false;remindersEnabled=false;onboardComplete=false;onboardStep=0;if(window.Android&&window.Android.cancelReminders)window.Android.cancelReminders();save();closeSettings();}}
 function importData(file){if(!file)return;file.text().then(t=>{
   const d=JSON.parse(t);
   txns=d.txns||[];
   budgets=d.budgets||[];budgets.forEach(b=>{if(!b.period)b.period="month";});
   accounts=d.accounts||[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];
-  userEC=d.userEC||{};userIC=d.userIC||{};profile=d.profile||{};recurring=d.recurring||[];scheduledPayments=Array.isArray(d.scheduledPayments)?d.scheduledPayments:[];
+  userEC=d.userEC||{};userIC=d.userIC||{};profile=d.profile||{};recurring=d.recurring||[];importHistory=Array.isArray(d.importHistory)?d.importHistory:[];scheduledPayments=Array.isArray(d.scheduledPayments)?d.scheduledPayments:[];
   // These four were previously dropped on restore. hiddenDefaultCats especially: without it,
   // every renamed default category came back as a duplicate alongside its new name.
   goals=Array.isArray(d.goals)?d.goals:[];
@@ -2114,6 +2139,7 @@ function deleteTx(id){const idx=txns.findIndex(t=>t.id===id);if(idx<0)return;con
 function duplicateTx(id){
   const t=txns.find(x=>x.id===id);if(!t)return;
   const copy={...t,id:uid(),date:toLocalISODate(new Date()),cleared:false}; // a duplicate is a fresh, not-yet-confirmed entry
+  delete copy.bankAlertId;delete copy.externalReference;
   delete copy.occurrenceKey;delete copy.scheduledDate;
   delete copy.splitGroupId; // stand alone — must NOT silently join the original's split group and change its displayed total
   txns.push(copy);save();showModal("close");render();
@@ -2148,7 +2174,7 @@ function selectDesc(prefix,val){
   const box=$(prefix+"DescSuggest");if(box){box.innerHTML="";box.style.display="none";}
 }
 function showModal(type,id){
-  const mc=$("modal-container");if(type==="close"){mc.innerHTML="";return;}
+  const mc=$("modal-container");if(type==="close"){statementLoadToken++;statementReview=null;pendingTx=[];mc.innerHTML="";return;}
   const EC=getEC(),IC=getIC();
   if(type==="edit"||type==="addtx")refreshPayeeList();
 
@@ -2190,7 +2216,7 @@ function showModal(type,id){
     // Clear any bank-alert link from a previously abandoned Add-Transaction. Without this, a
     // cancelled "add from alert" left the id set and the next unrelated manual transaction
     // silently dismissed that still-pending alert. confirmBankAlert() re-sets it after this.
-    window._bankAlertId=null;
+    window._bankAlertId=null;window._bankAlertMeta=null;window._bankAccountConfirmed=false;window._bankTypeConfirmed=false;
     window._txFromBankAlert=false;
     // toggleSplitMode() sets _skipSplitReset before re-invoking this same branch, so flipping
     // the toggle doesn't wipe the split lines the user was mid-way through building.
@@ -2235,6 +2261,7 @@ function showModal(type,id){
   }
 
   if(type==="upload"){
+    statementReview=null;pendingTx=[];statementLoadToken++;
     window._uploadAcc=accounts[0]?.id||"cash";
     mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb12"><span class="fz14 fw7">Upload Statement</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div><div class="mb8"><span class="edit-label">Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_uploadAcc','uploadAccLabel')"><span id="uploadAccLabel"></span><span class="muted">&#8250;</span></button></div><div class="drop-zone" id="dz" onclick="$('fi').click()"><div style="font-size:28px;margin-bottom:6px">&#128196;</div><div class="fz12 fw6">Tap to select CSV file</div><div class="fz10 muted mt4">Bank statement in CSV format</div><input type="file" id="fi" accept=".csv,.tsv,.txt" style="display:none" onchange="handleFile(this.files[0])"></div><div id="uMsg"></div><div id="uPrev"></div><div id="uAct"></div></div></div>`;
     $("uploadAccLabel").textContent=accName(window._uploadAcc);
@@ -2272,6 +2299,7 @@ function convertFromTransfer(id,newType){
   save();showModal("edit",id);
 }
 function setTT(t){
+  if(window._bankAlertId)window._bankTypeConfirmed=true;
   window._txT=t;
   const EC=getEC(),IC=getIC();const cats=t==="income"?IC:EC;const firstCat=Object.keys(cats)[0]||"";
   window._txCat=firstCat;window._txSub=(cats[firstCat]||[])[0]||"";
@@ -2288,6 +2316,7 @@ function setTT(t){
 // handle them correctly — they already sum however many transactions land in a category. The
 // only new code is generating the group on save and collapsing it back into one row for display.
 function toggleSplitMode(){
+  if(window._bankAlertId)return alert("For a split, record it manually using split mode and then dismiss this alert.");
   const keepDate=$("txDate")?.value,keepDesc=$("txDesc")?.value,keepAcc=window._txAcc,keepT=window._txT;
   window._txSplitMode=!window._txSplitMode;
   if(window._txSplitMode&&(!window._txSplits||!window._txSplits.length)){
@@ -2353,6 +2382,8 @@ function addTx(keepOpen){
   const a=parseAmount($("txAmt")?.value);if(!a)return alert("Enter an amount");
   if(!validEntry(a,$("txDate").value,window._txAcc))return;
   const newTx={id:uid(),date:$("txDate").value,description:$("txDesc").value,tags:(window._txTags||[]).slice(),amount:a,type:window._txT||"expense",category:window._txCat,subcategory:window._txSub||"",accountId:window._txAcc,source:"Manual",receipt:window._txReceipt||null,cleared:!!window._txFromBankAlert};
+  if(!validateBankAlertEntry(newTx))return;
+  if(window._bankAlertId){newTx.source="Bank Alert";newTx.bankAlertId=window._bankAlertId;newTx.externalReference=window._bankAlertMeta?.reference||"";newTx.bankAlertPackage=window._bankAlertMeta?.packageName||"";newTx.cleared=false;}
   txns.push(newTx);
   // Feature 2: recurring
   if($("txRec")?.checked){
@@ -2402,10 +2433,82 @@ function saveTransfer(id){
   save();showModal("close");render();
 }
 
-function parseCSV(text){const lines=text.split(/\r?\n/).filter(l=>l.trim());if(lines.length<2)return[];const sep=lines[0].includes("\t")?"\t":",";const pr=l=>{const r=[];let c="",q=false;for(let i=0;i<l.length;i++){const ch=l[i];if(ch==='"')q=!q;else if(ch===sep&&!q){r.push(c.trim());c="";}else c+=ch;}r.push(c.trim());return r;};const h=pr(lines[0]).map(x=>x.toLowerCase().replace(/['"]/g,""));return lines.slice(1).map(l=>{const v=pr(l);if(v.length<2)return null;const o={};h.forEach((k,j)=>{o[k]=v[j]||""});return o;}).filter(Boolean);}
-function detectTx(rows,accountId){if(!rows.length)return[];const keys=Object.keys(rows[0]),hdr=keys.map(k=>k.toLowerCase());let dC=-1,dsC=-1,drC=-1,crC=-1,amC=-1;hdr.forEach((h,i)=>{if(dC<0&&/date|trans.*date|value.*date|posting/i.test(h))dC=i;if(dsC<0&&/desc|narr|detail|particular|remark|reference/i.test(h))dsC=i;if(drC<0&&/debit|withdrawal|dr|outflow/i.test(h))drC=i;if(crC<0&&/credit|deposit|cr|inflow/i.test(h))crC=i;if(amC<0&&/^amount$|^value$/i.test(h))amC=i;});if(dsC<0)dsC=keys.findIndex((_,i)=>i!==dC&&i!==drC&&i!==crC&&i!==amC);const txs=[];rows.forEach(row=>{const vals=keys.map(k=>row[k]),desc=dsC>=0?String(vals[dsC]||"").trim():"";if(!desc||desc.length<2)return;let amount=0,type="expense";if(drC>=0&&crC>=0){const dr=parseFloat(String(vals[drC]||"0").replace(/[^0-9.-]/g,""))||0,cr=parseFloat(String(vals[crC]||"0").replace(/[^0-9.-]/g,""))||0;if(cr>0){amount=cr;type="income";}else if(dr>0){amount=dr;}else return;}else if(amC>=0){amount=parseFloat(String(vals[amC]||"0").replace(/[^0-9.-]/g,""))||0;if(amount>0)type="income";else{amount=Math.abs(amount);}}else return;if(!amount)return;let date=toLocalISODate(new Date());const ds=dC>=0?String(vals[dC]||""):"";const p=parseFlexibleDate(ds);if(!p)throw new Error("Invalid or missing date: "+ds+". Correct the statement before importing.");date=toLocalISODate(p);const d2=desc.toLowerCase();let cat="Other",sub="";if(/salary|wage|payroll/.test(d2)){cat="Salary";type="income";}else if(/shoprite|spar|market|grocery|provision|supermarket/.test(d2)){cat="Food & Dining";sub="Groceries";}else if(/uber|bolt|taxi|fuel|petrol|transport|fare|keke/.test(d2)){cat="Transportation";sub="Ride-hailing";}else if(/phcn|ekedc|ikedc|electric|nepa/.test(d2)){cat="Housing";sub="Electricity";}else if(/airtime|mtn|glo|airtel|9mobile|data|recharge|vtu/.test(d2)){cat="Communication";sub="Airtime";}else if(/restaurant|food|chicken|pizza|eat|bukka|suya/.test(d2)){cat="Food & Dining";sub="Restaurants";}else if(/charge|fee|stamp|vat|sms|maintenance/.test(d2)){cat="Finance";sub="Bank Charges";}else if(/school|tuition|course|exam|book/.test(d2)){cat="Education";}else if(/hospital|clinic|pharm|drug|health/.test(d2)){cat="Health";}else if(/rent|house|estate/.test(d2)){cat="Housing";sub="Rent";}txs.push({id:uid(),date,description:desc,amount,type,category:cat,subcategory:sub,accountId:accountId||"cash",source:"Upload"});});return txs;}
-function handleFile(file){if(!file)return;const accId=window._uploadAcc||"cash";const acc=accounts.find(a=>a.id===accId);file.text().then(text=>{const rows=parseCSV(text);const parsed=detectTx(rows,accId);if(!parsed.length){$("uMsg").innerHTML='<div class="msg msg-err">&#9888; No transactions found. Check columns: Date, Description, Debit/Credit.</div>';return;}pendingTx=parsed;$("uMsg").innerHTML=`<div class="msg msg-ok">&#10003; ${parsed.length} transactions from ${esc(acc?.name||"account")}</div>`;$("uPrev").innerHTML=`<table class="preview-tbl mt8"><tr><th>Date</th><th>Desc</th><th>Cat</th><th>Amt</th></tr>${parsed.slice(0,5).map(t=>`<tr><td>${t.date}</td><td class="ellip" style="max-width:90px">${esc(t.description)}</td><td><span class="cat-badge" style="background:${clr(t.category)}22;color:${clr(t.category)}">${esc(t.category)}</span></td><td class="${t.type==="income"?"green":"red"} fw6">${fmtTxn(t)}</td></tr>`).join("")}</table>`;$("uAct").innerHTML=`<button class="btn btn-p w100 mt8" style="justify-content:center;padding:11px" onclick="addPend()">&#10003; Add ${parsed.length} Transactions</button>`;}).catch(e=>{$("uMsg").innerHTML=`<div class="msg msg-err">&#9888; ${esc(e.message)}</div>`;});}
-function addPend(){const n=pendingTx.length;txns=[...txns,...pendingTx];pendingTx=[];save();$("uMsg").innerHTML=`<div class="msg msg-ok">&#10003; ${n} transactions added!</div>`;$("uPrev").innerHTML="";$("uAct").innerHTML=`<button class="btn btn-p w100 mt8" style="justify-content:center" onclick="showModal('close');goTo('transactions')">View Transactions</button>`;}
+function parseCSV(text){return StatementImport.parse(text);}
+function statementDate(value){
+  let v=String(value||'').trim();
+  if(statementReview?.dateOrder==='mdy'){
+    const m=v.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})$/);
+    if(m){let y=+m[3];if(y<100)y+=2000;return FinanceCore.date(`${y}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`)?`${y}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`:null;}
+  }
+  const d=parseFlexibleDate(v);return d?toLocalISODate(d):null;
+}
+function suggestStatementCategory(t){
+  let category=t.type==='income'?'Other Income':'Other',subcategory='';const d=t.description.toLowerCase();
+  if(t.type==='income'){if(/salary|wage|payroll/.test(d))category='Salary';}
+  else if(/shoprite|spar|grocery|supermarket/.test(d)){category='Food & Dining';subcategory='Groceries';}
+  else if(/uber|bolt|taxi/.test(d)){category='Transportation';subcategory='Ride-hailing';}
+  else if(/fuel|petrol/.test(d)){category='Transportation';subcategory='Fuel';}
+  else if(/airtime|mtn|glo|airtel|9mobile|recharge/.test(d)){category='Communication';subcategory='Airtime';}
+  else if(/charge|fee|stamp|vat|sms/.test(d)){category='Finance';subcategory='Bank Charges';}
+  const cats=t.type==='income'?getIC():getEC();
+  if(!cats[category]){category=Object.keys(cats)[0]||'';subcategory='';}
+  if(subcategory&&!(cats[category]||[]).includes(subcategory))subcategory='';
+  return {...t,category,subcategory};
+}
+function importControlsHTML(){
+  const s=statementReview;if(!s)return '';
+  const cols=s.rows[s.header]||[];
+  const labels={date:'Date',description:'Description',debit:'Debit',credit:'Credit',amount:'Amount',type:'Type / Direction',reference:'Reference',currency:'Currency'};
+  return `<div class="msg msg-ok fz11">Map your columns, check all rows, then select which entries to add. Nothing is recorded until you confirm.</div>
+    <span class="edit-label">Header row</span><select class="inp mb8" onchange="setStatementHeader(this.value)">${s.rows.slice(0,20).map((r,i)=>`<option value="${i}" ${i===s.header?'selected':''}>Row ${i+1}: ${esc(r.join(' · ').slice(0,90))}</option>`).join('')}</select>
+    <div class="grid2 mb8">${Object.entries(labels).map(([k,label])=>`<div><span class="edit-label">${label}</span><select class="inp" onchange="setStatementMapping('${k}',this.value)"><option value="-1">Not mapped</option>${cols.map((c,i)=>`<option value="${i}" ${s.mapping[k]===i?'selected':''}>${esc(c||'Column '+(i+1))}</option>`).join('')}</select></div>`).join('')}</div>
+    <span class="edit-label">Numeric date order</span><select class="inp mb8" onchange="statementReview.dateOrder=this.value;reviewStatement()"><option value="dmy" ${s.dateOrder==='dmy'?'selected':''}>Day / Month / Year</option><option value="mdy" ${s.dateOrder==='mdy'?'selected':''}>Month / Day / Year</option></select>
+    <span class="edit-label">Amount direction (if no Debit/Credit columns)</span><select class="inp mb8" onchange="statementReview.polarity=this.value;reviewStatement()"><option value="explicit">Use Type column; flag unknown directions</option><option value="positive-income" ${s.polarity==='positive-income'?'selected':''}>Positive = money in; negative = money out</option><option value="positive-expense" ${s.polarity==='positive-expense'?'selected':''}>Positive = money out; negative = money in</option></select>`;
+}
+function setStatementHeader(value){statementReview.header=Number(value);statementReview.mapping=StatementImport.mapping(statementReview.rows[statementReview.header]);reviewStatement();}
+function setStatementMapping(key,value){statementReview.mapping[key]=Number(value);reviewStatement();}
+function reviewStatement(){
+  if(!statementReview||!$('uPrev'))return;const s=statementReview;
+  const account=accounts.find(a=>a.id===window._uploadAcc);pendingTx=[];
+  try{
+    if(!account)throw new Error('Select an existing account.');
+    s.accountId=account.id;s.review=StatementImport.review(s.rows,s.mapping,{header:s.header,accountId:account.id,currency:account.currency||currency.code,parseDate:statementDate,polarity:s.polarity},txns);
+    s.review.forEach(item=>{if(item.tx)item.tx=suggestStatementCategory(item.tx);});s.error='';
+  }catch(e){s.review=[];s.error=e.message;}
+  renderStatementReview();
+}
+function renderStatementReview(){
+  const s=statementReview;if(!s||!$('uPrev'))return;
+  const valid=s.review.filter(r=>r.tx),selected=valid.filter(r=>r.selected),duplicates=valid.filter(r=>r.duplicate||r.possibleDuplicate);
+  const total=type=>selected.filter(r=>r.tx.type===type).reduce((sum,r)=>FinanceCore.round(sum+r.tx.amount),0);
+  const account=accounts.find(a=>a.id===s.accountId),code=account?.currency||currency.code;
+  $('uMsg').innerHTML=`<div class="fz11 muted mt8">${esc(s.name)} · ${s.review.length} rows · ${selected.length} selected · ${duplicates.length} duplicate/match flags · ${s.review.filter(r=>r.error).length} invalid/summary rows</div>`;
+  $('uPrev').innerHTML=importControlsHTML()+(s.error?`<div class="msg msg-err">${esc(s.error)}</div>`:`<div class="fz11 fw6 mb8">Selected inflow: ${fmtCur(total('income'),code)} · outflow: ${fmtCur(total('expense'),code)}</div><div style="max-height:320px;overflow:auto">${s.review.map((r,i)=>`<div class="bud-item"><label class="flex g8"><input type="checkbox" ${r.selected?'checked':''} ${r.error?'disabled':''} onchange="toggleStatementRow(${i},this.checked)"><span class="fz11">Row ${r.row}: ${r.tx?`${esc(r.tx.date)} · ${esc(r.tx.description)} · ${r.tx.type==='income'?'+':'−'}${fmtCur(r.tx.amount,code)} · ${esc(r.tx.category)}`:esc(r.error)}</span></label>${r.duplicate?'<div class="fz10 muted">Already recorded — excluded by default.</div>':r.possibleDuplicate?'<div class="fz10 muted">Same account/date/amount matches an existing entry or transfer — review before including.</div>':''}</div>`).join('')}</div>`);
+  $('uAct').innerHTML=selected.length?`<button class="btn btn-p w100 mt8" onclick="addPend()">Confirm ${selected.length} selected transactions</button>`:'';
+}
+function toggleStatementRow(index,selected){const item=statementReview?.review[index];if(!item||item.error)return;if(selected&&(item.duplicate||item.possibleDuplicate)&&!confirm('Include this flagged row? Only continue if it is a separate genuine transaction.'))return;item.selected=selected;item.override=selected&&(item.duplicate||item.possibleDuplicate);renderStatementReview();}
+async function handleFile(file){
+  if(!file)return;const token=++statementLoadToken;pendingTx=[];statementReview=null;
+  $('uPrev').innerHTML='';$('uAct').innerHTML='';
+  if(file.size>4*1024*1024){$('uMsg').textContent='File exceeds 4 MB. Split the CSV into smaller statements.';return;}
+  try{
+    const text=await file.text();if(token!==statementLoadToken||!$('uPrev'))return;
+    const rows=parseCSV(text);if(rows.length>10001)throw new Error('Limit: 10,000 statement rows per import.');
+    const header=StatementImport.headerRow(rows);statementReview={rows,header,mapping:StatementImport.mapping(rows[header]),dateOrder:'dmy',polarity:'explicit',name:file.name||'statement.csv',review:[]};reviewStatement();
+  }catch(e){if(token===statementLoadToken&&$('uMsg'))$('uMsg').innerHTML=`<div class="msg msg-err">${esc(e.message)}</div>`;}
+}
+function addPend(){
+  const s=statementReview;if(!s||s.error)return;
+  if(window._uploadAcc!==s.accountId){reviewStatement();return alert('Account changed. Review the updated rows first.');}
+  const selected=s.review.filter(r=>r.selected&&r.tx);if(!selected.length)return;
+  const fresh=StatementImport.review(s.rows,s.mapping,{header:s.header,accountId:s.accountId,currency:accounts.find(a=>a.id===s.accountId)?.currency||currency.code,parseDate:statementDate,polarity:s.polarity},txns);
+  if(selected.some(r=>{const now=fresh.find(x=>x.row===r.row);return !now?.tx||(!r.override&&(now.duplicate||now.possibleDuplicate));})){reviewStatement();return alert('Records changed. Review duplicate flags again.');}
+  if(!confirm(`Add ${selected.length} selected entries to ${accName(s.accountId)}?`))return;
+  const batchId=uid(),created=selected.map(r=>({...r.tx,id:uid(),importBatchId:batchId,statementRow:r.row,cleared:true}));
+  const history={id:batchId,filename:s.name,accountId:s.accountId,importedAt:new Date().toISOString(),count:created.length};
+  txns.push(...created);importHistory.unshift(history);save();statementReview=null;pendingTx=[];showModal('close');goTo('transactions');
+  showUndoToast('Imported '+created.length+' transactions',()=>{txns=txns.filter(t=>t.importBatchId!==batchId);importHistory=importHistory.filter(h=>h.id!==batchId);save();});
+}
 
 // One transaction row for the Transactions tab's list view — also reused by the calendar's
 // day-detail list (see calDayDetailHTML) so both views render split/transfer/normal rows
