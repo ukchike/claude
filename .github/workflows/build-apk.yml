@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - 'financeflow-android/**'
+      - 'tests/**'
+      - '.github/workflows/build-apk.yml'
   workflow_dispatch:
 
 permissions:
@@ -16,6 +18,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Node for financial regression checks
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Financial accuracy regression tests
+        run: node --test tests/financial-accuracy.test.cjs
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4

@@ -17,6 +17,8 @@ import android.util.Base64;
 import android.view.Window;
 import android.webkit.JavascriptInterface;
 import android.webkit.JsResult;
+import android.webkit.JsPromptResult;
+import android.widget.EditText;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -113,6 +115,20 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onJsPrompt(WebView view, String url, String message,
+                                      String defaultValue, JsPromptResult result) {
+                EditText input = new EditText(MainActivity.this);
+                input.setSingleLine(true);
+                input.setText(defaultValue);
+                new AlertDialog.Builder(MainActivity.this)
+                    .setMessage(message).setView(input)
+                    .setPositiveButton(android.R.string.ok,
+                        (d, w) -> result.confirm(input.getText().toString().trim()))
+                    .setNegativeButton(android.R.string.cancel, (d, w) -> result.cancel())
+                    .setOnCancelListener(d -> result.cancel()).show();
+                return true;
+            }
             // The base WebChromeClient silently swallows JS alert()/confirm() dialogs —
             // without these overrides, every validation alert and delete confirmation in
             // the app does nothing when tapped.
