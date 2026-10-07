@@ -153,3 +153,27 @@ test('backup roundtrip retains pending, paid and skipped recurring occurrence hi
   const run=app();run(`accounts=[{id:'a',name:'Bank',currency:'NGN'}];scheduledPayments=['pending','paid','skipped'].map((status,i)=>({id:'p'+i,accountId:'a',type:'expense',amount:100,date:'2026-01-01',status}));`);
   assert.equal(run('validateBackupData(backupData()).scheduledPayments.length'),3);
 });
+test('account deletion protects transactions, transfer endpoints and all payment/import history',()=>{
+  for(const setup of [
+    "txns=[{type:'expense',accountId:'a'}]",
+    "txns=[{type:'transfer',fromAccountId:'a',toAccountId:'b'}]",
+    "txns=[{type:'transfer',fromAccountId:'b',toAccountId:'a'}]",
+    "recurring=[{accountId:'a',active:false}]",
+    "scheduledPayments=[{accountId:'a',status:'paid'}]",
+    "scheduledPayments=[{accountId:'a',status:'skipped'}]",
+    "importHistory=[{accountId:'a'}]"
+  ]){const run=app();run(`accounts=[{id:'a',name:'A'},{id:'b',name:'B'}];${setup};deleteAccount('a');`);assert.equal(run('accounts.length'),2);}
+});
+test('empty account deletion confirms, keeps a final account and supports undo',()=>{
+  const cancel=app({accept:false});cancel(`accounts=[{id:'a',name:'A'},{id:'b',name:'B'}];deleteAccount('a');`);assert.equal(cancel('accounts.length'),2);
+  const run=app();run(`accounts=[{id:'a',name:'A'},{id:'b',name:'B'}];deleteAccount('a');`);assert.equal(run('accounts.length'),1);
+  run(`deleteAccount('b');`);assert.equal(run('accounts.length'),1);
+  run('window.testUndo();');assert.equal(run('accounts.length'),2);assert.equal(run('accounts[0].id'),'a');
+});
+test('navigation identifies current page and recommended layout keeps financial cards first',()=>{
+  const run=app();run(`V='transactions';renderNav();`);
+  assert.ok(run(`$('bnav').innerHTML`).includes('aria-label="Transactions" aria-current="page"'));
+  run(`homeLayout=['recent','balance'];hiddenHomeSections=['budget'];restoreDefaultHome();`);
+  assert.equal(run('homeLayout.slice(0,5).join(",")'),'balance,accounts,stats,budget,recent');
+  assert.equal(run('showNetworthChartHome'),false);assert.equal(run('hiddenHomeSections.join(",")'),'trend');
+});

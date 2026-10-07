@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#000000">
 <title>FinanceFlow</title>
@@ -221,6 +221,22 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
 .home-sec-ctrl{display:flex;gap:6px;justify-content:flex-end;margin-bottom:6px}
 .home-sec-ctrl .btn[disabled]{opacity:.35;pointer-events:none}
 @media(max-width:400px){.grid2{grid-template-columns:1fr 1fr}.stat-row{gap:6px}}
+
+/* Readable text, visible keyboard focus and comfortable touch targets. */
+body{font-size:14px;line-height:1.5}
+.fz9,.fz10,.fz11{font-size:12px!important}.fz12{font-size:14px!important}.fz13{font-size:15px!important}
+.stat-label,.chart-lbl,.legend-item,.cat-badge,.date-hdr,.edit-label,.tx-count{font-size:12px;line-height:1.5}
+.btn,.bnav-btn,.pp-nav,.pp-drop-btn,.avatar-btn,.tab-btn,.account-delete{min-height:44px}
+.avatar-btn,.pp-nav,.account-delete{min-width:44px}
+.bnav-btn{font-size:12px;gap:4px;padding:8px 2px;min-width:0}.bnav-btn.active{font-weight:700;background:rgba(var(--accent-rgb),.12)}
+.bnav-btn .ni{font-size:21px}.main-area{padding-bottom:110px}
+button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.stat-row{grid-template-columns:repeat(3,minmax(0,1fr))}.stat-val{font-size:clamp(14px,4vw,20px);overflow-wrap:anywhere}.stat{min-width:0}
+.home-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.home-actions .btn{flex:1;justify-content:center}
+.tx-row{min-height:56px}.tx-row .ellip{white-space:normal;overflow-wrap:anywhere}
+@media(max-width:380px){.grid2{grid-template-columns:1fr}.stat-row{grid-template-columns:1fr}.stat{display:flex;align-items:center;justify-content:space-between;gap:8px}.bnav-btn{font-size:11px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
 </style>
 </head>
 <body>
@@ -241,7 +257,7 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
   </div>
 </div>
 <header class="hdr">
-  <button class="avatar-btn" id="avatarBtn" onclick="openSettings('home')" title="Settings">&#9881;</button>
+  <button class="avatar-btn" id="avatarBtn" onclick="openSettings('home')" title="Settings" aria-label="Open settings">&#9881;</button>
   <div class="hdr-mid">
     <div class="app-name">FinanceFlow</div>
     <div class="tx-count" id="txCount">0 transactions</div>
@@ -251,8 +267,8 @@ select.inp{cursor:pointer;-webkit-appearance:none;appearance:none;background-ima
   </div>
 </header>
 <main class="main-area" id="main"></main>
-<button class="fab" id="fabAdd" onclick="showModal('addtx')" title="Add Transaction">+</button>
-<nav class="bnav" id="bnav"></nav>
+<button class="fab" id="fabAdd" onclick="showModal('addtx')" title="Add Transaction" aria-label="Add transaction">+</button>
+<nav class="bnav" id="bnav" aria-label="Main navigation"></nav>
 <div id="modal-container"></div>
 <script src="finance-core.js"></script>
 <script src="statement-import.js"></script>
@@ -327,12 +343,13 @@ let homeChartMode="week"; // Daily income/expense trend card: week or month view
 // chart) that could only be moved as a single block. Split into 3 independently orderable keys
 // so each can be placed anywhere on Home — or turned off Home entirely (see showBalanceHome
 // etc. below) and shown under Profile instead.
-let homeLayout=["balance","accounts","networthchart","goals","stats","chart","trend","insights","budget","recent"]; // Home section order
-let showBalanceHome=true,showAccountsHome=true,showNetworthChartHome=true;
+const DEFAULT_HOME_LAYOUT=["balance","accounts","stats","budget","recent","insights","goals","chart","trend","networthchart"];
+let homeLayout=DEFAULT_HOME_LAYOUT.slice(); // Home section order
+let showBalanceHome=true,showAccountsHome=true,showNetworthChartHome=false;
 // Every other Home card (stats/chart/trend/insights/budget/recent/goals) can be hidden too —
 // balance/accounts/networthchart get their own flags above because those specifically fall back
 // to showing under Profile when off; these just disappear from Home with no fallback location.
-let hiddenHomeSections=[];
+let hiddenHomeSections=["trend"];
 const HOME_SECTION_LABELS={balance:"Total Balance",accounts:"Accounts",networthchart:"Balance History",goals:"Goals",stats:"Quick Stats",chart:"Daily Trend",trend:"6-Month Trend",insights:"Insights",budget:"Budget",recent:"Recent Transactions"};
 function isHomeSectionHidden(key){
   if(key==="balance")return!showBalanceHome;
@@ -851,15 +868,15 @@ function accName(id){const a=accounts.find(x=>x.id===id);return a?a.name:"";}
 
 // ── PERIOD PICKER ──
 function ppDropHTML(mode,label,open,toggleFn,setFn){const modes=[["week","Week"],["month","Month"],["quarter","Quarter"],["year","Year"]];return`<div class="pp-drop-wrap"><button class="pp-drop-btn" onclick="${toggleFn}(event)">${label} <span style="color:var(--muted);font-size:10px">${open?"&#9652;":"&#9662;"}</span></button>${open?`<div class="pp-menu" onclick="event.stopPropagation()">${modes.map(([m,l])=>`<div class="pp-menu-item ${mode===m?"active":""}" onclick="closePP();${setFn}('${m}')"><span style="font-size:14px">${mode===m?"&#9679;":"&#9675;"}</span>${l}</div>`).join("")}</div>`:""}</div>`;}
-function ppHTML(){return`<div class="pp-row"><button class="pp-nav" onclick="navPeriod(-1,event)">&#9664;</button>${ppDropHTML(pMode,getLabelFor(pMode,pDate),ppOpen,"togglePP","setPMode")}<button class="pp-nav" onclick="navPeriod(1,event)">&#9654;</button></div>`;}
+function ppHTML(){return`<div class="pp-row"><button class="pp-nav" aria-label="Previous period" onclick="navPeriod(-1,event)">&#9664;</button>${ppDropHTML(pMode,getLabelFor(pMode,pDate),ppOpen,"togglePP","setPMode")}<button class="pp-nav" aria-label="Next period" onclick="navPeriod(1,event)">&#9654;</button></div>`;}
 function miniPickHTML(mode,date,open,toggleFn,navFn,setFn){return`<div class="mini-pick"><div class="pp-row" style="margin:0"><button class="pp-nav" style="width:24px;height:24px;font-size:11px" onclick="${navFn}(-1,event)">&#9664;</button>${ppDropHTML(mode,getLabelFor(mode,date),open,toggleFn,setFn)}<button class="pp-nav" style="width:24px;height:24px;font-size:11px" onclick="${navFn}(1,event)">&#9654;</button></div></div>`;}
 function cmpPickerHdr(){return`<div class="grid2 mb10" style="gap:10px;position:relative"><div>${miniPickHTML(pMode,pDate,ppOpen,"togglePP","navPeriod","setPMode")}</div><div>${miniPickHTML(pModeB,pDateB,ppBOpen,"togglePPB","navPeriodB","setPModeB")}</div><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--card);border:1px solid var(--border);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--muted)">vs</div></div>`;}
 function chgBadge(a,b,isExp){if(a===0&&b===0)return`<span class="chg chg-nil">&mdash;</span>`;if(b===0)return`<span class="chg chg-nil">New</span>`;const p=Math.abs(((a-b)/b)*100).toFixed(0);if(a>b)return isExp?`<span class="chg chg-up">&#9650; ${p}%</span>`:`<span class="chg chg-dn">&#9650; ${p}%</span>`;if(a<b)return isExp?`<span class="chg chg-dn">&#9660; ${p}%</span>`:`<span class="chg chg-up">&#9660; ${p}%</span>`;return`<span class="chg chg-nil">=</span>`;}
 
 // ── NAV ──
 function renderNav(){
-  const items=[{id:"dashboard",icon:"&#128202;",l:"Home"},{id:"stats",icon:"&#128200;",l:"Stats"},{id:"transactions",icon:"&#128203;",l:"Trans."},{id:"budgets",icon:"&#127919;",l:"Budgets"}];
-  $("bnav").innerHTML=items.map(n=>`<button class="bnav-btn ${!settingsOpen&&V===n.id?"active":""}" onclick="goTo('${n.id}')"><span class="ni">${n.icon}</span>${n.l}</button>`).join("")+`<button class="bnav-btn ${settingsOpen?"active":""}" onclick="openSettings('home')"><span class="ni">&#9881;</span>Settings</button>`;
+  const items=[{id:"dashboard",icon:"&#128202;",l:"Home"},{id:"stats",icon:"&#128200;",l:"Stats"},{id:"transactions",icon:"&#128203;",l:"History"},{id:"budgets",icon:"&#127919;",l:"Budgets"}];
+  $("bnav").innerHTML=items.map(n=>`<button aria-label="${n.id==='transactions'?'Transactions':n.l}" ${!settingsOpen&&V===n.id?'aria-current="page"':''} class="bnav-btn ${!settingsOpen&&V===n.id?"active":""}" onclick="goTo('${n.id}')"><span class="ni" aria-hidden="true">${n.icon}</span>${n.l}</button>`).join("")+`<button aria-label="Settings" ${settingsOpen?'aria-current="page"':''} class="bnav-btn ${settingsOpen?"active":""}" onclick="openSettings('home')"><span class="ni" aria-hidden="true">&#9881;</span>Settings</button>`;
   const av=$("avatarBtn");if(av)av.innerHTML=profile.name?profile.name.charAt(0).toUpperCase():"&#9881;";
   const tc=$("txCount");if(tc)tc.textContent=txns.length.toLocaleString()+" transactions";
 }
@@ -1217,27 +1234,30 @@ function rDash(f,inc,exp){
     </div>`,
     chart:`<div class="card"><div class="flex-b mb6"><span class="fz11 fw7">Daily Trend</span><div class="tab-row" style="width:130px"><button class="tab-btn ${homeChartMode==="week"?"active":""}" onclick="setHomeChartMode('week')">Week</button><button class="tab-btn ${homeChartMode==="month"?"active":""}" onclick="setHomeChartMode('month')">Month</button></div></div>${dailyTrendSVG(homeChartMode)}<div class="flex g8 mt6" style="justify-content:center"><span class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>Income</span><span class="legend-item"><span class="legend-dot" style="background:var(--red)"></span>Expenses</span></div></div>`,
     trend:`<div class="grid2">
-      <div class="card" style="margin:0"><div class="fz11 fw7 mb6">6-Month Trend</div><div class="chart-row">${trend.map(t=>`<div class="chart-col"><div class="chart-pair"><div class="chart-bar" style="background:var(--green);height:${Math.max((t.inc/tMax)*100,.5)}%"></div><div class="chart-bar" style="background:var(--red);height:${Math.max((t.exp/tMax)*100,.5)}%"></div></div><div class="chart-lbl">${t.month}</div></div>`).join("")}</div><div class="flex g8 mt6" style="justify-content:center"><span class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>Inc</span><span class="legend-item"><span class="legend-dot" style="background:var(--red)"></span>Exp</span></div></div>
+      <div class="card" style="margin:0"><div class="fz11 fw7 mb6">6-Month Trend</div><div class="chart-row">${trend.map(t=>`<div class="chart-col"><div class="chart-pair"><div class="chart-bar" style="background:var(--green);height:${Math.max((t.inc/tMax)*100,.5)}%"></div><div class="chart-bar" style="background:var(--red);height:${Math.max((t.exp/tMax)*100,.5)}%"></div></div><div class="chart-lbl">${t.month}</div></div>`).join("")}</div><div class="flex g8 mt6" style="justify-content:center"><span class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>Income</span><span class="legend-item"><span class="legend-dot" style="background:var(--red)"></span>Expenses</span></div></div>
       <div class="card" style="margin:0"><div class="fz11 fw7 mb6">Top Spending</div>${catArr.slice(0,5).map(([n,v])=>`<div class="cat-row"><div class="cat-dot" style="background:${clr(n)}"></div><span class="fz10 muted ellip" style="flex:1">${esc(n)}</span><span class="fz10 fw6">${fmtK(v)}</span><span class="fz9 muted tar" style="width:26px">${tot?(v/tot*100).toFixed(0):0}%</span></div>`).join("")||'<div class="muted fz11 tac" style="padding:12px">No data</div>'}</div>
     </div>`,
     insights:insights.length?`<div class="card"><div class="fz11 fw7 mb8">&#128161; Insights</div>${insights.map(i=>`<div class="insight-row"><div class="insight-icon" style="background:${i.color}20">${i.icon}</div><div class="fz11" style="flex:1">${i.text}</div></div>`).join("")}</div>`:"",
     budget:budH?`<div class="card"><div class="flex-b mb8"><span class="fz12 fw7">Budget</span><button class="btn btn-g btn-sm" onclick="goTo('budgets')">Details</button></div>${budgetSummary}${budH}</div>`:"",
-    recent:`<div class="card"><div class="flex-b mb8"><span class="fz12 fw7">Recent</span><button class="btn btn-g btn-sm" onclick="goTo('transactions')">All</button></div>${recent.map(txRow).join("")}</div>`,
+    recent:`<div class="card"><div class="flex-b mb8"><span class="fz12 fw7">Recent transactions</span><button class="btn btn-g btn-sm" onclick="goTo('transactions')">View all</button></div>${recent.map(txRow).join("")}</div>`,
   };
 
   $("main").innerHTML=ppHTML()+`<div class="flex-b mb10"><span class="fz12 fw7">Hi, ${esc(profile.name.split(" ")[0])}! &#128075;</span><button class="btn btn-sm ${homeCustomize?"btn-p":"btn-g"}" onclick="toggleHomeCustomize()">${homeCustomize?"&#10003; Done":"&#9881; Rearrange"}</button></div>
+  ${homeCustomize?'<button class="btn btn-g w100 mb12" onclick="restoreDefaultHome()">Restore recommended Home layout</button>':''}
+  <div class="home-actions"><button class="btn btn-p" onclick="showModal('addtx')">+ Add transaction</button><button class="btn btn-g" onclick="showModal('upload')">Import statement</button></div>
   ${homeLayout.map(key=>{
     if(!sections[key])return""; // nothing to show regardless (e.g. no budgets yet)
     if(isHomeSectionHidden(key))return homeCustomize?hiddenPlaceholder(key):"";
     return wrap(key,sections[key]);
   }).join("")}
   <div class="tac mt8 flex g8" style="justify-content:center">
-    <button class="btn btn-g btn-sm" onclick="exportData()">&#128228; JSON</button>
-    <button class="btn btn-g btn-sm" onclick="exportCSV()">&#128196; CSV</button>
-    <button class="btn btn-g btn-sm" onclick="$('impFile').click()">&#128229; Import</button>
+    <button class="btn btn-g btn-sm" onclick="exportData()">&#128228; Backup JSON</button>
+    <button class="btn btn-g btn-sm" onclick="exportCSV()">&#128196; Export CSV</button>
+    <button class="btn btn-g btn-sm" onclick="$('impFile').click()">&#128229; Restore backup</button>
     <input type="file" id="impFile" accept=".json" style="display:none" onchange="importData(this.files[0])">
   </div>`;
 }
+function restoreDefaultHome(){if(!confirm("Restore the recommended Home cards and order? Your accounts and transactions are unchanged."))return;homeLayout=DEFAULT_HOME_LAYOUT.slice();showBalanceHome=true;showAccountsHome=true;showNetworthChartHome=false;hiddenHomeSections=["trend"];save();render();}
 function toggleHomeCustomize(){homeCustomize=!homeCustomize;render();}
 function moveHomeSection(key,dir){
   const i=homeLayout.indexOf(key);const j=i+dir;
@@ -1342,7 +1362,7 @@ function accountsSectionHTML(){
   const unconverted=foreign.filter(a=>!(a.fxRate>0));
   const tb=accounts.reduce((s,a)=>{const eq=acctPrimaryEquiv(a);return eq===null?s:s+eq;},0);
   return`<div class="flex-b mb4"><span class="fz13 fw7">Your Accounts</span>${accounts.length>1?`<button class="btn btn-g btn-sm" onclick="showModal('transfer')">&#8646; Transfer</button>`:""}</div><div class="fz10 muted mb12">Total balance (${esc(currency.code)}): <span class="fw7 accent fz14">${fmt(tb)}</span>${unconverted.length?` <span class="fz9 muted">· ${unconverted.length} account${unconverted.length>1?"s":""} not included (no rate set)</span>`:""}</div>
-  <div class="grid2 mb12">${accounts.map(a=>{const bal=getAccountBalance(a.id);const cnt=txnCountForAccount(a.id);const ic=a.type==="cash"?"&#128181;":"&#127981;";const acCode=a.currency||currency.code;const isForeign=acCode!==currency.code;const eq=acctPrimaryEquiv(a);return`<div class="acc-card"><div class="flex g8 mb8"><div style="width:34px;height:34px;border-radius:8px;background:${a.color}20;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:16px">${ic}</div><div style="flex:1;min-width:0"><div class="fw7 fz12 ellip">${esc(a.name)}</div><div class="fz9 muted">${cnt} txns${isForeign?" · "+esc(acCode):""}</div></div><button onclick="deleteAccount('${a.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">&#10005;</button></div><div class="fw8 fz16">${fmtCur(bal,acCode)}</div>${isForeign?`<div class="flex g6 mt8" style="align-items:center"><span class="fz9 muted" style="white-space:nowrap">1 ${esc(acCode)} =</span><input class="inp" style="font-size:11px;padding:5px 8px" type="text" inputmode="decimal" value="${a.fxRate?a.fxRate:""}" placeholder="rate" onchange="setAccFxRate('${a.id}',this.value)"><span class="fz9 muted">${esc(currency.code)}</span></div>${eq!==null?`<div class="fz9 muted mt4">&#8776; ${fmt(eq)}</div>`:""}`:""}</div>`;}).join("")}</div>
+  <div class="grid2 mb12">${accounts.map(a=>{const bal=getAccountBalance(a.id);const cnt=txnCountForAccount(a.id);const ic=a.type==="cash"?"&#128181;":"&#127981;";const acCode=a.currency||currency.code;const isForeign=acCode!==currency.code;const eq=acctPrimaryEquiv(a);return`<div class="acc-card"><div class="flex g8 mb8"><div style="width:34px;height:34px;border-radius:8px;background:${a.color}20;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:16px">${ic}</div><div style="flex:1;min-width:0"><div class="fw7 fz12 ellip">${esc(a.name)}</div><div class="fz9 muted">${cnt} txns${isForeign?" · "+esc(acCode):""}</div></div><button class="account-delete" aria-label="Delete ${esc(a.name)} account" title="Delete account" onclick="deleteAccount('${escJs(a.id)}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">&#10005;</button></div><div class="fw8 fz16">${fmtCur(bal,acCode)}</div>${isForeign?`<div class="flex g6 mt8" style="align-items:center"><span class="fz9 muted" style="white-space:nowrap">1 ${esc(acCode)} =</span><input class="inp" style="font-size:11px;padding:5px 8px" type="text" inputmode="decimal" value="${a.fxRate?a.fxRate:""}" aria-label="Exchange rate for ${esc(a.name)} in ${esc(currency.code)}" placeholder="rate" onchange="setAccFxRate('${a.id}',this.value)"><span class="fz9 muted">${esc(currency.code)}</span></div>${eq!==null?`<div class="fz9 muted mt4">&#8776; ${fmt(eq)}</div>`:""}`:""}</div>`;}).join("")}</div>
   <div class="card"><div class="fz12 fw7 mb10">Add Account</div>
     <div style="display:grid;gap:10px">
       <input class="inp" id="newAccName" value="${esc(draftAccName)}" oninput="draftAccName=this.value" placeholder="Account name (e.g. GTBank, Opay)">
@@ -1351,12 +1371,25 @@ function accountsSectionHTML(){
       <div><span class="edit-label">Color</span><div class="swatch-row">${ACC_COLORS.map(c=>`<button type="button" class="color-swatch ${newAccColor===c?"sel":""}" style="background:${c}" onclick="selectAccColor('${c}')" title="${c}"></button>`).join("")}</div></div>
       <button class="btn btn-p w100" style="justify-content:center" onclick="addAccount()">+ Add Account</button>
     </div>
-    <div class="fz9 muted mt8">Accounts in a different currency show their own balance. Enter a rate on the account card above to fold it into your Total Balance too — FinanceFlow never fetches live exchange rates, so this is always a rate you set yourself. Budgets and stats stay per-category and are unaffected either way.</div>
+    <div class="fz9 muted mt8">Accounts in a different currency show their own balance. Enter a rate on the account card above to fold it into your Total Balance too — FinanceFlow never fetches live exchange rates, so this is always a rate you set yourself. Budgets and statistics convert to your primary currency using the rates you enter.</div>
   </div>`;
 }
 function selectAccColor(c){newAccColor=c;render();}
 function addAccount(){const n=$("newAccName")?.value.trim();if(!n)return alert("Enter account name");const t=$("newAccType")?.value||"bank";const cur=$("newAccCurrency")?.value||currency.code;accounts.push({id:uid(),name:n,type:t,color:newAccColor,currency:cur});newAccColor=ACC_COLORS[0];draftAccName="";save();render();}
-function deleteAccount(id){if(txnCountForAccount(id)>0||recurring.some(r=>r.accountId===id)||scheduledPayments.some(p=>p.accountId===id&&p.status==="pending"))return alert("This account has financial history or scheduled payments. It cannot be deleted.");const idx=accounts.findIndex(a=>a.id===id);if(idx<0)return;const removed=accounts[idx];accounts=accounts.filter(a=>a.id!==id);save();render();showUndoToast("Account deleted",()=>{accounts.splice(idx,0,removed);save();});}
+function accountHistoryReason(id){
+  if(txnCountForAccount(id))return 'recorded transactions (including transfers)';
+  if(recurring.some(r=>r.accountId===id))return 'recurring schedules';
+  if(scheduledPayments.some(p=>p.accountId===id))return 'recurring-payment history';
+  if(importHistory.some(h=>h.accountId===id))return 'statement-import history';
+  return '';
+}
+function deleteAccount(id){
+  const idx=accounts.findIndex(a=>a.id===id);if(idx<0)return;
+  const reason=accountHistoryReason(id);if(reason)return alert('This account has '+reason+'. Keep it to preserve your account history.');
+  if(accounts.length===1)return alert('Keep at least one account. Add another account before deleting this empty account.');
+  const removed=accounts[idx];if(!confirm('Delete the empty account "'+removed.name+'"?'))return;
+  accounts.splice(idx,1);save();render();showUndoToast('Account deleted',()=>{if(!accounts.some(a=>a.id===removed.id))accounts.splice(Math.min(idx,accounts.length),0,removed);save();});
+}
 
 // ── SETTINGS ──
 function openSettings(tab){settingsOpen=true;settingsTab=tab||"home";let sp=document.getElementById("settingsPanel");if(!sp){sp=document.createElement("div");sp.id="settingsPanel";document.body.appendChild(sp);}render();}
@@ -2109,7 +2142,7 @@ function backupData(){return {
 }
 
 // ── DATA ACTIONS ──
-function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts","ffd_homelayout","ffd_catorder","ffd_goals","ffd_pin","ffd_reminders","ffd_onboard","ffd_usertags","ffd_homecards","ffd_hiddensections"].forEach(k=>localStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e",currency:currency.code}];userEC={};userIC={};profile={name:""};recurring=[];scheduledPayments=[];importHistory=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;homeLayout=["balance","accounts","networthchart","goals","stats","chart","trend","insights","budget","recent"];showBalanceHome=true;showAccountsHome=true;showNetworthChartHome=true;hiddenHomeSections=[];catOrder={expense:[],income:[]};goals=[];userTags=[];pinHash="";pinLockActive=false;remindersEnabled=false;onboardComplete=false;onboardStep=0;if(window.Android&&window.Android.cancelReminders)window.Android.cancelReminders();save();closeSettings();}}
+function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts","ffd_homelayout","ffd_catorder","ffd_goals","ffd_pin","ffd_reminders","ffd_onboard","ffd_usertags","ffd_homecards","ffd_hiddensections"].forEach(k=>localStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e",currency:currency.code}];userEC={};userIC={};profile={name:""};recurring=[];scheduledPayments=[];importHistory=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;homeLayout=DEFAULT_HOME_LAYOUT.slice();showBalanceHome=true;showAccountsHome=true;showNetworthChartHome=false;hiddenHomeSections=["trend"];catOrder={expense:[],income:[]};goals=[];userTags=[];pinHash="";pinLockActive=false;remindersEnabled=false;onboardComplete=false;onboardStep=0;if(window.Android&&window.Android.cancelReminders)window.Android.cancelReminders();save();closeSettings();}}
 function validateBackupData(d){
   const fail=m=>{throw new Error(m);},obj=v=>v&&typeof v==='object'&&!Array.isArray(v);
   if(!obj(d)||!Array.isArray(d.txns)||!Array.isArray(d.accounts)||!d.accounts.length)fail('Not a FinanceFlow backup: transactions and accounts are required.');
@@ -2679,7 +2712,7 @@ function rTx(f,inc,exp){
     return;
   }
   const sorted=[...f].sort((a,b)=>b.date.localeCompare(a.date));const groups={};sorted.forEach(t=>{(groups[t.date]=groups[t.date]||[]).push(t);});const dates=Object.keys(groups).sort((a,b)=>b.localeCompare(a));
-  $("main").innerHTML=ppHTML()+filterBarHTML+viewToggleHTML+`<div class="flex-b fz10 muted mb8"><span>${f.length} transactions</span><div class="flex g6"><span>In: <span class="green">${fmtK(inc)}</span> &middot; Out: <span class="red">${fmtK(exp)}</span></span><button class="btn btn-g btn-sm" onclick="exportCSV()">&#128196; CSV</button><button class="btn ${selectMode?"btn-p":"btn-g"} btn-sm" onclick="toggleSelectMode()">${selectMode?"Cancel":"Select"}</button></div></div>
+  $("main").innerHTML=ppHTML()+filterBarHTML+viewToggleHTML+`<div class="flex-b fz10 muted mb8"><span>${f.length} transactions</span><div class="flex g6"><span>In: <span class="green">${fmtK(inc)}</span> &middot; Out: <span class="red">${fmtK(exp)}</span></span><button class="btn btn-g btn-sm" onclick="exportCSV()">&#128196; Export CSV</button><button class="btn ${selectMode?"btn-p":"btn-g"} btn-sm" onclick="toggleSelectMode()">${selectMode?"Cancel":"Select"}</button></div></div>
   <div class="card" style="padding:0;overflow:hidden">${dates.length?dates.map(d=>{const dayInc=groups[d].filter(t=>t.type==="income").reduce((s,t)=>FinanceCore.round(s+primaryAmount(t)),0);const dayExp=groups[d].filter(t=>t.type==="expense").reduce((s,t)=>FinanceCore.round(s+primaryAmount(t)),0);const dayItems=selectMode?groups[d]:groupSplits(groups[d]);return`<div class="date-hdr flex-b"><span>${fmtD(d)}</span><span class="date-hdr-tot"><span class="green">${fmtK(dayInc)}</span><span class="red">${fmtK(dayExp)}</span></span></div>${dayItems.map(t=>txListRow(t,selectMode)).join("")}`;}).join(""):'<div class="muted fz12 tac" style="padding:40px">No transactions found</div>'}</div>`;
   const si=$("si");if(si&&search){si.focus();si.setSelectionRange(search.length,search.length);}
   if(selectMode&&selectedTxIds.size){

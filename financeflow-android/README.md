@@ -56,3 +56,9 @@ Statement review suggests category and subcategory from specific description phr
 ### Backup restore safeguards
 
 JSON restore validates record shapes, financial amounts/dates, account references, duplicate IDs and supported versions before changing data. A confirmation shows transaction/account/schedule counts and explicitly states that restore replaces current data. Versions 1–3 are accepted. Restoration keeps the device PIN and biometric settings; files larger than 25 MB are rejected. A failed restore rolls back in-memory data and local storage. If storage recovery also fails, the app asks you to export the recovered in-memory data before closing. Backups remain plain JSON; encryption is not included in this update.
+
+### Account history and dashboard accessibility
+
+Accounts with recorded transactions, either transfer endpoint, recurring schedules (including paused schedules), any recurring-payment history or statement-import history cannot be deleted. Empty-account deletion requires confirmation; at least one account must remain.
+
+Small text and touch targets are larger, pinch zoom is enabled, keyboard focus is visible and reduced-motion preferences are respected. Navigation exposes the current page and labelled actions. New installations put balance, accounts, period totals, budgets and recent transactions first, with extra trend charts hidden. Existing saved layouts are preserved. Home → Rearrange → Restore recommended Home layout applies the new defaults.
