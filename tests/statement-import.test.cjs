@@ -79,3 +79,39 @@ test('application date mapping and bank-alert account/type/currency guards',()=>
   assert.equal(run(`validateBankAlertEntry({accountId:'u',amount:100,date:'2026-01-01',type:'expense'})`),false);
   assert.equal(run(`validateBankAlertEntry({accountId:'a',amount:100,date:'2026-01-01',type:'expense'})`),true);
 });
+test('description suggestions recognise expenses and income without changing direction',()=>{
+  const run=app();
+  for(const [description,type,category,subcategory] of [
+    ['IKEJA ELECTRIC payment','expense','Housing','Electricity'],
+    ['MTN DATA BUNDLE','expense','Communication','Data'],
+    ['SMS CHARGE','expense','Finance','Bank Charges'],
+    ['ICAN exam fee','expense','Education','Exams'],
+    ['Salary October','income','Salary','Primary Job'],
+    ['Dividend payment','income','Investment','Dividends']]){
+    const t=run(`suggestStatementCategory(${JSON.stringify({description,type,amount:100})})`);
+    assert.equal(t.category,category);assert.equal(t.subcategory,subcategory);assert.equal(t.type,type);
+  }
+  assert.equal(run(`suggestStatementCategory({description:'Salary reversal',type:'expense'}).category`),'Other');
+  assert.equal(run(`suggestStatementCategory({description:'POS transfer to somebody',type:'expense'}).category`),'Other');
+  assert.equal(run(`suggestStatementCategory({description:'Shoprite fuel',type:'expense'}).category`),'Other');
+  assert.equal(run(`suggestStatementCategory({description:'BOLTEX chargeback',type:'expense'}).category`),'Other');
+});
+test('previous description classifications support custom categories and flag conflicts',()=>{
+  const run=app();run(`userEC={'Professional Costs':['Membership']};txns=[{description:'ABC Membership REF: 1234',type:'expense',category:'Professional Costs',subcategory:'Membership'}];`);
+  assert.equal(run(`suggestStatementCategory({description:'ABC Membership ref: 5678',type:'expense'}).category`),'Professional Costs');
+  run(`txns.push({description:'ABC Membership',type:'expense',category:'Education',subcategory:'Training'});`);
+  assert.equal(run(`suggestStatementCategory({description:'ABC Membership',type:'expense'}).category`),'Other');
+  run(`hiddenDefaultCats.expense=['Transportation'];txns=[];`);
+  assert.equal(run(`suggestStatementCategory({description:'Uber ride',type:'expense'}).category`),'Other');
+});
+test('review category overrides survive recalculation and persist only on imported rows',()=>{
+  const run=app();run(`accounts=[{id:'a',currency:'NGN'}];window._uploadAcc='a';
+    const rows=StatementImport.parse('Date,Description,Debit,Credit\\n2026-01-01,Unknown supplier,100,');
+    statementReview={rows,header:0,mapping:StatementImport.mapping(rows[0]),name:'bank.csv',dateOrder:'dmy',polarity:'explicit',review:[]};reviewStatement();
+    setStatementCategory(0,'Education');setStatementSubcategory(0,'Training');reviewStatement();`);
+  assert.equal(run('statementReview.review[0].tx.subcategory'),'Training');
+  run(`setStatementCategory(0,'Made up');setStatementSubcategory(0,'Made up');addPend();`);
+  assert.equal(run('txns[0].category'),'Education');assert.equal(run('txns[0].subcategory'),'Training');
+  assert.equal(run('Object.hasOwn(txns[0],"categoryReason")'),false);
+  assert.equal(run(`suggestStatementCategory({description:'Unknown supplier',type:'expense'}).category`),'Education');
+});

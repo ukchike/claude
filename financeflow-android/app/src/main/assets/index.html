@@ -2442,18 +2442,54 @@ function statementDate(value){
   }
   const d=parseFlexibleDate(v);return d?toLocalISODate(d):null;
 }
+function statementDescriptionKey(value){return String(value||'').toLowerCase().replace(/\b(?:ref|reference|session id|transaction id)\s*[:#=-]?\s*[a-z0-9_-]+/g,' ').replace(/[^a-z0-9]+/g,' ').trim();}
+function statementCategoryKey(t){return JSON.stringify([t.accountId,t.date,t.type,t.amount,t.description]);}
 function suggestStatementCategory(t){
-  let category=t.type==='income'?'Other Income':'Other',subcategory='';const d=t.description.toLowerCase();
-  if(t.type==='income'){if(/salary|wage|payroll/.test(d))category='Salary';}
-  else if(/shoprite|spar|grocery|supermarket/.test(d)){category='Food & Dining';subcategory='Groceries';}
-  else if(/uber|bolt|taxi/.test(d)){category='Transportation';subcategory='Ride-hailing';}
-  else if(/fuel|petrol/.test(d)){category='Transportation';subcategory='Fuel';}
-  else if(/airtime|mtn|glo|airtel|9mobile|recharge/.test(d)){category='Communication';subcategory='Airtime';}
-  else if(/charge|fee|stamp|vat|sms/.test(d)){category='Finance';subcategory='Bank Charges';}
-  const cats=t.type==='income'?getIC():getEC();
-  if(!cats[category]){category=Object.keys(cats)[0]||'';subcategory='';}
-  if(subcategory&&!(cats[category]||[]).includes(subcategory))subcategory='';
-  return {...t,category,subcategory};
+  const cats=t.type==='income'?getIC():getEC(),d=statementDescriptionKey(t.description);
+  const valid=(c,sub)=>Object.hasOwn(cats,c)&&(!sub||(cats[c]||[]).includes(sub));
+  const previous=txns.filter(x=>x.type===t.type&&!x.splitGroupId&&statementDescriptionKey(x.description)===d&&valid(x.category,x.subcategory)&&x.category!=='Other');
+  const choices=new Map(previous.map(x=>[JSON.stringify([x.category,x.subcategory||'']),x]));
+  if(d.length>=4&&choices.size===1){const x=choices.values().next().value;return {...t,category:x.category,subcategory:x.subcategory||'',categoryReason:'Matches your previous classification'};}
+  let rules=t.type==='income'?[
+    [/\b(salary|wages?|payroll)\b/,'Salary','Primary Job'],
+    [/\b(dividends?)\b/,'Investment','Dividends'],[/\binterest\b/,'Investment','Interest'],
+    [/\b(consulting|consultancy)\b/,'Freelance','Consulting'],
+    [/\b(sales|sale proceeds)\b/,'Business','Sales'],[/\b(cash gift|gift received)\b/,'Gift','Cash Gift']
+  ]:[
+    [/\b(bank charges?|transfer fee|transaction fee|sms charge|stamp duty|maintenance fee|electronic money transfer levy|emtl)\b/,'Finance','Bank Charges'],
+    [/\b(shoprite|spar|grocery|groceries|supermarket)\b/,'Food & Dining','Groceries'],
+    [/\b(restaurant|kfc|chicken republic|dominos|pizza)\b/,'Food & Dining','Restaurants'],
+    [/\b(uber|bolt|taxi)\b/,'Transportation','Ride-hailing'],
+    [/\b(fuel|petrol|diesel|filling station)\b/,'Transportation','Fuel'],
+    [/\b(airtime|recharge)\b/,'Communication','Airtime'],
+    [/\b(data bundle|data plan|internet data)\b/,'Communication','Data'],
+    [/\b(electricity|ikeja electric|eko electric|ikedc|ekedc|aedc|power bill)\b/,'Housing','Electricity'],
+    [/\b(rent|house rent)\b/,'Housing','Rent'],
+    [/\b(hospital|clinic|medical)\b/,'Health','Hospital'],[/\b(pharmacy|medicine|drugs)\b/,'Health','Pharmacy'],
+    [/\b(tuition|school fees)\b/,'Education','Tuition'],[/\b(ican|exam fees?|examination)\b/,'Education','Exams'],
+    [/\b(training|course fee)\b/,'Education','Training'],
+    [/\b(netflix|spotify|showmax|dstv|gotv)\b/,'Entertainment','Streaming'],
+    [/\b(insurance|premium)\b/,'Finance','Insurance'],[/\b(tax payment|paye|withholding tax|income tax)\b/,'Finance','Taxes'],
+    [/\b(donation|charity)\b/,'Gifts & Donations','Charity'],[/\b(tithe|offering|church|mosque)\b/,'Gifts & Donations','Religious']
+  ];
+  const matches=rules.filter(([re,c,sub])=>re.test(d)&&valid(c,sub));
+  if(choices.size<=1&&matches.length===1){const [,category,subcategory]=matches[0];return {...t,category,subcategory,categoryReason:'Suggested from description'};}
+  // Generic POS/transfer/payment wording and conflicting evidence cannot identify a category.
+  return {...t,category:Object.hasOwn(cats,'Other')?'Other':'',subcategory:'',categoryReason:choices.size>1||matches.length>1?'Conflicting clues — choose a category':'No clear match — choose a category'};
+}
+function statementCategoryControls(r,index){
+  if(!r.tx)return '';const t=r.tx,cats=t.type==='income'?getIC():getEC();
+  return `<div class="grid2 mt8"><select aria-label="Category for row ${r.row}" class="inp" onchange="setStatementCategory(${index},this.value)"><option value="" ${!t.category?'selected':''}>Choose category</option>${Object.keys(cats).map(c=>`<option value="${esc(c)}" ${c===t.category?'selected':''}>${esc(c)}</option>`).join('')}</select><select aria-label="Subcategory for row ${r.row}" class="inp" onchange="setStatementSubcategory(${index},this.value)"><option value="">No subcategory</option>${(cats[t.category]||[]).map(sub=>`<option value="${esc(sub)}" ${sub===t.subcategory?'selected':''}>${esc(sub)}</option>`).join('')}</select></div><div class="fz10 muted mt4">${esc(t.categoryReason||'Review category')}</div>`;
+}
+function setStatementCategory(index,value){
+  const r=statementReview?.review[index];if(!r?.tx)return;const cats=r.tx.type==='income'?getIC():getEC();if(!Object.hasOwn(cats,value))return;
+  r.tx={...r.tx,category:value,subcategory:'',categoryReason:'Selected by you'};
+  (statementReview.categoryOverrides||= {})[statementCategoryKey(r.tx)]={category:value,subcategory:''};renderStatementReview();
+}
+function setStatementSubcategory(index,value){
+  const r=statementReview?.review[index];if(!r?.tx)return;const cats=r.tx.type==='income'?getIC():getEC();if(value&&!(cats[r.tx.category]||[]).includes(value))return;
+  r.tx={...r.tx,subcategory:value,categoryReason:'Selected by you'};
+  (statementReview.categoryOverrides||= {})[statementCategoryKey(r.tx)]={category:r.tx.category,subcategory:value};renderStatementReview();
 }
 function importControlsHTML(){
   const s=statementReview;if(!s)return '';
@@ -2473,7 +2509,7 @@ function reviewStatement(){
   try{
     if(!account)throw new Error('Select an existing account.');
     s.accountId=account.id;s.review=StatementImport.review(s.rows,s.mapping,{header:s.header,accountId:account.id,currency:account.currency||currency.code,parseDate:statementDate,polarity:s.polarity},txns);
-    s.review.forEach(item=>{if(item.tx)item.tx=suggestStatementCategory(item.tx);});s.error='';
+    s.review.forEach(item=>{if(item.tx){item.tx=suggestStatementCategory(item.tx);const override=s.categoryOverrides?.[statementCategoryKey(item.tx)];const cats=item.tx.type==='income'?getIC():getEC();if(override&&Object.hasOwn(cats,override.category)&&(!override.subcategory||(cats[override.category]||[]).includes(override.subcategory)))item.tx={...item.tx,...override,categoryReason:'Selected by you'};}});s.error='';
   }catch(e){s.review=[];s.error=e.message;}
   renderStatementReview();
 }
@@ -2483,7 +2519,7 @@ function renderStatementReview(){
   const total=type=>selected.filter(r=>r.tx.type===type).reduce((sum,r)=>FinanceCore.round(sum+r.tx.amount),0);
   const account=accounts.find(a=>a.id===s.accountId),code=account?.currency||currency.code;
   $('uMsg').innerHTML=`<div class="fz11 muted mt8">${esc(s.name)} · ${s.review.length} rows · ${selected.length} selected · ${duplicates.length} duplicate/match flags · ${s.review.filter(r=>r.error).length} invalid/summary rows</div>`;
-  $('uPrev').innerHTML=importControlsHTML()+(s.error?`<div class="msg msg-err">${esc(s.error)}</div>`:`<div class="fz11 fw6 mb8">Selected inflow: ${fmtCur(total('income'),code)} · outflow: ${fmtCur(total('expense'),code)}</div><div style="max-height:320px;overflow:auto">${s.review.map((r,i)=>`<div class="bud-item"><label class="flex g8"><input type="checkbox" ${r.selected?'checked':''} ${r.error?'disabled':''} onchange="toggleStatementRow(${i},this.checked)"><span class="fz11">Row ${r.row}: ${r.tx?`${esc(r.tx.date)} · ${esc(r.tx.description)} · ${r.tx.type==='income'?'+':'−'}${fmtCur(r.tx.amount,code)} · ${esc(r.tx.category)}`:esc(r.error)}</span></label>${r.duplicate?'<div class="fz10 muted">Already recorded — excluded by default.</div>':r.possibleDuplicate?'<div class="fz10 muted">Same account/date/amount matches an existing entry or transfer — review before including.</div>':''}</div>`).join('')}</div>`);
+  $('uPrev').innerHTML=importControlsHTML()+(s.error?`<div class="msg msg-err">${esc(s.error)}</div>`:`<div class="fz11 fw6 mb8">Selected inflow: ${fmtCur(total('income'),code)} · outflow: ${fmtCur(total('expense'),code)}</div><div style="max-height:320px;overflow:auto">${s.review.map((r,i)=>`<div class="bud-item"><label class="flex g8"><input type="checkbox" ${r.selected?'checked':''} ${r.error?'disabled':''} onchange="toggleStatementRow(${i},this.checked)"><span class="fz11">Row ${r.row}: ${r.tx?`${esc(r.tx.date)} · ${esc(r.tx.description)} · ${r.tx.type==='income'?'+':'−'}${fmtCur(r.tx.amount,code)} · ${esc(r.tx.category)}`:esc(r.error)}</span></label>${statementCategoryControls(r,i)}${r.duplicate?'<div class="fz10 muted">Already recorded — excluded by default.</div>':r.possibleDuplicate?'<div class="fz10 muted">Same account/date/amount matches an existing entry or transfer — review before including.</div>':''}</div>`).join('')}</div>`);
   $('uAct').innerHTML=selected.length?`<button class="btn btn-p w100 mt8" onclick="addPend()">Confirm ${selected.length} selected transactions</button>`:'';
 }
 function toggleStatementRow(index,selected){const item=statementReview?.review[index];if(!item||item.error)return;if(selected&&(item.duplicate||item.possibleDuplicate)&&!confirm('Include this flagged row? Only continue if it is a separate genuine transaction.'))return;item.selected=selected;item.override=selected&&(item.duplicate||item.possibleDuplicate);renderStatementReview();}
@@ -2503,8 +2539,9 @@ function addPend(){
   const selected=s.review.filter(r=>r.selected&&r.tx);if(!selected.length)return;
   const fresh=StatementImport.review(s.rows,s.mapping,{header:s.header,accountId:s.accountId,currency:accounts.find(a=>a.id===s.accountId)?.currency||currency.code,parseDate:statementDate,polarity:s.polarity},txns);
   if(selected.some(r=>{const now=fresh.find(x=>x.row===r.row);return !now?.tx||(!r.override&&(now.duplicate||now.possibleDuplicate));})){reviewStatement();return alert('Records changed. Review duplicate flags again.');}
+  if(selected.some(r=>{const cats=r.tx.type==='income'?getIC():getEC();return !Object.hasOwn(cats,r.tx.category)||(r.tx.subcategory&&!(cats[r.tx.category]||[]).includes(r.tx.subcategory));}))return alert('Choose a valid category for every selected row.');
   if(!confirm(`Add ${selected.length} selected entries to ${accName(s.accountId)}?`))return;
-  const batchId=uid(),created=selected.map(r=>({...r.tx,id:uid(),importBatchId:batchId,statementRow:r.row,cleared:true}));
+  const batchId=uid(),created=selected.map(r=>(()=>{const {categoryReason,...tx}=r.tx;return {...tx,id:uid(),importBatchId:batchId,statementRow:r.row,cleared:true};})());
   const history={id:batchId,filename:s.name,accountId:s.accountId,importedAt:new Date().toISOString(),count:created.length};
   txns.push(...created);importHistory.unshift(history);save();statementReview=null;pendingTx=[];showModal('close');goTo('transactions');
   showUndoToast('Imported '+created.length+' transactions',()=>{txns=txns.filter(t=>t.importBatchId!==batchId);importHistory=importHistory.filter(h=>h.id!==batchId);save();});

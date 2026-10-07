@@ -48,3 +48,7 @@ The Full APK detects NGN bank-alert candidates locally. Both comma-formatted and
 Bank-alert confirmation requires selecting the NGN account; unknown direction requires an explicit Income/Expense choice. The date defaults to the notification date and must be checked. Existing matching amounts/records trigger an additional warning. Alerts remain unreconciled until you verify them against your bank statement. Notifications are never posted automatically. Detection is format-dependent; anonymised real-bank examples are needed for bank-specific acceptance testing.
 
 GitHub Actions also compiles and runs the pure Java BankAlertParserTest before building the APKs.
+
+### Description-based import categories
+
+Statement review suggests category and subcategory from specific description phrases, or an unambiguous previous classification of the same description (reference IDs are ignored). Existing custom categories are supported through previous classifications. Generic POS, transfer or payment wording, conflicting history, and multiple rule matches fall back to Other for review. Suggestions never change debit/credit direction. Each row has editable category/subcategory selectors before confirmation; confirmed corrections inform later matching descriptions. No external AI service is used.
