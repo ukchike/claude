@@ -275,7 +275,7 @@ button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--accent);ou
 <script>
 
 // Android 6+ stores financial records in encrypted app-private storage.
-let secureStorageReady=false;
+let secureStorageReady=false,storageInitializationFailed=false;
 function secureStorageAvailable(){return !!(window.Android?.supportsSecureStorage&&window.Android.supportsSecureStorage());}
 const appStorage={
   getItem(key){if(!secureStorageReady)return localStorage.getItem(key);const result=JSON.parse(window.Android.getSecureItem(key));if(!result.ok)throw Error(result.error);return result.found?result.value:null;},
@@ -285,6 +285,7 @@ const appStorage={
   key(index){return secureStorageReady?(JSON.parse(window.Android.secureKeys())[index]||null):localStorage.key(index);}
 };
 function prepareSecureStorage(){
+  storageInitializationFailed=false;
   if(!secureStorageAvailable())return true;
   try{
     const legacy=[];for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key?.startsWith('ffd_'))legacy.push([key,localStorage.getItem(key)]);}
@@ -293,7 +294,7 @@ function prepareSecureStorage(){
     // Verify every encrypted record before retiring any legacy copy or starting the app.
     for(const key of JSON.parse(window.Android.secureKeys())){const r=JSON.parse(window.Android.getSecureItem(key));if(!r.ok)throw Error(r.error);}
     secureStorageReady=true;for(const [key] of legacy)localStorage.removeItem(key);return true;
-  }catch(e){alert('Secure storage could not initialise. Your records have not been replaced. Keep the app installed and retain your exported backup. '+e.message);return false;}
+  }catch(e){storageInitializationFailed=true;alert('Secure storage could not initialise. Your records have not been replaced. Keep the app installed and retain your exported backup. '+e.message);return false;}
 }
 // ── CATEGORIES ──
 const DEF_EC={"Food & Dining":["Groceries","Restaurants","Fast Food","Beverages","Snacks"],"Transportation":["Fuel","Public Transport","Ride-hailing","Parking","Maintenance"],"Housing":["Rent","Electricity","Water","Internet","Security","Repairs"],"Communication":["Airtime","Data","Subscriptions"],"Health":["Hospital","Pharmacy","Gym","Optical","Dental"],"Education":["Tuition","Books","Training","Exams","Stationery"],"Entertainment":["Movies","Events","Streaming","Hobbies","Sports"],"Shopping":["Clothing","Electronics","Personal Care","Accessories"],"Finance":["Bank Charges","Loan Repayment","Insurance","Taxes"],"Gifts & Donations":["Family","Friends","Charity","Religious"],"Savings":["Emergency Fund","Target Savings","Investment"],"Other":["Miscellaneous"]};
@@ -1845,6 +1846,7 @@ function syncWidgetData(){
 // Called by MainActivity.dispatchPendingShortcut() when the app is opened via the Quick
 // Settings tile or the widget's "Budgets"/"+ Add" buttons.
 window.handleShortcutAction=function(action){
+  if(storageInitializationFailed)return;
   if(action==="budgets"){
     if(settingsOpen)closeSettings();
     goTo("budgets");
@@ -2899,7 +2901,7 @@ document.addEventListener("click",(e)=>{
   });
 });
 
-if(!prepareSecureStorage())throw Error("Secure storage initialisation stopped");
+if(!prepareSecureStorage()){document.body.innerHTML='<main style="padding:24px"><h1>Records unavailable</h1><p>Encrypted storage could not be opened. Keep this app installed and retain your exported backup. No new records can be entered until storage is recovered.</p></main>';throw Error("Secure storage initialisation stopped");}
 load();
 initializeFinancialState();
 save();

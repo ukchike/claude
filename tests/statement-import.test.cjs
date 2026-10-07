@@ -226,3 +226,9 @@ test('encrypted restore with an incorrect password leaves records unchanged',asy
   const run=app({promptValue:'wrong-password'});await run(`(async()=>{window.encrypted=await encryptBackup({version:3,txns:[],accounts:[{id:'b',name:'Bank'}]},'private-password');txns=[{id:'original'}];await importData({size:100,text:async()=>JSON.stringify(window.encrypted)});})()`);
   assert.equal(run('txns[0].id'),'original');
 });
+
+test('storage failure blocks shortcut entry until a successful retry',()=>{
+  const run=app();run(`storageInitializationFailed=true;window.handleShortcutAction('addtx');`);
+  assert.equal(run('storageInitializationFailed'),true);
+  assert.equal(run('prepareSecureStorage()'),true);assert.equal(run('storageInitializationFailed'),false);
+});
