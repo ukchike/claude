@@ -52,3 +52,7 @@ GitHub Actions also compiles and runs the pure Java BankAlertParserTest before b
 ### Description-based import categories
 
 Statement review suggests category and subcategory from specific description phrases, or an unambiguous previous classification of the same description (reference IDs are ignored). Existing custom categories are supported through previous classifications. Generic POS, transfer or payment wording, conflicting history, and multiple rule matches fall back to Other for review. Suggestions never change debit/credit direction. Each row has editable category/subcategory selectors before confirmation; confirmed corrections inform later matching descriptions. No external AI service is used.
+
+### Backup restore safeguards
+
+JSON restore validates record shapes, financial amounts/dates, account references, duplicate IDs and supported versions before changing data. A confirmation shows transaction/account/schedule counts and explicitly states that restore replaces current data. Versions 1–3 are accepted. Restoration keeps the device PIN and biometric settings; files larger than 25 MB are rejected. A failed restore rolls back in-memory data and local storage. If storage recovery also fails, the app asks you to export the recovered in-memory data before closing. Backups remain plain JSON; encryption is not included in this update.

@@ -50,11 +50,13 @@ test('possible matches include bank-alert/manual records, internal transfers and
   assert.ok(S.possible(t,[{date:t.date,type:'transfer',fromAccountId:'a',toAccountId:'b',amount:100}]));
   assert.ok(S.possible(t,[{...t,amount:40,splitGroupId:'s'},{...t,amount:60,splitGroupId:'s'}]));
 });
-function app(){
+function app({accept=true}={}){
   const source=fs.readFileSync('financeflow-android/app/src/main/assets/index.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1].split('\nload();')[0];
   const elements=new Map(),alerts=[];
   const el=id=>{if(!elements.has(id))elements.set(id,{innerHTML:'',value:'',style:{},textContent:'',insertAdjacentHTML(){},remove(){}});return elements.get(id);};
-  const ctx=vm.createContext({FinanceCore:core,StatementImport:S,window:{},document:{addEventListener(){},getElementById:el},console,Date,Math,Set,Intl,JSON,alert:m=>alerts.push(m),confirm:()=>true,setTimeout:()=>0,clearTimeout(){}});
+  const storage=new Map();
+  const localStorage={get length(){return storage.size;},key:i=>[...storage.keys()][i],getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,String(v)),removeItem:k=>storage.delete(k)};
+  const ctx=vm.createContext({localStorage,FinanceCore:core,StatementImport:S,window:{},document:{addEventListener(){},getElementById:el},console,Date,Math,Set,Intl,JSON,alert:m=>alerts.push(m),confirm:()=>accept,setTimeout:()=>0,clearTimeout(){}});
   vm.runInContext(source,ctx);vm.runInContext('save=()=>{};render=()=>{};showToast=()=>{};showUndoToast=(label,undo)=>{window.testUndo=undo;};',ctx);
   return code=>vm.runInContext(code,ctx);
 }
@@ -114,4 +116,40 @@ test('review category overrides survive recalculation and persist only on import
   assert.equal(run('txns[0].category'),'Education');assert.equal(run('txns[0].subcategory'),'Training');
   assert.equal(run('Object.hasOwn(txns[0],"categoryReason")'),false);
   assert.equal(run(`suggestStatementCategory({description:'Unknown supplier',type:'expense'}).category`),'Education');
+});
+
+test('backup validator rejects corrupt financial data before changing live records',()=>{
+  const run=app();run(`accounts=[{id:'a',name:'Bank',currency:'NGN'}];txns=[{id:'t',accountId:'a',amount:100,date:'2026-01-01',type:'expense',category:'Other'}];`);
+  assert.equal(run('validateBackupData(backupData()).txns.length'),1);
+  for(const mutation of ["d.txns={}","d.txns[0].amount=-1","d.txns[0].date='2026-02-31'","d.txns[0].accountId='missing'","d.accounts.push({...d.accounts[0]})","d.version=99","d.userEC={Custom:'broken'}"]){
+    assert.throws(()=>run(`{const d=JSON.parse(JSON.stringify(backupData()));${mutation};validateBackupData(d);}`));
+    assert.equal(run('txns[0].amount'),100);
+  }
+  assert.throws(()=>run(`validateBackupData(JSON.parse('{"txns":[],"accounts":[{"id":"a","name":"Bank"}],"__proto__":{}}'))`));
+});
+test('backup restore cancellation and invalid files leave existing records intact',async()=>{
+  const run=app({accept:false});run(`txns=[{id:'old',amount:50}];`);
+  await run(`importData({size:100,text:async()=>JSON.stringify({version:3,txns:[],accounts:[{id:'a',name:'Bank'}]})})`);
+  assert.equal(run('txns[0].id'),'old');assert.equal(run('backupRestoreBusy'),false);
+  await run(`importData({size:100,text:async()=>'{bad json'})`);
+  assert.equal(run('txns[0].id'),'old');
+});
+test('failed restore rolls back memory and storage, preserving device lock settings',async()=>{
+  const run=app();run(`accounts=[{id:'a',name:'Bank',currency:'NGN'}];txns=[{id:'old',amount:50,accountId:'a',type:'expense',date:'2026-01-01',category:'Other'}];pinHash='device-pin';biometricEnabled=true;
+    localStorage.setItem('ffd_tx','original-storage');localStorage.setItem('ffd_pin','device-pin');
+    applyTheme=()=>{};processRecurring=()=>{};save=()=>{localStorage.setItem('ffd_tx','partial');localStorage.setItem('ffd_new','partial');throw Error('Storage full');};`);
+  await run(`importData({size:100,text:async()=>JSON.stringify({version:3,txns:[],accounts:[{id:'b',name:'Restored Bank'}]})})`);
+  assert.equal(run('txns[0].id'),'old');assert.equal(run('accounts[0].id'),'a');
+  assert.equal(run("localStorage.getItem('ffd_tx')"),'original-storage');assert.equal(run("localStorage.getItem('ffd_new')"),null);
+  assert.equal(run('pinHash'),'device-pin');assert.equal(run('biometricEnabled'),true);
+});
+test('valid older backup restores without transferring PIN or biometrics',async()=>{
+  const run=app();run(`pinHash='device-pin';biometricEnabled=true;applyTheme=()=>{};processRecurring=()=>{};`);
+  await run(`importData({size:100,text:async()=>JSON.stringify({version:2,txns:[{id:'new',amount:75,date:'2026-01-01',type:'income',accountId:'b',category:'Other'}],accounts:[{id:'b',name:'Bank'}],pinHash:'foreign-pin',biometricEnabled:false})})`);
+  assert.equal(run('txns[0].id'),'new');assert.equal(run('getAccountBalance("b")'),75);assert.equal(run('pinHash'),'device-pin');assert.equal(run('biometricEnabled'),true);
+});
+
+test('backup roundtrip retains pending, paid and skipped recurring occurrence history',()=>{
+  const run=app();run(`accounts=[{id:'a',name:'Bank',currency:'NGN'}];scheduledPayments=['pending','paid','skipped'].map((status,i)=>({id:'p'+i,accountId:'a',type:'expense',amount:100,date:'2026-01-01',status}));`);
+  assert.equal(run('validateBackupData(backupData()).scheduledPayments.length'),3);
 });

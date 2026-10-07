@@ -2095,21 +2095,57 @@ function exportData(){
   // Everything persisted by save() EXCEPT the security settings (pinHash, biometricEnabled).
   // Those are deliberately left out: a backup file travels to Google Drive and another device,
   // and restoring a lock the user can no longer satisfy would lock them out of their own data.
-  const content=JSON.stringify({
+  const content=JSON.stringify(backupData());
+  saveOrDownload("financeflow_"+toLocalISODate(new Date())+".json",content,"application/json");
+}
+function backupData(){return {
     version:3,exportedAt:new Date().toISOString(),
     txns,budgets,accounts,userEC,userIC,profile,recurring,scheduledPayments,importHistory,
     goals,catOrder,homeLayout,hiddenDefaultCats,userTags,
     homeCards:{balance:showBalanceHome,accounts:showAccountsHome,networthchart:showNetworthChartHome},
     hiddenHomeSections,
     theme,accent:accentColor.h,currency:currency.code,remindersEnabled
-  });
-  saveOrDownload("financeflow_"+toLocalISODate(new Date())+".json",content,"application/json");
+  };
 }
 
 // ── DATA ACTIONS ──
 function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts","ffd_homelayout","ffd_catorder","ffd_goals","ffd_pin","ffd_reminders","ffd_onboard","ffd_usertags","ffd_homecards","ffd_hiddensections"].forEach(k=>localStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e",currency:currency.code}];userEC={};userIC={};profile={name:""};recurring=[];scheduledPayments=[];importHistory=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;homeLayout=["balance","accounts","networthchart","goals","stats","chart","trend","insights","budget","recent"];showBalanceHome=true;showAccountsHome=true;showNetworthChartHome=true;hiddenHomeSections=[];catOrder={expense:[],income:[]};goals=[];userTags=[];pinHash="";pinLockActive=false;remindersEnabled=false;onboardComplete=false;onboardStep=0;if(window.Android&&window.Android.cancelReminders)window.Android.cancelReminders();save();closeSettings();}}
-function importData(file){if(!file)return;file.text().then(t=>{
-  const d=JSON.parse(t);
+function validateBackupData(d){
+  const fail=m=>{throw new Error(m);},obj=v=>v&&typeof v==='object'&&!Array.isArray(v);
+  if(!obj(d)||!Array.isArray(d.txns)||!Array.isArray(d.accounts)||!d.accounts.length)fail('Not a FinanceFlow backup: transactions and accounts are required.');
+  if(d.version!==undefined&&(!Number.isInteger(d.version)||d.version<1||d.version>3))fail('Unsupported backup version.');
+  const inspect=v=>{if(!v||typeof v!=='object')return;for(const k of Object.keys(v)){if(['__proto__','prototype','constructor'].includes(k))fail('Unsafe field in backup.');inspect(v[k]);}};inspect(d);
+  const arrayKeys=['budgets','recurring','scheduledPayments','importHistory','goals','userTags','homeLayout','hiddenHomeSections'];
+  for(const k of arrayKeys)if(d[k]!==undefined&&!Array.isArray(d[k]))fail(k+' must be a list.');
+  for(const k of ['profile','userEC','userIC','catOrder','hiddenDefaultCats','homeCards'])if(d[k]!==undefined&&!obj(d[k]))fail(k+' must be an object.');
+  for(const k of ['userEC','userIC'])for(const [name,subs] of Object.entries(d[k]||{}))if(!name||!Array.isArray(subs)||subs.some(x=>typeof x!=='string'))fail('Invalid custom categories.');
+  for(const k of ['catOrder','hiddenDefaultCats'])for(const type of ['income','expense'])if(d[k]?.[type]!==undefined&&(!Array.isArray(d[k][type])||d[k][type].some(x=>typeof x!=='string')))fail('Invalid category settings.');
+  for(const k of ['userTags','homeLayout','hiddenHomeSections'])if((d[k]||[]).some(x=>typeof x!=='string'))fail('Invalid '+k+'.');
+  if(d.profile?.name!==undefined&&typeof d.profile.name!=='string')fail('Invalid profile name.');
+  const ids=new Set(),supported=new Set(CURRENCIES.map(c=>c.code));
+  for(const a of d.accounts){if(!obj(a)||typeof a.id!=='string'||!a.id||ids.has(a.id)||typeof a.name!=='string')fail('Invalid or duplicate account.');ids.add(a.id);if(a.currency&&!supported.has(a.currency))fail('Unsupported account currency.');}
+  if(d.currency&&!supported.has(d.currency))fail('Unsupported primary currency.');
+  const finite=v=>typeof v==='number'&&Number.isFinite(v),positive=v=>finite(v)&&v>0;
+  for(const list of ['txns','recurring','scheduledPayments']){
+    const seen=new Set();for(const t of d[list]||[]){
+      if(!obj(t)||typeof t.id!=='string'||!t.id||seen.has(t.id))fail('Invalid or duplicate ID in '+list+'.');seen.add(t.id);
+      if(!positive(t.amount))fail('Invalid amount in '+list+'.');
+      if(!['income','expense','transfer'].includes(t.type)||(list!=='txns'&&t.type==='transfer'))fail('Invalid transaction direction.');
+      if(list==='txns'||list==='scheduledPayments'){if(!FinanceCore.date(t.date))fail('Invalid transaction date.');}
+      if(list==='recurring'&&(!FinanceCore.date(t.nextDue)||!['daily','weekly','monthly','yearly'].includes(t.frequency)))fail('Invalid recurring schedule.');
+      const refs=t.type==='transfer'?[t.fromAccountId,t.toAccountId]:[t.accountId];if(refs.some(id=>!ids.has(id)))fail('A transaction refers to an account missing from the backup.');
+      if(t.type==='transfer'&&t.fromAccountId===t.toAccountId)fail('Invalid transfer accounts.');
+      for(const k of ['description','category','subcategory'])if(t[k]!==undefined&&typeof t[k]!=='string')fail('Invalid '+k+'.');
+      if(t.tags!==undefined&&(!Array.isArray(t.tags)||t.tags.some(x=>typeof x!=='string')))fail('Invalid transaction tags.');
+      if(list==='scheduledPayments'&&!['pending','paid','skipped'].includes(t.status))fail('Invalid pending-payment status.');
+    }
+  }
+  for(const b of d.budgets||[]){if(!obj(b)||typeof b.cat!=='string'||!finite(b.limit)||b.limit<0||!Array.isArray(b.subs)||b.subs.some(x=>!obj(x)||typeof x.name!=='string'||!finite(x.limit)||x.limit<0))fail('Invalid budget.');}
+  for(const g of d.goals||[])if(!obj(g)||typeof g.name!=='string'||!finite(g.target)||g.target<0)fail('Invalid savings goal.');
+  for(const h of d.importHistory||[])if(!obj(h)||typeof h.filename!=='string'||!Number.isInteger(h.count)||h.count<0)fail('Invalid import history.');
+  return d;
+}
+function applyBackupData(d){
   txns=d.txns||[];
   budgets=d.budgets||[];budgets.forEach(b=>{if(!b.period)b.period="month";});
   accounts=d.accounts||[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];
@@ -2133,8 +2169,26 @@ function importData(file){if(!file)return;file.text().then(t=>{
   const ac=ACCENT_COLORS.find(c=>c.h===d.accent);if(ac)accentColor=ac;
   const cu=CURRENCIES.find(c=>c.code===d.currency);if(cu)currency=cu;
   accounts.forEach(a=>{if(!a.currency)a.currency=currency.code;});
-  initializeFinancialState();applyTheme();save();processRecurring();render();showToast("✅ Imported successfully","green");
-}).catch(e=>showToast("⚠️ Import failed: "+e.message,"red"));}
+  if(typeof d.remindersEnabled==='boolean')remindersEnabled=d.remindersEnabled;
+  initializeFinancialState();
+}
+let backupRestoreBusy=false;
+async function importData(file){
+  if(!file||backupRestoreBusy)return;backupRestoreBusy=true;
+  let before=null,stored=null;
+  try{
+    if(file.size>25*1024*1024)throw new Error('Backup exceeds 25 MB.');
+    const d=validateBackupData(JSON.parse(await file.text()));
+    if(!confirm(`Restore ${d.txns.length} transactions, ${d.accounts.length} accounts and ${(d.recurring||[]).length} recurring schedules?\nThis replaces your current ${txns.length} transactions. Export a JSON backup first. Device PIN and biometric settings remain as they are.`))return;
+    const snapshot=JSON.parse(JSON.stringify(backupData()));stored={};
+    for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith('ffd_'))stored[k]=localStorage.getItem(k);}
+    before=snapshot;applyBackupData(d);save();applyTheme();processRecurring();render();showToast('✅ Backup restored successfully','green');
+  }catch(e){
+    let recovered=true;
+    if(before){applyBackupData(before);try{const keys=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith('ffd_'))keys.push(k);}keys.forEach(k=>localStorage.removeItem(k));Object.entries(stored).forEach(([k,v])=>localStorage.setItem(k,v));}catch(storageError){recovered=false;}applyTheme();render();}
+    showToast('⚠️ Restore failed: '+e.message+(before?(recovered?' Previous data restored.':' Previous data remains in memory; storage recovery failed. Export a backup now before closing the app.'):' Your records were not changed.'),'red');
+  }finally{backupRestoreBusy=false;}
+}
 function deleteTx(id){const idx=txns.findIndex(t=>t.id===id);if(idx<0)return;const removed=txns[idx];txns.splice(idx,1);save();render();showUndoToast("Transaction deleted",()=>{txns.splice(idx,0,removed);save();});}
 function duplicateTx(id){
   const t=txns.find(x=>x.id===id);if(!t)return;
