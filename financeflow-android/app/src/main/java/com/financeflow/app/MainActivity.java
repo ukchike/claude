@@ -136,6 +136,7 @@ public class MainActivity extends AppCompatActivity {
                 EditText input = new EditText(MainActivity.this);
                 input.setSingleLine(true);
                 if (message.contains("current app PIN")) input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+                else if (message.toLowerCase().contains("backup password")) input.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
                 input.setText(defaultValue);
                 new AlertDialog.Builder(MainActivity.this)
                     .setMessage(message).setView(input)
@@ -279,7 +280,15 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private SecureStore secureStore;
+    private synchronized SecureStore secureStore(){if(secureStore==null)secureStore=new SecureStore(MainActivity.this);return secureStore;}
     private class AndroidBridge {
+        @JavascriptInterface public boolean supportsSecureStorage(){return Build.VERSION.SDK_INT>=23;}
+        @JavascriptInterface public String getSecureItem(String key){return secureStore().get(key);}
+        @JavascriptInterface public boolean setSecureItem(String key,String value){return secureStore().set(key,value);}
+        @JavascriptInterface public boolean removeSecureItem(String key){return secureStore().remove(key);}
+        @JavascriptInterface public String secureKeys(){return secureStore().keys();}
+
 
         @JavascriptInterface
         public boolean hasBiometric() {

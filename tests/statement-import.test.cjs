@@ -56,7 +56,7 @@ function app({accept=true,promptValue=null}={}){
   const el=id=>{if(!elements.has(id))elements.set(id,{innerHTML:'',value:'',style:{},textContent:'',insertAdjacentHTML(){},remove(){}});return elements.get(id);};
   const storage=new Map();
   const localStorage={get length(){return storage.size;},key:i=>[...storage.keys()][i],getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,String(v)),removeItem:k=>storage.delete(k)};
-  const ctx=vm.createContext({crypto:require('node:crypto').webcrypto,TextEncoder,prompt:()=>promptValue,localStorage,FinanceCore:core,StatementImport:S,window:{},document:{addEventListener(){},getElementById:el},console,Date,Math,Set,Intl,JSON,alert:m=>alerts.push(m),confirm:()=>accept,setTimeout:()=>0,clearTimeout(){}});
+  const ctx=vm.createContext({crypto:require('node:crypto').webcrypto,TextEncoder,TextDecoder,prompt:()=>promptValue,localStorage,FinanceCore:core,StatementImport:S,window:{},document:{addEventListener(){},getElementById:el},console,Date,Math,Set,Intl,JSON,alert:m=>alerts.push(m),confirm:()=>accept,setTimeout:()=>0,clearTimeout(){}});
   vm.runInContext(source,ctx);vm.runInContext('save=()=>{};render=()=>{};showToast=()=>{};showUndoToast=(label,undo)=>{window.testUndo=undo;};',ctx);
   return code=>vm.runInContext(code,ctx);
 }
@@ -199,4 +199,30 @@ test('changing or removing an existing PIN requires the current PIN',async()=>{
 });
 test('missing native authentication cannot dismiss the app lock',()=>{
   const run=app();run('pinLockActive=true;triggerAuth();');assert.equal(run('pinLockActive'),true);
+});
+test('encrypted backups roundtrip, randomise ciphertext and reject wrong passwords or tampering',async()=>{
+  const run=app();const payload={version:3,accounts:[{id:'a',name:'Bank'}],txns:[]};
+  const a=await run(`encryptBackup(${JSON.stringify(payload)},'private-password')`),b=await run(`encryptBackup(${JSON.stringify(payload)},'private-password')`);
+  assert.notEqual(a.data,b.data);assert.ok(!JSON.stringify(a).includes('Bank'));
+  assert.deepEqual(JSON.parse(JSON.stringify(await run(`decryptBackup(${JSON.stringify(a)},'private-password')`))),payload);
+  await assert.rejects(run(`decryptBackup(${JSON.stringify(a)},'wrong-password')`));
+  a.data=(a.data[0]==='0'?'1':'0')+a.data.slice(1);await assert.rejects(run(`decryptBackup(${JSON.stringify(a)},'private-password')`));
+  await assert.rejects(run(`encryptBackup({},'short')`));
+});
+test('secure storage migration verifies copies and survives a partial write failure',()=>{
+  const run=app();run(`window.vault=new Map();window.writes=0;window.fail=true;
+    window.Android={supportsSecureStorage:()=>true,getSecureItem:k=>JSON.stringify({ok:true,found:window.vault.has(k),value:window.vault.get(k)}),setSecureItem:(k,v)=>{if(window.fail&&++window.writes===2)return false;window.vault.set(k,v);return true;},secureKeys:()=>JSON.stringify([...window.vault.keys()]),removeSecureItem:k=>window.vault.delete(k)};
+    localStorage.setItem('ffd_tx','records');localStorage.setItem('ffd_pin','hash');`);
+  assert.equal(run('prepareSecureStorage()'),false);assert.equal(run('localStorage.length'),2);assert.equal(run('secureStorageReady'),false);
+  run('window.fail=false;');assert.equal(run('prepareSecureStorage()'),true);assert.equal(run('localStorage.length'),0);
+  assert.equal(run("appStorage.getItem('ffd_tx')"),'records');assert.equal(run("appStorage.getItem('ffd_pin')"),'hash');
+  run(`secureStorageReady=false;`);assert.equal(run('prepareSecureStorage()'),true);assert.equal(run("appStorage.getItem('ffd_tx')"),'records');
+});
+test('unreadable encrypted records stop startup without retiring legacy data',()=>{
+  const run=app();run(`localStorage.setItem('ffd_tx','original');window.Android={supportsSecureStorage:()=>true,getSecureItem:()=>JSON.stringify({ok:false,error:'Key unavailable'}),secureKeys:()=>JSON.stringify(['ffd_tx'])};`);
+  assert.equal(run('prepareSecureStorage()'),false);assert.equal(run("localStorage.getItem('ffd_tx')"),'original');assert.equal(run('secureStorageReady'),false);
+});
+test('encrypted restore with an incorrect password leaves records unchanged',async()=>{
+  const run=app({promptValue:'wrong-password'});await run(`(async()=>{window.encrypted=await encryptBackup({version:3,txns:[],accounts:[{id:'b',name:'Bank'}]},'private-password');txns=[{id:'original'}];await importData({size:100,text:async()=>JSON.stringify(window.encrypted)});})()`);
+  assert.equal(run('txns[0].id'),'original');
 });

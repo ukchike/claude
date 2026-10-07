@@ -274,6 +274,27 @@ button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--accent);ou
 <script src="statement-import.js"></script>
 <script>
 
+// Android 6+ stores financial records in encrypted app-private storage.
+let secureStorageReady=false;
+function secureStorageAvailable(){return !!(window.Android?.supportsSecureStorage&&window.Android.supportsSecureStorage());}
+const appStorage={
+  getItem(key){if(!secureStorageReady)return localStorage.getItem(key);const result=JSON.parse(window.Android.getSecureItem(key));if(!result.ok)throw Error(result.error);return result.found?result.value:null;},
+  setItem(key,value){if(!secureStorageReady)return localStorage.setItem(key,String(value));if(!window.Android.setSecureItem(key,String(value)))throw Error('Encrypted storage write failed');},
+  removeItem(key){if(!secureStorageReady)return localStorage.removeItem(key);if(!window.Android.removeSecureItem(key))throw Error('Encrypted storage removal failed');},
+  get length(){return secureStorageReady?JSON.parse(window.Android.secureKeys()).length:localStorage.length;},
+  key(index){return secureStorageReady?(JSON.parse(window.Android.secureKeys())[index]||null):localStorage.key(index);}
+};
+function prepareSecureStorage(){
+  if(!secureStorageAvailable())return true;
+  try{
+    const legacy=[];for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key?.startsWith('ffd_'))legacy.push([key,localStorage.getItem(key)]);}
+    for(const [key,value] of legacy){const found=JSON.parse(window.Android.getSecureItem(key));if(!found.ok)throw Error(found.error);
+      if(!found.found){if(!window.Android.setSecureItem(key,value))throw Error('Migration write failed');const verified=JSON.parse(window.Android.getSecureItem(key));if(!verified.ok||verified.value!==value)throw Error('Migration verification failed');}}
+    // Verify every encrypted record before retiring any legacy copy or starting the app.
+    for(const key of JSON.parse(window.Android.secureKeys())){const r=JSON.parse(window.Android.getSecureItem(key));if(!r.ok)throw Error(r.error);}
+    secureStorageReady=true;for(const [key] of legacy)localStorage.removeItem(key);return true;
+  }catch(e){alert('Secure storage could not initialise. Your records have not been replaced. Keep the app installed and retain your exported backup. '+e.message);return false;}
+}
 // ── CATEGORIES ──
 const DEF_EC={"Food & Dining":["Groceries","Restaurants","Fast Food","Beverages","Snacks"],"Transportation":["Fuel","Public Transport","Ride-hailing","Parking","Maintenance"],"Housing":["Rent","Electricity","Water","Internet","Security","Repairs"],"Communication":["Airtime","Data","Subscriptions"],"Health":["Hospital","Pharmacy","Gym","Optical","Dental"],"Education":["Tuition","Books","Training","Exams","Stationery"],"Entertainment":["Movies","Events","Streaming","Hobbies","Sports"],"Shopping":["Clothing","Electronics","Personal Care","Accessories"],"Finance":["Bank Charges","Loan Repayment","Insurance","Taxes"],"Gifts & Donations":["Family","Friends","Charity","Religious"],"Savings":["Emergency Fund","Target Savings","Investment"],"Other":["Miscellaneous"]};
 const DEF_IC={"Salary":["Primary Job","Part-time"],"Business":["Sales","Services","Products"],"Freelance":["Consulting","Contract Work","Design","Writing"],"Investment":["Dividends","Interest","Returns"],"Gift":["Cash Gift","Prize"],"Other":["Miscellaneous"]};
@@ -673,59 +694,59 @@ const $=id=>document.getElementById(id);
 
 // ── PERSISTENCE ──
 function save(){
-  localStorage.setItem("ffd_tx",JSON.stringify(txns));
-  localStorage.setItem("ffd_bd",JSON.stringify(budgets));
-  localStorage.setItem("ffd_acc",JSON.stringify(accounts));
-  localStorage.setItem("ffd_ec",JSON.stringify(userEC));
-  localStorage.setItem("ffd_ic",JSON.stringify(userIC));
-  localStorage.setItem("ffd_pro",JSON.stringify(profile));
-  localStorage.setItem("ffd_rec",JSON.stringify(recurring));
-  localStorage.setItem("ffd_scheduled",JSON.stringify(scheduledPayments));
-  localStorage.setItem("ffd_imports",JSON.stringify(importHistory));
-  localStorage.setItem("ffd_bio",JSON.stringify(biometricEnabled));
-  localStorage.setItem("ffd_theme",theme);
-  localStorage.setItem("ffd_accent",accentColor.h);
-  localStorage.setItem("ffd_currency",currency.code);
-  localStorage.setItem("ffd_hidecats",JSON.stringify(hiddenDefaultCats));
-  localStorage.setItem("ffd_bankalerts",JSON.stringify(bankAlertsEnabled));
-  localStorage.setItem("ffd_homelayout",JSON.stringify(homeLayout));
-  localStorage.setItem("ffd_catorder",JSON.stringify(catOrder));
-  localStorage.setItem("ffd_goals",JSON.stringify(goals));
-  localStorage.setItem("ffd_usertags",JSON.stringify(userTags));
-  localStorage.setItem("ffd_homecards",JSON.stringify({balance:showBalanceHome,accounts:showAccountsHome,networthchart:showNetworthChartHome}));
-  localStorage.setItem("ffd_hiddensections",JSON.stringify(hiddenHomeSections));
-  localStorage.setItem("ffd_pin",pinHash);
-  localStorage.setItem("ffd_reminders",JSON.stringify(remindersEnabled));
-  localStorage.setItem("ffd_onboard",JSON.stringify(onboardComplete));
+  appStorage.setItem("ffd_tx",JSON.stringify(txns));
+  appStorage.setItem("ffd_bd",JSON.stringify(budgets));
+  appStorage.setItem("ffd_acc",JSON.stringify(accounts));
+  appStorage.setItem("ffd_ec",JSON.stringify(userEC));
+  appStorage.setItem("ffd_ic",JSON.stringify(userIC));
+  appStorage.setItem("ffd_pro",JSON.stringify(profile));
+  appStorage.setItem("ffd_rec",JSON.stringify(recurring));
+  appStorage.setItem("ffd_scheduled",JSON.stringify(scheduledPayments));
+  appStorage.setItem("ffd_imports",JSON.stringify(importHistory));
+  appStorage.setItem("ffd_bio",JSON.stringify(biometricEnabled));
+  appStorage.setItem("ffd_theme",theme);
+  appStorage.setItem("ffd_accent",accentColor.h);
+  appStorage.setItem("ffd_currency",currency.code);
+  appStorage.setItem("ffd_hidecats",JSON.stringify(hiddenDefaultCats));
+  appStorage.setItem("ffd_bankalerts",JSON.stringify(bankAlertsEnabled));
+  appStorage.setItem("ffd_homelayout",JSON.stringify(homeLayout));
+  appStorage.setItem("ffd_catorder",JSON.stringify(catOrder));
+  appStorage.setItem("ffd_goals",JSON.stringify(goals));
+  appStorage.setItem("ffd_usertags",JSON.stringify(userTags));
+  appStorage.setItem("ffd_homecards",JSON.stringify({balance:showBalanceHome,accounts:showAccountsHome,networthchart:showNetworthChartHome}));
+  appStorage.setItem("ffd_hiddensections",JSON.stringify(hiddenHomeSections));
+  appStorage.setItem("ffd_pin",pinHash);
+  appStorage.setItem("ffd_reminders",JSON.stringify(remindersEnabled));
+  appStorage.setItem("ffd_onboard",JSON.stringify(onboardComplete));
   if(remindersEnabled)syncUpcomingBills();
   syncWidgetData();
 }
 function load(){
-  try{importHistory=JSON.parse(localStorage.getItem("ffd_imports")||"[]");if(!Array.isArray(importHistory))importHistory=[];}catch(e){importHistory=[];}
-  try{scheduledPayments=JSON.parse(localStorage.getItem("ffd_scheduled")||"[]");if(!Array.isArray(scheduledPayments))scheduledPayments=[];}catch(e){scheduledPayments=[];}
-  try{const t=localStorage.getItem("ffd_tx");if(t)txns=JSON.parse(t);}catch(e){}
-  try{const b=localStorage.getItem("ffd_bd");if(b)budgets=JSON.parse(b);}catch(e){}
+  try{importHistory=JSON.parse(appStorage.getItem("ffd_imports")||"[]");if(!Array.isArray(importHistory))importHistory=[];}catch(e){importHistory=[];}
+  try{scheduledPayments=JSON.parse(appStorage.getItem("ffd_scheduled")||"[]");if(!Array.isArray(scheduledPayments))scheduledPayments=[];}catch(e){scheduledPayments=[];}
+  try{const t=appStorage.getItem("ffd_tx");if(t)txns=JSON.parse(t);}catch(e){}
+  try{const b=appStorage.getItem("ffd_bd");if(b)budgets=JSON.parse(b);}catch(e){}
   budgets.forEach(b=>{if(!b.period)b.period="month";}); // existing budgets predate per-budget periods — default to Monthly, matching prior behavior
-  try{const a=localStorage.getItem("ffd_acc");if(a)accounts=JSON.parse(a);}catch(e){}
-  try{const ec=localStorage.getItem("ffd_ec");if(ec)userEC=JSON.parse(ec);}catch(e){}
-  try{const ic=localStorage.getItem("ffd_ic");if(ic)userIC=JSON.parse(ic);}catch(e){}
-  try{const p=localStorage.getItem("ffd_pro");if(p)profile=JSON.parse(p);}catch(e){}
-  try{const r=localStorage.getItem("ffd_rec");if(r)recurring=JSON.parse(r);}catch(e){}
-  try{const bio=localStorage.getItem("ffd_bio");if(bio)biometricEnabled=JSON.parse(bio);}catch(e){}
-  try{const th=localStorage.getItem("ffd_theme");if(th==="light"||th==="dark")theme=th;else if(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches)theme="light";}catch(e){}
-  try{const ac=localStorage.getItem("ffd_accent");if(ac){const found=ACCENT_COLORS.find(c=>c.h===ac);if(found)accentColor=found;}}catch(e){}
-  try{const cc=localStorage.getItem("ffd_currency");if(cc){const found=CURRENCIES.find(c=>c.code===cc);if(found)currency=found;}}catch(e){}
-  try{const hc=localStorage.getItem("ffd_hidecats");if(hc)hiddenDefaultCats=JSON.parse(hc);}catch(e){}
-  try{const ba=localStorage.getItem("ffd_bankalerts");if(ba)bankAlertsEnabled=JSON.parse(ba);}catch(e){}
-  try{const hl=localStorage.getItem("ffd_homelayout");if(hl){let arr=expandNetworthKey(JSON.parse(hl));const valid=["balance","accounts","networthchart","goals","stats","chart","trend","insights","budget","recent"];if(Array.isArray(arr)&&arr.every(x=>valid.includes(x))&&arr.length>=6){valid.forEach(k=>{if(!arr.includes(k))arr.unshift(k);});homeLayout=arr;}}}catch(e){}
-  try{const co=localStorage.getItem("ffd_catorder");if(co)catOrder=JSON.parse(co);}catch(e){}
-  try{const g=localStorage.getItem("ffd_goals");if(g)goals=JSON.parse(g);}catch(e){}
-  try{const ut=localStorage.getItem("ffd_usertags");if(ut)userTags=JSON.parse(ut);}catch(e){}
-  try{const hc=localStorage.getItem("ffd_homecards");if(hc){const p=JSON.parse(hc);showBalanceHome=p.balance!==false;showAccountsHome=p.accounts!==false;showNetworthChartHome=p.networthchart!==false;}}catch(e){}
-  try{const hs=localStorage.getItem("ffd_hiddensections");if(hs)hiddenHomeSections=JSON.parse(hs);}catch(e){}
-  try{pinHash=localStorage.getItem("ffd_pin")||"";}catch(e){}
-  try{const rm=localStorage.getItem("ffd_reminders");if(rm)remindersEnabled=JSON.parse(rm);}catch(e){}
-  try{const ob=localStorage.getItem("ffd_onboard");onboardComplete=ob!==null?JSON.parse(ob):!!profile.name;}catch(e){onboardComplete=!!profile.name;}
+  try{const a=appStorage.getItem("ffd_acc");if(a)accounts=JSON.parse(a);}catch(e){}
+  try{const ec=appStorage.getItem("ffd_ec");if(ec)userEC=JSON.parse(ec);}catch(e){}
+  try{const ic=appStorage.getItem("ffd_ic");if(ic)userIC=JSON.parse(ic);}catch(e){}
+  try{const p=appStorage.getItem("ffd_pro");if(p)profile=JSON.parse(p);}catch(e){}
+  try{const r=appStorage.getItem("ffd_rec");if(r)recurring=JSON.parse(r);}catch(e){}
+  try{const bio=appStorage.getItem("ffd_bio");if(bio)biometricEnabled=JSON.parse(bio);}catch(e){}
+  try{const th=appStorage.getItem("ffd_theme");if(th==="light"||th==="dark")theme=th;else if(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches)theme="light";}catch(e){}
+  try{const ac=appStorage.getItem("ffd_accent");if(ac){const found=ACCENT_COLORS.find(c=>c.h===ac);if(found)accentColor=found;}}catch(e){}
+  try{const cc=appStorage.getItem("ffd_currency");if(cc){const found=CURRENCIES.find(c=>c.code===cc);if(found)currency=found;}}catch(e){}
+  try{const hc=appStorage.getItem("ffd_hidecats");if(hc)hiddenDefaultCats=JSON.parse(hc);}catch(e){}
+  try{const ba=appStorage.getItem("ffd_bankalerts");if(ba)bankAlertsEnabled=JSON.parse(ba);}catch(e){}
+  try{const hl=appStorage.getItem("ffd_homelayout");if(hl){let arr=expandNetworthKey(JSON.parse(hl));const valid=["balance","accounts","networthchart","goals","stats","chart","trend","insights","budget","recent"];if(Array.isArray(arr)&&arr.every(x=>valid.includes(x))&&arr.length>=6){valid.forEach(k=>{if(!arr.includes(k))arr.unshift(k);});homeLayout=arr;}}}catch(e){}
+  try{const co=appStorage.getItem("ffd_catorder");if(co)catOrder=JSON.parse(co);}catch(e){}
+  try{const g=appStorage.getItem("ffd_goals");if(g)goals=JSON.parse(g);}catch(e){}
+  try{const ut=appStorage.getItem("ffd_usertags");if(ut)userTags=JSON.parse(ut);}catch(e){}
+  try{const hc=appStorage.getItem("ffd_homecards");if(hc){const p=JSON.parse(hc);showBalanceHome=p.balance!==false;showAccountsHome=p.accounts!==false;showNetworthChartHome=p.networthchart!==false;}}catch(e){}
+  try{const hs=appStorage.getItem("ffd_hiddensections");if(hs)hiddenHomeSections=JSON.parse(hs);}catch(e){}
+  try{pinHash=appStorage.getItem("ffd_pin")||"";}catch(e){}
+  try{const rm=appStorage.getItem("ffd_reminders");if(rm)remindersEnabled=JSON.parse(rm);}catch(e){}
+  try{const ob=appStorage.getItem("ffd_onboard");onboardComplete=ob!==null?JSON.parse(ob):!!profile.name;}catch(e){onboardComplete=!!profile.name;}
   if(!accounts.length)accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];
   accounts.forEach(a=>{if(!a.currency)a.currency=currency.code;}); // pre-per-account-currency accounts inherit the app's global currency
   applyTheme();
@@ -1484,9 +1505,9 @@ function renderSettings(){
         <button class="btn btn-p w100" style="justify-content:center" onclick="exportData()">&#9729;&#65039; Backup Now</button>
       </div>
       <span class="st-label">Recent Statement Imports</span>${importHistory.slice(0,10).map(h=>`<div class="fz10 muted mb6">${esc(h.filename)} · ${h.count} entries · ${esc(accName(h.accountId))} · ${esc(h.importedAt.slice(0,10))}</div>`).join("")||'<div class="fz10 muted mb8">No imports recorded yet.</div>'}
-      <span class="st-label">Export &amp; Restore</span>
+      <span class="st-label">Export &amp; Restore</span><div class="fz11 muted mb8">${secureStorageReady?"Financial records are encrypted on this device.":"Device storage encryption requires Android 6 or later in the APK."} Encrypted backups require a separate password, which cannot be recovered.</div>
       <div class="flex-w" style="gap:8px;margin-top:4px">
-        <button class="btn btn-g btn-sm" onclick="exportData()">&#128228; Backup (JSON)</button>
+        <button class="btn btn-p btn-sm" onclick="exportEncryptedData()">Encrypted backup</button><button class="btn btn-g btn-sm" onclick="exportData()">Plain JSON backup</button>
         <button class="btn btn-g btn-sm" onclick="exportCSV()">&#128196; Export CSV</button>
         <button class="btn btn-g btn-sm" onclick="$('impFile2').click()">&#128229; Restore</button>
         <input type="file" id="impFile2" accept=".json" style="display:none" onchange="importData(this.files[0])">
@@ -1926,10 +1947,10 @@ async function sha256Hex(str){
   const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(str));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
 }
-function pinAttemptState(){try{const s=JSON.parse(localStorage.getItem('ffd_pin_attempts')||'{}');return {failures:Number(s.failures)||0,until:Number(s.until)||0};}catch(e){return {failures:0,until:0};}}
+function pinAttemptState(){try{const s=JSON.parse(appStorage.getItem('ffd_pin_attempts')||'{}');return {failures:Number(s.failures)||0,until:Number(s.until)||0};}catch(e){return {failures:0,until:0};}}
 function pinWaitMessage(){const s=pinAttemptState();return s.until>Date.now()?'Too many incorrect PIN attempts. Try again in '+Math.ceil((s.until-Date.now())/1000)+' seconds.':'';}
-function recordPinFailure(){const s=pinAttemptState();s.failures++;if(s.failures>=5)s.until=Date.now()+Math.min(300,30*Math.pow(2,Math.min(s.failures-5,4)))*1000;localStorage.setItem('ffd_pin_attempts',JSON.stringify(s));}
-function clearPinFailures(){localStorage.removeItem('ffd_pin_attempts');}
+function recordPinFailure(){const s=pinAttemptState();s.failures++;if(s.failures>=5)s.until=Date.now()+Math.min(300,30*Math.pow(2,Math.min(s.failures-5,4)))*1000;appStorage.setItem('ffd_pin_attempts',JSON.stringify(s));}
+function clearPinFailures(){appStorage.removeItem('ffd_pin_attempts');}
 async function pinDigest(pin,salt){
   const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),{name:'PBKDF2'},false,['deriveBits']);
   const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:new Uint8Array(salt.match(/../g).map(x=>parseInt(x,16))),iterations:100000,hash:'SHA-256'},key,256);
@@ -1948,7 +1969,7 @@ async function verifyPin(){
   pinOperationBusy=true;
   try{
     if(await matchesPin(val)){
-      if(!pinHash.startsWith('v2$')){const upgraded=await encodedPin(val);localStorage.setItem('ffd_pin',upgraded);pinHash=upgraded;}
+      if(!pinHash.startsWith('v2$')){const upgraded=await encodedPin(val);appStorage.setItem('ffd_pin',upgraded);pinHash=upgraded;}
       clearPinFailures();hideLock();
     }else{recordPinFailure();$('pinMsg').textContent=pinWaitMessage()||'Incorrect PIN. Try again.';$('pinInput').value='';}
   }catch(e){$('pinMsg').textContent='PIN verification could not complete. Try again.';}finally{pinOperationBusy=false;}
@@ -1964,12 +1985,12 @@ async function setPin(){
   const p1=$('newPinInput')?.value||'',p2=$('newPinConfirm')?.value||'';
   if(!/^\d{4,6}$/.test(p1))return alert('PIN must be 4–6 digits');if(p1!==p2)return alert("PINs don't match");
   pinOperationBusy=true;
-  try{if(!await authorisePinChange())return;const encoded=await encodedPin(p1);localStorage.setItem('ffd_pin',encoded);pinHash=encoded;clearPinFailures();pinChangeOpen=false;syncWidgetData();render();showToast('🔒 PIN set','green');}
+  try{if(!await authorisePinChange())return;const encoded=await encodedPin(p1);appStorage.setItem('ffd_pin',encoded);pinHash=encoded;clearPinFailures();pinChangeOpen=false;syncWidgetData();render();showToast('🔒 PIN set','green');}
   catch(e){alert('PIN could not be saved. Your previous PIN remains in place.');}finally{pinOperationBusy=false;}
 }
 async function removePin(){
   if(pinOperationBusy||!confirm('Remove the app PIN? Biometrics will remain active if enabled.'))return;pinOperationBusy=true;
-  try{if(!await authorisePinChange())return;localStorage.setItem('ffd_pin','');pinHash='';clearPinFailures();syncWidgetData();render();showToast('🔓 PIN removed','warn');}
+  try{if(!await authorisePinChange())return;appStorage.setItem('ffd_pin','');pinHash='';clearPinFailures();syncWidgetData();render();showToast('🔓 PIN removed','warn');}
   catch(e){alert('PIN could not be removed.');}finally{pinOperationBusy=false;}
 }
 
@@ -2163,6 +2184,33 @@ function exportData(){
   const content=JSON.stringify(backupData());
   saveOrDownload("financeflow_"+toLocalISODate(new Date())+".json",content,"application/json");
 }
+async function backupKey(password,salt){
+  const material=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:200000,hash:'SHA-256'},material,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+const hexBytes=bytes=>Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join('');
+function bytesFromHex(value){if(typeof value!=='string'||!value.length||value.length%2||!/^[a-f0-9]+$/.test(value))throw Error('Invalid encrypted backup encoding');return new Uint8Array(value.match(/../g).map(x=>parseInt(x,16)));}
+async function encryptBackup(data,password){
+  if(password.length<10)throw Error('Use a backup password of at least 10 characters');
+  const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12)),key=await backupKey(password,salt);
+  const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(JSON.stringify(data)));
+  return {format:'financeflow-encrypted',version:1,kdf:'PBKDF2-SHA256',iterations:200000,cipher:'AES-256-GCM',salt:hexBytes(salt),iv:hexBytes(iv),data:hexBytes(new Uint8Array(encrypted))};
+}
+async function decryptBackup(envelope,password){
+  if(envelope.version!==1||envelope.kdf!=='PBKDF2-SHA256'||envelope.iterations!==200000||envelope.cipher!=='AES-256-GCM')throw Error('Unsupported encrypted backup format');
+  const salt=bytesFromHex(envelope.salt),iv=bytesFromHex(envelope.iv),data=bytesFromHex(envelope.data);if(salt.length!==16||iv.length!==12||data.length<16)throw Error('Invalid encrypted backup');
+  try{const key=await backupKey(password,salt);const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,data);return JSON.parse(new TextDecoder().decode(plain));}
+  catch(e){throw Error('Incorrect backup password or damaged encrypted backup');}
+}
+async function decodeBackupText(text){const d=JSON.parse(text);if(d?.format!=='financeflow-encrypted')return d;const password=prompt('Enter backup password.');if(password===null)throw Error('Restore cancelled');return decryptBackup(d,password);}
+let encryptedBackupBusy=false;
+async function exportEncryptedData(){
+  if(encryptedBackupBusy)return;encryptedBackupBusy=true;
+  try{const password=prompt('Choose a backup password (at least 10 characters). Keep it separately: it cannot be recovered.');if(password===null)return;
+    const confirmation=prompt('Confirm backup password.');if(confirmation===null)return;if(password!==confirmation)throw Error('Backup passwords do not match');
+    const content=JSON.stringify(await encryptBackup(backupData(),password));saveOrDownload('financeflow_encrypted_'+toLocalISODate(new Date())+'.json',content,'application/json');
+  }catch(e){alert(e.message);}finally{encryptedBackupBusy=false;}
+}
 function backupData(){return {
     version:3,exportedAt:new Date().toISOString(),
     txns,budgets,accounts,userEC,userIC,profile,recurring,scheduledPayments,importHistory,
@@ -2174,7 +2222,7 @@ function backupData(){return {
 }
 
 // ── DATA ACTIONS ──
-function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts","ffd_homelayout","ffd_catorder","ffd_goals","ffd_pin","ffd_reminders","ffd_onboard","ffd_usertags","ffd_homecards","ffd_hiddensections"].forEach(k=>localStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e",currency:currency.code}];userEC={};userIC={};profile={name:""};recurring=[];scheduledPayments=[];importHistory=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;homeLayout=DEFAULT_HOME_LAYOUT.slice();showBalanceHome=true;showAccountsHome=true;showNetworthChartHome=false;hiddenHomeSections=["trend"];catOrder={expense:[],income:[]};goals=[];userTags=[];pinHash="";pinLockActive=false;remindersEnabled=false;onboardComplete=false;onboardStep=0;if(window.Android&&window.Android.cancelReminders)window.Android.cancelReminders();save();closeSettings();}}
+function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts","ffd_homelayout","ffd_catorder","ffd_goals","ffd_pin","ffd_reminders","ffd_onboard","ffd_usertags","ffd_homecards","ffd_hiddensections"].forEach(k=>appStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e",currency:currency.code}];userEC={};userIC={};profile={name:""};recurring=[];scheduledPayments=[];importHistory=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;homeLayout=DEFAULT_HOME_LAYOUT.slice();showBalanceHome=true;showAccountsHome=true;showNetworthChartHome=false;hiddenHomeSections=["trend"];catOrder={expense:[],income:[]};goals=[];userTags=[];pinHash="";pinLockActive=false;remindersEnabled=false;onboardComplete=false;onboardStep=0;if(window.Android&&window.Android.cancelReminders)window.Android.cancelReminders();save();closeSettings();}}
 function validateBackupData(d){
   const fail=m=>{throw new Error(m);},obj=v=>v&&typeof v==='object'&&!Array.isArray(v);
   if(!obj(d)||!Array.isArray(d.txns)||!Array.isArray(d.accounts)||!d.accounts.length)fail('Not a FinanceFlow backup: transactions and accounts are required.');
@@ -2243,14 +2291,14 @@ async function importData(file){
   let before=null,stored=null;
   try{
     if(file.size>25*1024*1024)throw new Error('Backup exceeds 25 MB.');
-    const d=validateBackupData(JSON.parse(await file.text()));
+    const d=validateBackupData(await decodeBackupText(await file.text()));
     if(!confirm(`Restore ${d.txns.length} transactions, ${d.accounts.length} accounts and ${(d.recurring||[]).length} recurring schedules?\nThis replaces your current ${txns.length} transactions. Export a JSON backup first. Device PIN and biometric settings remain as they are.`))return;
     const snapshot=JSON.parse(JSON.stringify(backupData()));stored={};
-    for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith('ffd_'))stored[k]=localStorage.getItem(k);}
+    for(let i=0;i<appStorage.length;i++){const k=appStorage.key(i);if(k?.startsWith('ffd_'))stored[k]=appStorage.getItem(k);}
     before=snapshot;applyBackupData(d);save();applyTheme();processRecurring();render();showToast('✅ Backup restored successfully','green');
   }catch(e){
     let recovered=true;
-    if(before){applyBackupData(before);try{const keys=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith('ffd_'))keys.push(k);}keys.forEach(k=>localStorage.removeItem(k));Object.entries(stored).forEach(([k,v])=>localStorage.setItem(k,v));}catch(storageError){recovered=false;}applyTheme();render();}
+    if(before){applyBackupData(before);try{const keys=[];for(let i=0;i<appStorage.length;i++){const k=appStorage.key(i);if(k?.startsWith('ffd_'))keys.push(k);}keys.forEach(k=>appStorage.removeItem(k));Object.entries(stored).forEach(([k,v])=>appStorage.setItem(k,v));}catch(storageError){recovered=false;}applyTheme();render();}
     showToast('⚠️ Restore failed: '+e.message+(before?(recovered?' Previous data restored.':' Previous data remains in memory; storage recovery failed. Export a backup now before closing the app.'):' Your records were not changed.'),'red');
   }finally{backupRestoreBusy=false;}
 }
@@ -2851,6 +2899,7 @@ document.addEventListener("click",(e)=>{
   });
 });
 
+if(!prepareSecureStorage())throw Error("Secure storage initialisation stopped");
 load();
 initializeFinancialState();
 save();
