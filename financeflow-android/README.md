@@ -62,3 +62,9 @@ JSON restore validates record shapes, financial amounts/dates, account reference
 Accounts with recorded transactions, either transfer endpoint, recurring schedules (including paused schedules), any recurring-payment history or statement-import history cannot be deleted. Empty-account deletion requires confirmation; at least one account must remain.
 
 Small text and touch targets are larger, pinch zoom is enabled, keyboard focus is visible and reduced-motion preferences are respected. Navigation exposes the current page and labelled actions. New installations put balance, accounts, period totals, budgets and recent transactions first, with extra trend charts hidden. Existing saved layouts are preserved. Home → Rearrange → Restore recommended Home layout applies the new defaults.
+
+### Lock and privacy safeguards
+
+Unavailable native authentication fails closed. Existing SHA-256 PINs migrate to salted PBKDF2-SHA256 (100,000 iterations) on successful unlock. Five incorrect PIN entries start a persistent cooldown; changing/removing an existing PIN requires that PIN. Screenshots and recent-app previews are protected with FLAG_SECURE. The widget hides financial figures while an app lock is configured. The WebView blocks navigation to untrusted pages and cross-file/universal file access; ordinary web links open externally. Android automatic backup/device transfer excludes app data; explicit JSON export/restore remains available.
+
+This does not encrypt the financial database or JSON exports, replace Android device security, or rotate the existing signing key. Signing identity is unchanged to support updates over installed APKs.

@@ -50,13 +50,13 @@ test('possible matches include bank-alert/manual records, internal transfers and
   assert.ok(S.possible(t,[{date:t.date,type:'transfer',fromAccountId:'a',toAccountId:'b',amount:100}]));
   assert.ok(S.possible(t,[{...t,amount:40,splitGroupId:'s'},{...t,amount:60,splitGroupId:'s'}]));
 });
-function app({accept=true}={}){
+function app({accept=true,promptValue=null}={}){
   const source=fs.readFileSync('financeflow-android/app/src/main/assets/index.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1].split('\nload();')[0];
   const elements=new Map(),alerts=[];
   const el=id=>{if(!elements.has(id))elements.set(id,{innerHTML:'',value:'',style:{},textContent:'',insertAdjacentHTML(){},remove(){}});return elements.get(id);};
   const storage=new Map();
   const localStorage={get length(){return storage.size;},key:i=>[...storage.keys()][i],getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,String(v)),removeItem:k=>storage.delete(k)};
-  const ctx=vm.createContext({localStorage,FinanceCore:core,StatementImport:S,window:{},document:{addEventListener(){},getElementById:el},console,Date,Math,Set,Intl,JSON,alert:m=>alerts.push(m),confirm:()=>accept,setTimeout:()=>0,clearTimeout(){}});
+  const ctx=vm.createContext({crypto:require('node:crypto').webcrypto,TextEncoder,prompt:()=>promptValue,localStorage,FinanceCore:core,StatementImport:S,window:{},document:{addEventListener(){},getElementById:el},console,Date,Math,Set,Intl,JSON,alert:m=>alerts.push(m),confirm:()=>accept,setTimeout:()=>0,clearTimeout(){}});
   vm.runInContext(source,ctx);vm.runInContext('save=()=>{};render=()=>{};showToast=()=>{};showUndoToast=(label,undo)=>{window.testUndo=undo;};',ctx);
   return code=>vm.runInContext(code,ctx);
 }
@@ -176,4 +176,27 @@ test('navigation identifies current page and recommended layout keeps financial 
   run(`homeLayout=['recent','balance'];hiddenHomeSections=['budget'];restoreDefaultHome();`);
   assert.equal(run('homeLayout.slice(0,5).join(",")'),'balance,accounts,stats,budget,recent');
   assert.equal(run('showNetworthChartHome'),false);assert.equal(run('hiddenHomeSections.join(",")'),'trend');
+});
+
+test('legacy PIN upgrades after correct entry and salted hashes differ for the same PIN',async()=>{
+  const run=app();await run(`(async()=>{pinHash=await sha256Hex('1234');$('pinInput').value='1234';pinLockActive=true;await verifyPin();})()`);
+  assert.ok(run('pinHash').startsWith('v2$'));assert.equal(run('pinLockActive'),false);
+  assert.equal(await run(`matchesPin('1234')`),true);assert.equal(await run(`matchesPin('9999')`),false);
+  const first=await run(`encodedPin('1234')`),second=await run(`encodedPin('1234')`);assert.notEqual(first,second);
+});
+test('PIN failures persist and enforce cooldown while successful entry clears attempts',async()=>{
+  const run=app();await run(`(async()=>{pinHash=await encodedPin('1234');pinLockActive=true;for(let i=0;i<5;i++){$('pinInput').value='0000';await verifyPin();}})()`);
+  assert.ok(run('pinWaitMessage()'));assert.equal(run('pinLockActive'),true);
+  await run(`(async()=>{$('pinInput').value='1234';await verifyPin();})()`);assert.equal(run('pinLockActive'),true);
+  run(`localStorage.setItem('ffd_pin_attempts',JSON.stringify({failures:5,until:0}));`);
+  await run('verifyPin()');assert.equal(run('pinLockActive'),false);assert.equal(run('pinAttemptState().failures'),0);
+});
+test('changing or removing an existing PIN requires the current PIN',async()=>{
+  const wrong=app({promptValue:'9999'});await wrong(`(async()=>{pinHash=await encodedPin('1234');$('newPinInput').value='5678';$('newPinConfirm').value='5678';await setPin();await removePin();})()`);
+  assert.equal(await wrong(`matchesPin('1234')`),true);
+  const correct=app({promptValue:'1234'});await correct(`(async()=>{pinHash=await encodedPin('1234');$('newPinInput').value='5678';$('newPinConfirm').value='5678';await setPin();})()`);
+  assert.equal(await correct(`matchesPin('5678')`),true);
+});
+test('missing native authentication cannot dismiss the app lock',()=>{
+  const run=app();run('pinLockActive=true;triggerAuth();');assert.equal(run('pinLockActive'),true);
 });

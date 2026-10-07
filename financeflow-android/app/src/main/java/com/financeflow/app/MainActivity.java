@@ -15,6 +15,7 @@ import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Base64;
 import android.view.Window;
+import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.JsResult;
 import android.webkit.JsPromptResult;
@@ -86,6 +87,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         setContentView(R.layout.activity_main);
 
         createNotificationChannel();
@@ -99,14 +101,27 @@ public class MainActivity extends AppCompatActivity {
         settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
+        settings.setAllowFileAccessFromFileURLs(false);
+        settings.setAllowUniversalAccessFromFileURLs(false);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
-        settings.setBuiltInZoomControls(false);
+        settings.setBuiltInZoomControls(true);
         settings.setDisplayZoomControls(false);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
         webView.addJavascriptInterface(new AndroidBridge(), "Android");
         webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                // Only the bundled app may access the native JavaScript bridge.
+                if ("file:///android_asset/index.html".equals(url)) return false;
+                Uri uri = Uri.parse(url);
+                if ("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme())) {
+                    try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); } catch (Exception ignored) {}
+                }
+                return true;
+            }
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
@@ -120,6 +135,7 @@ public class MainActivity extends AppCompatActivity {
                                       String defaultValue, JsPromptResult result) {
                 EditText input = new EditText(MainActivity.this);
                 input.setSingleLine(true);
+                if (message.contains("current app PIN")) input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
                 input.setText(defaultValue);
                 new AlertDialog.Builder(MainActivity.this)
                     .setMessage(message).setView(input)
@@ -276,15 +292,16 @@ public class MainActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public void authenticate(final String callbackFn) {
+            if (!"onAuthResult".equals(callbackFn)) return;
             BiometricManager bm = BiometricManager.from(MainActivity.this);
             int canAuth = bm.canAuthenticate(
                 BiometricManager.Authenticators.BIOMETRIC_WEAK |
                 BiometricManager.Authenticators.DEVICE_CREDENTIAL);
 
             if (canAuth != BiometricManager.BIOMETRIC_SUCCESS) {
-                // No biometric/PIN available — unlock automatically
+                // Unavailable authentication must never count as a successful unlock.
                 runOnUiThread(() ->
-                    webView.evaluateJavascript("window['" + callbackFn + "'](true)", null));
+                    webView.evaluateJavascript("window['" + callbackFn + "'](false)", null));
                 return;
             }
 
@@ -428,6 +445,8 @@ public class MainActivity extends AppCompatActivity {
         // INTERNET permission (the browser app does its own networking, not this WebView).
         @JavascriptInterface
         public void openExternalLink(String url) {
+            String scheme = Uri.parse(url).getScheme();
+            if (!"https".equalsIgnoreCase(scheme) && !"http".equalsIgnoreCase(scheme)) return;
             runOnUiThread(() -> {
                 try {
                     suppressNextLock = true;
