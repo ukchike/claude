@@ -50,7 +50,12 @@
     }
     return result;
   }
-  const api={round,date,nextDue,rate,amount,sameCurrency,occurrences};
+  function transferAmounts(amount,exchangeRate){
+    const sent=round(Number(amount)),fx=Number(exchangeRate),received=round(sent*fx);
+    if(!Number.isFinite(sent)||sent<=0||!Number.isFinite(fx)||fx<=0||!Number.isFinite(received)||received<=0)throw Error('Enter a positive amount and conversion rate.');
+    return {amount:sent,receivedAmount:received,exchangeRate:fx};
+  }
+  const api={round,date,nextDue,rate,amount,sameCurrency,occurrences,transferAmounts};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   root.FinanceCore=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

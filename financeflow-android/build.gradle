@@ -1,3 +1,28 @@
 plugins {
     id 'com.android.application' version '8.2.2' apply false
 }
+
+// Document parsing stays offline; app signing configuration is unaffected.
+subprojects {
+    afterEvaluate { project ->
+        if (project.name == 'app') {
+            project.dependencies.add('implementation', 'com.tom-roush:pdfbox-android:2.0.27.0')
+            project.dependencies.add('testImplementation', 'junit:junit:4.13.2')
+            project.dependencies.add('testImplementation', 'org.json:json:20240303')
+            project.android.testOptions.unitTests.returnDefaultValues = true
+            def runNumber = System.getenv('GITHUB_RUN_NUMBER')
+            if (runNumber) {
+                project.android.defaultConfig.versionCode = runNumber.toInteger()
+                project.android.defaultConfig.versionName = '1.2.' + runNumber
+            }
+            def signingFile = System.getenv('FF_SIGNING_STORE_FILE')
+            if (signingFile) {
+                def config = project.android.signingConfigs.getByName('release')
+                config.storeFile = new File(signingFile)
+                config.storePassword = System.getenv('FF_SIGNING_STORE_PASSWORD')
+                config.keyAlias = System.getenv('FF_SIGNING_KEY_ALIAS')
+                config.keyPassword = System.getenv('FF_SIGNING_KEY_PASSWORD')
+            }
+        }
+    }
+}

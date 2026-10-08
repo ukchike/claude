@@ -232,3 +232,37 @@ test('storage failure blocks shortcut entry until a successful retry',()=>{
   assert.equal(run('storageInitializationFailed'),true);
   assert.equal(run('prepareSecureStorage()'),true);assert.equal(run('storageInitializationFailed'),false);
 });
+test('FX transfer posts both native amounts, preserves rate on edit and stays out of income/expense',()=>{
+  const run=app();run(`accounts=[{id:'u',name:'USD',currency:'USD',fxRate:1500},{id:'n',name:'NGN',currency:'NGN'}];window._tfFrom='u';window._tfTo='n';$('tfAmt').value='100';$('tfRate').value='1500';$('tfDate').value='2026-10-08';$('tfDesc').value='Convert USD';addTransfer();`);
+  assert.equal(run('getAccountBalance("u")'),-100);assert.equal(run('getAccountBalance("n")'),150000);assert.equal(run('txns[0].exchangeRate'),1500);assert.equal(run('txns.filter(t=>t.type==="income"||t.type==="expense").length'),0);
+  run(`window.id=txns[0].id;$('tfAmt').value='50';$('tfRate').value='1600';saveTransfer(window.id);`);
+  assert.equal(run('getAccountBalance("u")'),-50);assert.equal(run('getAccountBalance("n")'),80000);
+  assert.equal(run('validateBackupData(backupData()).txns[0].receivedCurrency'),'NGN');
+  run(`window._tfFrom='n';window._tfTo='u';$('tfAmt').value='150000';$('tfRate').value=String(1/1500);addTransfer();`);
+  assert.equal(run('getAccountBalance("u")'),50);assert.equal(run('getAccountBalance("n")'),-70000);
+  const before=run('txns.length');run(`$('tfRate').value='0';addTransfer();`);assert.equal(run('txns.length'),before);
+});
+test('conversion rejects impossible rates and cent-rounded receiving amounts',()=>{
+  assert.deepEqual(core.transferAmounts(100,1500),{amount:100,receivedAmount:150000,exchangeRate:1500});
+  assert.equal(core.transferAmounts(150000,1/1500).receivedAmount,100);
+  for(const rate of [0,-1,Infinity,NaN,1e-20])assert.throws(()=>core.transferAmounts(10,rate));
+});
+test('custom description rules override suggestions without changing direction and survive backup',()=>{
+  const run=app();run(`importRules=[{id:'r',phrase:'abc membership',type:'expense',category:'Education',subcategory:'Training'}];`);
+  assert.equal(run(`suggestStatementCategory({description:'Payment ABC membership REF: 1122',type:'expense'}).category`),'Education');
+  assert.equal(run(`suggestStatementCategory({description:'ABC membership',type:'income'}).category`),'Other');
+  assert.equal(run(`statementRuleMatches('XYZabc membership','abc membership')`),false);
+  run(`importRules.push({id:'s',phrase:'abc membership',type:'expense',category:'Other',subcategory:''});`);
+  assert.ok(run(`suggestStatementCategory({description:'ABC membership',type:'expense'}).categoryReason`).includes('Conflicting'));
+  assert.equal(run('backupData().importRules.length'),2);
+});
+test('reconciliation uses each transfer endpoint currency and never clears the other account implicitly',()=>{
+  const run=app();run(`accounts=[{id:'u',name:'USD',currency:'USD'},{id:'n',name:'NGN',currency:'NGN'}];txns=[{id:'t',type:'transfer',amount:100,receivedAmount:150000,exchangeRate:1500,fromAccountId:'u',toAccountId:'n',date:'2026-10-08'}];setAccountEntryCleared(txns[0],'n',true);`);
+  assert.equal(run(`reconcileSummary('n','2026-10-08').cleared`),150000);assert.equal(run(`reconcileSummary('u','2026-10-08').cleared`),0);assert.equal(run(`reconcileSummary('n','2026-10-07').balance`),0);
+  run(`setAccountEntryCleared(txns[0],'u',true);`);assert.equal(run(`reconcileSummary('u','2026-10-08').cleared`),-100);
+  run(`setAccountEntryCleared(txns[0],'n',false);`);assert.equal(run(`reconcileSummary('n','2026-10-08').cleared`),0);
+});
+test('statement matching marks an existing transfer endpoint and adds no financial record',()=>{
+  const run=app();run(`accounts=[{id:'u',name:'USD',currency:'USD'},{id:'n',name:'NGN',currency:'NGN'}];txns=[{id:'t',type:'transfer',amount:100,receivedAmount:150000,fromAccountId:'u',toAccountId:'n',date:'2026-10-08'}];statementReview={review:[{tx:{accountId:'n',type:'income',amount:150000,date:'2026-10-08'},selected:false,possibleDuplicate:true}],rows:[],mapping:{},accountId:'n'};renderStatementReview=()=>{};matchStatementRow(0,'t');`);
+  assert.equal(run('txns.length'),1);assert.equal(run('statementReview.review[0].matchedId'),'t');assert.equal(run(`accountEntryCleared(txns[0],'n')`),true);assert.equal(run(`accountEntryCleared(txns[0],'u')`),false);
+});

@@ -136,7 +136,7 @@ public class MainActivity extends AppCompatActivity {
                 EditText input = new EditText(MainActivity.this);
                 input.setSingleLine(true);
                 if (message.contains("current app PIN")) input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
-                else if (message.toLowerCase().contains("backup password")) input.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+                else if (message.toLowerCase().contains("password")) input.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
                 input.setText(defaultValue);
                 new AlertDialog.Builder(MainActivity.this)
                     .setMessage(message).setView(input)
@@ -283,6 +283,13 @@ public class MainActivity extends AppCompatActivity {
     private SecureStore secureStore;
     private synchronized SecureStore secureStore(){if(secureStore==null)secureStore=new SecureStore(MainActivity.this);return secureStore;}
     private class AndroidBridge {
+        @JavascriptInterface public void decodeStatement(String extension,String encoded,String password,int token){
+            new Thread(()->{JSONObject result=new JSONObject();try{byte[] data=Base64.decode(encoded,Base64.DEFAULT);if(data.length>4*1024*1024)throw new IllegalArgumentException("File exceeds 4 MB");
+                result=extension.equals("xlsx")?StatementDocumentReader.xlsx(data):extension.equals("pdf")?StatementDocumentReader.pdf(MainActivity.this,data,password):new JSONObject().put("error","Use CSV, XLSX or a text-based PDF");
+            }catch(Exception e){try{result.put("error",e.getMessage()==null?"Statement extraction failed":e.getMessage());}catch(Exception ignored){}}
+            final String json=result.toString();runOnUiThread(()->webView.evaluateJavascript("window.onStatementDecoded("+token+","+JSONObject.quote(json)+")",null));},"statement-extraction").start();
+        }
+
         @JavascriptInterface public boolean supportsSecureStorage(){return Build.VERSION.SDK_INT>=23;}
         @JavascriptInterface public String getSecureItem(String key){return secureStore().get(key);}
         @JavascriptInterface public boolean setSecureItem(String key,String value){return secureStore().set(key,value);}
@@ -473,8 +480,7 @@ public class MainActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public String getPendingBankAlerts() {
-            return getSharedPreferences(BankAlertListenerService.PREFS, Context.MODE_PRIVATE)
-                .getString(BankAlertListenerService.KEY_PENDING, "[]");
+            try{return BankAlertStore.get(MainActivity.this,BankAlertListenerService.KEY_PENDING,"[]");}catch(Exception e){return "[]";}
         }
 
         @JavascriptInterface
@@ -482,13 +488,13 @@ public class MainActivity extends AppCompatActivity {
             synchronized (BankAlertListenerService.LOCK) {
                 SharedPreferences prefs = getSharedPreferences(BankAlertListenerService.PREFS, Context.MODE_PRIVATE);
                 try {
-                    JSONArray pending = new JSONArray(prefs.getString(BankAlertListenerService.KEY_PENDING, "[]"));
+                    JSONArray pending = new JSONArray(BankAlertStore.get(MainActivity.this,BankAlertListenerService.KEY_PENDING,"[]"));
                     JSONArray kept = new JSONArray();
                     for (int i = 0; i < pending.length(); i++) {
                         JSONObject entry = pending.getJSONObject(i);
                         if (!entry.optString("id").equals(id)) kept.put(entry);
                     }
-                    prefs.edit().putString(BankAlertListenerService.KEY_PENDING, kept.toString()).apply();
+                    BankAlertStore.put(MainActivity.this,kept.toString(),null);
                 } catch (Exception ignored) {
                 }
             }
@@ -512,13 +518,13 @@ public class MainActivity extends AppCompatActivity {
                 SharedPreferences.Editor edit = prefs.edit().putStringSet(BankAlertListenerService.KEY_IGNORED, sources);
                 if (ignored) {
                     try {
-                        JSONArray pending = new JSONArray(prefs.getString(BankAlertListenerService.KEY_PENDING, "[]"));
+                        JSONArray pending = new JSONArray(BankAlertStore.get(MainActivity.this,BankAlertListenerService.KEY_PENDING,"[]"));
                         JSONArray kept = new JSONArray();
                         for (int i=0; i<pending.length(); i++) {
                             JSONObject entry=pending.getJSONObject(i);
                             if (!pkg.equals(entry.optString("packageName"))) kept.put(entry);
                         }
-                        edit.putString(BankAlertListenerService.KEY_PENDING, kept.toString());
+                        BankAlertStore.put(MainActivity.this,kept.toString(),null);
                     } catch (Exception e) { return; }
                 }
                 edit.apply();

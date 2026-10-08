@@ -53,15 +53,15 @@ public class BankAlertListenerService extends NotificationListenerService {
         String dedupeKey = pkg + "|" + notificationKey + "|" + sbn.getPostTime() + "|" + combined.hashCode();
         synchronized (LOCK) {
             if (prefs.getStringSet(KEY_IGNORED, java.util.Collections.emptySet()).contains(pkg)) return;
-            String seenJoined = prefs.getString(KEY_SEEN, "");
+            String seenJoined;try{seenJoined=BankAlertStore.get(this,KEY_SEEN,"");}catch(Exception e){return;}
             for (String seen : seenJoined.split("\n")) if (seen.equals(dedupeKey)) return;
 
             try {
-                JSONArray pending = new JSONArray(prefs.getString(KEY_PENDING, "[]"));
+                JSONArray pending = new JSONArray(BankAlertStore.get(this,KEY_PENDING,"[]"));
                 JSONObject entry = new JSONObject();
                 entry.put("id", notificationKey + "_" + sbn.getPostTime() + "_" + combined.hashCode());
                 entry.put("amount", parsed.amount);
-                entry.put("currency", "NGN");
+                entry.put("currency", parsed.currency);
                 entry.put("parserVersion", 2);
                 entry.put("packageName", pkg);
                 entry.put("reference", parsed.reference);
@@ -86,10 +86,7 @@ public class BankAlertListenerService extends NotificationListenerService {
                     seenBuilder.append("\n").append(seenArr[i]);
                 }
 
-                prefs.edit()
-                    .putString(KEY_PENDING, trimmed.toString())
-                    .putString(KEY_SEEN, seenBuilder.toString())
-                    .apply();
+                BankAlertStore.put(this,trimmed.toString(),seenBuilder.toString());
             } catch (Exception ignored) {
                 // malformed prefs content — drop this detection rather than crash the listener
             }

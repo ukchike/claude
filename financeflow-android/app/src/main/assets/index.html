@@ -237,6 +237,28 @@ button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--accent);ou
 @media(max-width:380px){.grid2{grid-template-columns:1fr}.stat-row{grid-template-columns:1fr}.stat{display:flex;align-items:center;justify-content:space-between;gap:8px}.bnav-btn{font-size:11px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
+
+.entry-modal{display:flex;flex-direction:column;max-height:calc(100dvh - 12px);overflow:hidden!important;padding:12px!important}
+.entry-modal .modal-handle{display:none}.entry-modal .mb16,.entry-modal .mb14{margin-bottom:6px!important}
+.entry-body{min-height:0;overflow:auto}.entry-modal .inp{padding:8px 10px;min-height:40px;font-size:15px}.entry-modal .edit-label{margin-bottom:2px;font-size:12px}
+.entry-footer{flex-shrink:0;background:var(--card);padding-top:8px;margin-top:6px;border-top:1px solid var(--border)}
+.entry-footer .btn{padding:10px!important;min-height:44px}.entry-extras summary{padding:8px;cursor:pointer;font-size:13px}
+
+
+.entry-modal:not(.split-entry) .entry-body{grid-template-columns:repeat(2,minmax(0,1fr))}
+.entry-modal:not(.split-entry) .entry-body>div:nth-child(1){grid-column:1;grid-row:1}
+.entry-modal:not(.split-entry) .entry-body>div:nth-child(2){grid-column:1/-1;grid-row:2}
+.entry-modal:not(.split-entry) .entry-body>div:nth-child(3){grid-column:2;grid-row:1}
+.entry-modal:not(.split-entry) .entry-body>div:nth-child(4){grid-column:1;grid-row:3}
+.entry-modal:not(.split-entry) .entry-body>div:nth-child(5){grid-column:1/-1;grid-row:4}
+.entry-modal:not(.split-entry) .entry-body>div:nth-child(6){grid-column:2;grid-row:3}
+.entry-modal .entry-extras{grid-column:1/-1}.entry-modal .entry-body .flex .btn{padding:8px!important}
+.entry-modal .entry-body .inp{min-width:0}.entry-modal .entry-body .inp span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+
+.entry-modal.edit-entry .entry-body>div:nth-child(5){grid-column:2;grid-row:3}
+.transfer-modal{display:flex;flex-direction:column;max-height:calc(100dvh - 12px);overflow:hidden!important}.transfer-body{min-height:0;overflow:auto}.transfer-save{flex-shrink:0}
+
 </style>
 </head>
 <body>
@@ -276,6 +298,7 @@ button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--accent);ou
 
 // Android 6+ stores financial records in encrypted app-private storage.
 let secureStorageReady=false,storageInitializationFailed=false;
+let importRules=[];
 function secureStorageAvailable(){return !!(window.Android?.supportsSecureStorage&&window.Android.supportsSecureStorage());}
 const appStorage={
   getItem(key){if(!secureStorageReady)return localStorage.getItem(key);const result=JSON.parse(window.Android.getSecureItem(key));if(!result.ok)throw Error(result.error);return result.found?result.value:null;},
@@ -615,6 +638,7 @@ function pickAccountFor(id){
   window[_pickerVarName]=id;
   const acc=accounts.find(a=>a.id===id);
   const lbl=$(_pickerLabelId);if(lbl)lbl.textContent=acc?acc.name:"";
+  if(_pickerVarName==='_tfFrom'||_pickerVarName==='_tfTo'){if($('tfRate'))$('tfRate').value='';updateTransferPreview();}
   if(_pickerVarName==="_uploadAcc"&&statementReview)reviewStatement();
   if(_pickerVarName==="_txAcc"&&window._bankAlertId)window._bankAccountConfirmed=true;
   closePicker();
@@ -695,6 +719,7 @@ const $=id=>document.getElementById(id);
 
 // ── PERSISTENCE ──
 function save(){
+  appStorage.setItem("ffd_rules",JSON.stringify(importRules));
   appStorage.setItem("ffd_tx",JSON.stringify(txns));
   appStorage.setItem("ffd_bd",JSON.stringify(budgets));
   appStorage.setItem("ffd_acc",JSON.stringify(accounts));
@@ -723,6 +748,7 @@ function save(){
   syncWidgetData();
 }
 function load(){
+  try{importRules=JSON.parse(appStorage.getItem("ffd_rules")||"[]");if(!Array.isArray(importRules))importRules=[];}catch(e){importRules=[];}
   try{importHistory=JSON.parse(appStorage.getItem("ffd_imports")||"[]");if(!Array.isArray(importHistory))importHistory=[];}catch(e){importHistory=[];}
   try{scheduledPayments=JSON.parse(appStorage.getItem("ffd_scheduled")||"[]");if(!Array.isArray(scheduledPayments))scheduledPayments=[];}catch(e){scheduledPayments=[];}
   try{const t=appStorage.getItem("ffd_tx");if(t)txns=JSON.parse(t);}catch(e){}
@@ -836,18 +862,31 @@ function viewTagTx(tag){closePP();fCat="all";fType="all";fAcc="all";search=tag;V
 // ── ACCOUNT BALANCE HELPERS (income/expense affect one account; transfers move between two) ──
 function primaryAmount(t){return FinanceCore.amount(t,accounts,currency.code)??0;}
 function txnCurrency(t){const a=accounts.find(a=>a.id===(t.accountId||t.fromAccountId));return a?.currency||currency.code;}
-function fmtTxn(t){return fmtCur(t.amount,txnCurrency(t));}
+function fmtTxn(t){return t.type==='transfer'?fmtCur(t.amount,txnCurrency(t))+' → '+fmtCur(t.receivedAmount??t.amount,accounts.find(a=>a.id===t.toAccountId)?.currency||currency.code):fmtCur(t.amount,txnCurrency(t));}
 function financialNoticeHTML(){
   const foreign=accounts.filter(a=>(a.currency||currency.code)!==currency.code);
   const missing=foreign.filter(a=>FinanceCore.rate(a,currency.code)===null);
-  const invalidTransfers=txns.filter(t=>t.type==="transfer"&&!FinanceCore.sameCurrency(t.fromAccountId,t.toAccountId,accounts,currency.code));
+  const invalidTransfers=txns.filter(t=>t.type==="transfer"&&(!accounts.some(a=>a.id===t.fromAccountId)||!accounts.some(a=>a.id===t.toAccountId)||(!FinanceCore.sameCurrency(t.fromAccountId,t.toAccountId,accounts,currency.code)&&!(Number(t.receivedAmount)>0&&Number(t.exchangeRate)>0))));
   return (foreign.length?`<div class="msg msg-ok fz11">Reports are in ${esc(currency.code)}. Foreign amounts use your current manual rates, including past periods.${missing.length?' Excluded until a rate is set: '+missing.map(a=>esc(a.name)).join(', ')+'.':''}</div>`:'')+
     (invalidTransfers.length?`<div class="msg msg-err fz11">${invalidTransfers.length} existing transfer(s) involve different currencies or missing accounts. Review them: their original amounts are preserved.</div>`:'');
 }
-function validTransfer(from,to){
+function validTransfer(from,to,rate){
+  if(!accounts.some(a=>a.id===from)||!accounts.some(a=>a.id===to)||from===to){alert('Choose two different existing accounts.');return false;}
   if(FinanceCore.sameCurrency(from,to,accounts,currency.code))return true;
-  alert("Transfers require two existing accounts in the same currency. Cross-currency transfers need separate sending and receiving amounts and are not supported yet.");return false;
+  if(Number.isFinite(Number(rate))&&Number(rate)>0)return true;
+  alert('Enter the conversion rate: destination currency received for 1 unit of the sending currency.');return false;
 }
+function transferFieldsHTML(rate=''){
+  return `<div id="tfFx"><label class="edit-label" for="tfRate">Conversion rate</label><input class="inp" id="tfRate" inputmode="decimal" type="number" step="any" min="0" value="${esc(String(rate))}" oninput="updateTransferPreview()"><div class="fz11 muted" id="tfRateLabel"></div></div><div class="msg msg-ok" id="tfReceived" aria-live="polite"></div>`;
+}
+function updateTransferPreview(){
+  const from=accounts.find(a=>a.id===window._tfFrom),to=accounts.find(a=>a.id===window._tfTo);if(!$('tfFx')||!from||!to)return;
+  const fc=from.currency||currency.code,tc=to.currency||currency.code,same=fc===tc;
+  $('tfFx').style.display=same?'none':'block';$('tfRateLabel').textContent=`1 ${fc} = entered rate in ${tc}. Record any fee separately as an expense.`;
+  try{const values=FinanceCore.transferAmounts(parseAmount($('tfAmt')?.value),same?1:Number($('tfRate')?.value));$('tfReceived').textContent=`Send ${fmtCur(values.amount,fc)} → Receive ${fmtCur(values.receivedAmount,tc)}`;}
+  catch(e){$('tfReceived').textContent=`Sending currency: ${fc} · Receiving currency: ${tc}. Enter amount${same?'':' and conversion rate'}.`;}
+}
+function transferValues(){const same=FinanceCore.sameCurrency(window._tfFrom,window._tfTo,accounts,currency.code);return FinanceCore.transferAmounts(parseAmount($('tfAmt')?.value),same?1:Number($('tfRate')?.value));}
 function validEntry(amount,dateStr,accountId){
   if(!Number.isFinite(amount)||amount<=0){alert("Enter a positive, finite amount");return false;}
   if(!FinanceCore.date(dateStr)){alert("Enter a valid transaction date");return false;}
@@ -1293,7 +1332,7 @@ function moveHomeSection(key,dir){
 function clearedDotHTML(t){
   return`<span onclick="event.stopPropagation();toggleCleared('${t.id}')" title="${t.cleared?"Reconciled — tap to unmark":"Tap to mark reconciled against your bank"}" style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;cursor:pointer;background:${t.cleared?"var(--green)":"transparent"};border:1.5px solid ${t.cleared?"var(--green)":"var(--muted)"}"></span>`;
 }
-function toggleCleared(id){const t=txns.find(x=>x.id===id);if(!t)return;t.cleared=!t.cleared;save();render();}
+function toggleCleared(id){const t=txns.find(x=>x.id===id);if(!t)return;if(t.type==='transfer'){openReconciliation(t.fromAccountId);return;}t.cleared=!t.cleared;save();render();}
 function txRow(t){
   if(t.type==="transfer")return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:rgba(var(--accent-rgb),.1);color:var(--accent)">&#8646;</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||"Transfer")}</div><div class="fz9 muted">${esc(accName(t.fromAccountId))} &#8594; ${esc(accName(t.toAccountId))}</div></div><div><div class="fz12 fw7 tar accent">${clearedDotHTML(t)}${fmtTxn(t)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
   const acc=accounts.find(a=>a.id===t.accountId);return`<div class="tx-row" onclick="showModal('edit','${t.id}')"><div class="tx-icon" style="background:${clr(t.category)}22;color:${clr(t.category)}">${catIcon(t.category)}</div><div style="flex:1;min-width:0"><div class="fz11 fw6 ellip">${esc(t.description||t.category)} ${t.source==="Recurring"?'<span class="rec-badge">&#128257;</span>':""}${t.receipt?'<span class="rec-badge">&#128247;</span>':""}${t.splitGroupId?'<span class="rec-badge">&#128203; split</span>':""}${tagChipsHTML(t.tags)}</div><div class="fz9 muted">${esc(t.subcategory?t.category+" › "+t.subcategory:t.category)} · ${esc(acc?acc.name:"")}</div></div><div><div class="fz12 fw7 tar ${t.type==="income"?"green":"red"}">${clearedDotHTML(t)}${t.type==="income"?"+":"-"}${fmtTxn(t)}</div><div class="fz9 muted tar">${t.date}</div></div></div>`;
@@ -1384,7 +1423,7 @@ function accountsSectionHTML(){
   const unconverted=foreign.filter(a=>!(a.fxRate>0));
   const tb=accounts.reduce((s,a)=>{const eq=acctPrimaryEquiv(a);return eq===null?s:s+eq;},0);
   return`<div class="flex-b mb4"><span class="fz13 fw7">Your Accounts</span>${accounts.length>1?`<button class="btn btn-g btn-sm" onclick="showModal('transfer')">&#8646; Transfer</button>`:""}</div><div class="fz10 muted mb12">Total balance (${esc(currency.code)}): <span class="fw7 accent fz14">${fmt(tb)}</span>${unconverted.length?` <span class="fz9 muted">· ${unconverted.length} account${unconverted.length>1?"s":""} not included (no rate set)</span>`:""}</div>
-  <div class="grid2 mb12">${accounts.map(a=>{const bal=getAccountBalance(a.id);const cnt=txnCountForAccount(a.id);const ic=a.type==="cash"?"&#128181;":"&#127981;";const acCode=a.currency||currency.code;const isForeign=acCode!==currency.code;const eq=acctPrimaryEquiv(a);return`<div class="acc-card"><div class="flex g8 mb8"><div style="width:34px;height:34px;border-radius:8px;background:${a.color}20;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:16px">${ic}</div><div style="flex:1;min-width:0"><div class="fw7 fz12 ellip">${esc(a.name)}</div><div class="fz9 muted">${cnt} txns${isForeign?" · "+esc(acCode):""}</div></div><button class="account-delete" aria-label="Delete ${esc(a.name)} account" title="Delete account" onclick="deleteAccount('${escJs(a.id)}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">&#10005;</button></div><div class="fw8 fz16">${fmtCur(bal,acCode)}</div>${isForeign?`<div class="flex g6 mt8" style="align-items:center"><span class="fz9 muted" style="white-space:nowrap">1 ${esc(acCode)} =</span><input class="inp" style="font-size:11px;padding:5px 8px" type="text" inputmode="decimal" value="${a.fxRate?a.fxRate:""}" aria-label="Exchange rate for ${esc(a.name)} in ${esc(currency.code)}" placeholder="rate" onchange="setAccFxRate('${a.id}',this.value)"><span class="fz9 muted">${esc(currency.code)}</span></div>${eq!==null?`<div class="fz9 muted mt4">&#8776; ${fmt(eq)}</div>`:""}`:""}</div>`;}).join("")}</div>
+  <div class="grid2 mb12">${accounts.map(a=>{const bal=getAccountBalance(a.id);const cnt=txnCountForAccount(a.id);const ic=a.type==="cash"?"&#128181;":"&#127981;";const acCode=a.currency||currency.code;const isForeign=acCode!==currency.code;const eq=acctPrimaryEquiv(a);return`<div class="acc-card"><div class="flex g8 mb8"><div style="width:34px;height:34px;border-radius:8px;background:${a.color}20;display:flex;align-items:center;justify-content:center;color:${a.color};font-size:16px">${ic}</div><div style="flex:1;min-width:0"><div class="fw7 fz12 ellip">${esc(a.name)}</div><div class="fz9 muted">${cnt} txns${isForeign?" · "+esc(acCode):""}</div></div><button class="account-delete" aria-label="Delete ${esc(a.name)} account" title="Delete account" onclick="deleteAccount('${escJs(a.id)}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">&#10005;</button></div><div class="fw8 fz16">${fmtCur(bal,acCode)}</div>${isForeign?`<div class="flex g6 mt8" style="align-items:center"><span class="fz9 muted" style="white-space:nowrap">1 ${esc(acCode)} =</span><input class="inp" style="font-size:11px;padding:5px 8px" type="text" inputmode="decimal" value="${a.fxRate?a.fxRate:""}" aria-label="Exchange rate for ${esc(a.name)} in ${esc(currency.code)}" placeholder="rate" onchange="setAccFxRate('${a.id}',this.value)"><span class="fz9 muted">${esc(currency.code)}</span></div>${eq!==null?`<div class="fz9 muted mt4">&#8776; ${fmt(eq)}</div>`:""}`:""}<button class="btn btn-g btn-sm w100 mt8" onclick="openReconciliation('${escJs(a.id)}')">Reconcile account</button>${a.lastReconciliation?`<div class="fz11 muted">Last reconciled: ${esc(a.lastReconciliation.date)}</div>`:""}</div>`;}).join("")}</div>
   <div class="card"><div class="fz12 fw7 mb10">Add Account</div>
     <div style="display:grid;gap:10px">
       <input class="inp" id="newAccName" value="${esc(draftAccName)}" oninput="draftAccName=this.value" placeholder="Account name (e.g. GTBank, Opay)">
@@ -1425,6 +1464,7 @@ const SETTINGS_ITEMS=[
   {id:"budgets",icon:"&#127919;",label:"Budgets"},
   {id:"goals",icon:"&#127942;",label:"Goals"},
   {id:"tags",icon:"&#127991;",label:"Tags"},
+  {id:"rules",icon:"&#128221;",label:"Statement category rules"},
   {id:"categories",icon:"&#127991;&#65039;",label:"Categories"},
   {id:"appearance",icon:"&#127912;",label:"Appearance"},
   {id:"security",icon:"&#128274;",label:"Security"},
@@ -1484,6 +1524,7 @@ function renderSettings(){
       ${!showNetworthChartHome?networthChartCardHTML():""}
     </div>`;
   }
+  if(settingsTab==="rules"){body=importRulesHTML();}
   if(settingsTab==="accounts"){
     body=`<div class="st-section">${accountsSectionHTML()}</div>`;
   }
@@ -1865,18 +1906,18 @@ function ignoredBankSources(){try{return window.Android?.getIgnoredBankSources?J
 function setIgnoredBankSource(pkg,ignored){if(!window.Android?.setBankSourceIgnored)return;if(ignored&&!confirm('Ignore future detections from '+pkg+' and remove its pending alerts?'))return;Android.setBankSourceIgnored(pkg,ignored);render();}
 function bankAlertsHTML(pending){
   const ignored=ignoredBankSources();
-  return `<div class="fz10 muted mb8">Only NGN alert amounts are detected. Notifications are suggestions, not bank reconciliation. Verify the source app, date, amount, direction and account. The latest 100 detections are retained.</div>`+
+  return `<div class="fz10 muted mb8">NGN, USD, EUR and GBP alert amounts are detected. Notifications are suggestions, not bank reconciliation. Verify the source app, date, amount, direction and account. The latest 100 detections are retained.</div>`+
     (ignored.length?`<div class="fz10 muted mb8">Ignored sources: ${ignored.map(pkg=>`<button class="btn btn-g btn-sm" onclick="setIgnoredBankSource('${escJs(pkg)}',false)">Allow ${esc(pkg)}</button>`).join('')}</div>`:'')+
-    (pending.length?pending.map((p,i)=>`<div class="bud-item"><div class="fz12 fw6">${fmtCur(p.amount,'NGN')} · ${p.type==='income'?'Possible credit':p.type==='expense'?'Possible debit':'Direction needs review'}</div><div class="fz10 muted mt4">Source: ${esc(p.appName||p.packageName||'Unknown source (older detection)')} · ${p.timestamp?esc(toLocalISODate(new Date(p.timestamp))):'Check date'}</div>${p.amountUncertain?'<div class="msg msg-err fz10">Multiple amounts found — verify the transaction amount.</div>':''}<details class="fz10 muted mt6"><summary>View notification text</summary><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(p.text)}</div></details><div class="flex g6 mt8"><button class="btn btn-p btn-sm" onclick="confirmBankAlert(${i})">Review &amp; Add</button><button class="btn btn-rd btn-sm" onclick="dismissBankAlert(${i})">Dismiss</button>${p.packageName?`<button class="btn btn-g btn-sm" onclick="setIgnoredBankSource('${escJs(p.packageName)}',true)">Ignore source</button>`:''}</div></div>`).join(''):'<div class="fz11 muted tac" style="padding:12px">No pending detections.</div>');
+    (pending.length?pending.map((p,i)=>`<div class="bud-item"><div class="fz12 fw6">${fmtCur(p.amount,p.currency||'NGN')} · ${p.type==='income'?'Possible credit':p.type==='expense'?'Possible debit':'Direction needs review'}</div><div class="fz10 muted mt4">Source: ${esc(p.appName||p.packageName||'Unknown source (older detection)')} · ${p.timestamp?esc(toLocalISODate(new Date(p.timestamp))):'Check date'}</div>${p.amountUncertain?'<div class="msg msg-err fz10">Multiple amounts found — verify the transaction amount.</div>':''}<details class="fz10 muted mt6"><summary>View notification text</summary><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(p.text)}</div></details><div class="flex g6 mt8"><button class="btn btn-p btn-sm" onclick="confirmBankAlert(${i})">Review &amp; Add</button><button class="btn btn-rd btn-sm" onclick="dismissBankAlert(${i})">Dismiss</button>${p.packageName?`<button class="btn btn-g btn-sm" onclick="setIgnoredBankSource('${escJs(p.packageName)}',true)">Ignore source</button>`:''}</div></div>`).join(''):'<div class="fz11 muted tac" style="padding:12px">No pending detections.</div>');
 }
 function confirmBankAlert(idx){
   const a=getPendingBankAlerts()[idx];if(!a)return;
   if(txns.some(t=>t.bankAlertId===a.id)){dismissBankAlert(idx);return alert('This alert has already been recorded.');}
   showModal('addtx');
   window._bankAlertId=a.id;window._bankAlertMeta=a;window._txFromBankAlert=false;
-  const account=accounts.find(a=>(a.currency||currency.code)==='NGN');
+  const alertCurrency=a.currency||'NGN';const account=accounts.find(x=>(x.currency||currency.code)===alertCurrency);
   window._txAcc=account?.id||null;window._bankAccountConfirmed=false;
-  if($('txAccLabel'))$('txAccLabel').textContent=account?account.name+' (NGN) — tap to confirm account':'Select a NGN account';
+  if($('txAccLabel'))$('txAccLabel').textContent=account?account.name+' ('+alertCurrency+') — tap to confirm account':'Select a '+alertCurrency+' account';
   setAmountValue('txAmt',a.amount);
   if($('txDesc'))$('txDesc').value=a.text||'';
   if($('txDate')&&a.timestamp)$('txDate').value=toLocalISODate(new Date(a.timestamp));
@@ -1890,7 +1931,7 @@ function validateBankAlertEntry(t){
   const a=window._bankAlertMeta;
   if(!window._bankAccountConfirmed){alert('Tap Account and select the bank account for this alert.');return false;}
   if(!window._bankTypeConfirmed){alert('Select Income or Expense to confirm the direction.');return false;}
-  if(txnCurrency(t)!=='NGN'){alert('This alert is in NGN. Select a NGN account.');return false;}
+  const code=window._bankAlertMeta?.currency||'NGN';if(txnCurrency(t)!==code){alert('This alert is in '+code+'. Select an account in that currency.');return false;}
   if(txns.some(x=>x.bankAlertId===window._bankAlertId)){alert('This alert is already recorded.');return false;}
   const match=StatementImport.possible(t,txns);
   return confirm((match?'A matching account/date/amount or transfer already exists. Cancel and dismiss this alert if it is the same transaction.\n\n':'')+`Record ${t.type==='income'?'income':'expense'} ${fmtTxn(t)} in ${accName(t.accountId)} on ${t.date}?`);
@@ -2104,10 +2145,10 @@ window.onSaveResult=function(success){
   else showToast("⚠️ Save cancelled","warn");
 };
 function exportCSV(){
-  const h=["Date","Description","Amount","Type","Category","Subcategory","Account","Tags","Currency"];
+  const h=["Date","Description","Amount","Type","Category","Subcategory","Account","Tags","Currency","Received Amount","Received Currency","Conversion Rate"];
   const rows=txns.sort((a,b)=>b.date.localeCompare(a.date)).map(t=>{
-    if(t.type==="transfer")return[t.date,t.description||"",t.amount,"transfer","Transfer","",accName(t.fromAccountId)+" → "+accName(t.toAccountId),(t.tags||[]).join("; "),txnCurrency(t)].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",");
-    const acc=accounts.find(a=>a.id===t.accountId);return[t.date,t.description||"",t.amount,t.type,t.category,t.subcategory||"",acc?acc.name:"",(t.tags||[]).join("; "),txnCurrency(t)].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",");
+    if(t.type==="transfer")return[t.date,t.description||"",t.amount,"transfer","Transfer","",accName(t.fromAccountId)+" → "+accName(t.toAccountId),(t.tags||[]).join("; "),txnCurrency(t),t.receivedAmount??t.amount,t.receivedCurrency||accounts.find(a=>a.id===t.toAccountId)?.currency||currency.code,t.exchangeRate||1].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",");
+    const acc=accounts.find(a=>a.id===t.accountId);return[t.date,t.description||"",t.amount,t.type,t.category,t.subcategory||"",acc?acc.name:"",(t.tags||[]).join("; "),txnCurrency(t),"","",""].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",");
   });
   const csv=[h.join(","),...rows].join("\n");
   saveOrDownload("financeflow_"+toLocalISODate(new Date())+".csv",csv,"text/csv");
@@ -2215,7 +2256,7 @@ async function exportEncryptedData(){
 }
 function backupData(){return {
     version:3,exportedAt:new Date().toISOString(),
-    txns,budgets,accounts,userEC,userIC,profile,recurring,scheduledPayments,importHistory,
+    txns,budgets,accounts,userEC,userIC,profile,recurring,scheduledPayments,importHistory,importRules,
     goals,catOrder,homeLayout,hiddenDefaultCats,userTags,
     homeCards:{balance:showBalanceHome,accounts:showAccountsHome,networthchart:showNetworthChartHome},
     hiddenHomeSections,
@@ -2224,13 +2265,13 @@ function backupData(){return {
 }
 
 // ── DATA ACTIONS ──
-function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts","ffd_homelayout","ffd_catorder","ffd_goals","ffd_pin","ffd_reminders","ffd_onboard","ffd_usertags","ffd_homecards","ffd_hiddensections"].forEach(k=>appStorage.removeItem(k));txns=[];budgets=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e",currency:currency.code}];userEC={};userIC={};profile={name:""};recurring=[];scheduledPayments=[];importHistory=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;homeLayout=DEFAULT_HOME_LAYOUT.slice();showBalanceHome=true;showAccountsHome=true;showNetworthChartHome=false;hiddenHomeSections=["trend"];catOrder={expense:[],income:[]};goals=[];userTags=[];pinHash="";pinLockActive=false;remindersEnabled=false;onboardComplete=false;onboardStep=0;if(window.Android&&window.Android.cancelReminders)window.Android.cancelReminders();save();closeSettings();}}
+function resetAll(){if(confirm("Clear ALL data and start fresh?")){["ffd_tx","ffd_bd","ffd_acc","ffd_ec","ffd_ic","ffd_pro","ffd_rec","ffd_bio","ffd_hidecats","ffd_bankalerts","ffd_homelayout","ffd_catorder","ffd_goals","ffd_pin","ffd_reminders","ffd_onboard","ffd_usertags","ffd_homecards","ffd_hiddensections"].forEach(k=>appStorage.removeItem(k));txns=[];budgets=[];importRules=[];accounts=[{id:"cash",name:"Cash",type:"cash",color:"#22c55e",currency:currency.code}];userEC={};userIC={};profile={name:""};recurring=[];scheduledPayments=[];importHistory=[];biometricEnabled=false;hiddenDefaultCats={expense:[],income:[]};bankAlertsEnabled=false;homeLayout=DEFAULT_HOME_LAYOUT.slice();showBalanceHome=true;showAccountsHome=true;showNetworthChartHome=false;hiddenHomeSections=["trend"];catOrder={expense:[],income:[]};goals=[];userTags=[];pinHash="";pinLockActive=false;remindersEnabled=false;onboardComplete=false;onboardStep=0;if(window.Android&&window.Android.cancelReminders)window.Android.cancelReminders();save();closeSettings();}}
 function validateBackupData(d){
   const fail=m=>{throw new Error(m);},obj=v=>v&&typeof v==='object'&&!Array.isArray(v);
   if(!obj(d)||!Array.isArray(d.txns)||!Array.isArray(d.accounts)||!d.accounts.length)fail('Not a FinanceFlow backup: transactions and accounts are required.');
   if(d.version!==undefined&&(!Number.isInteger(d.version)||d.version<1||d.version>3))fail('Unsupported backup version.');
   const inspect=v=>{if(!v||typeof v!=='object')return;for(const k of Object.keys(v)){if(['__proto__','prototype','constructor'].includes(k))fail('Unsafe field in backup.');inspect(v[k]);}};inspect(d);
-  const arrayKeys=['budgets','recurring','scheduledPayments','importHistory','goals','userTags','homeLayout','hiddenHomeSections'];
+  const arrayKeys=['importRules','budgets','recurring','scheduledPayments','importHistory','goals','userTags','homeLayout','hiddenHomeSections'];
   for(const k of arrayKeys)if(d[k]!==undefined&&!Array.isArray(d[k]))fail(k+' must be a list.');
   for(const k of ['profile','userEC','userIC','catOrder','hiddenDefaultCats','homeCards'])if(d[k]!==undefined&&!obj(d[k]))fail(k+' must be an object.');
   for(const k of ['userEC','userIC'])for(const [name,subs] of Object.entries(d[k]||{}))if(!name||!Array.isArray(subs)||subs.some(x=>typeof x!=='string'))fail('Invalid custom categories.');
@@ -2250,6 +2291,7 @@ function validateBackupData(d){
       if(list==='recurring'&&(!FinanceCore.date(t.nextDue)||!['daily','weekly','monthly','yearly'].includes(t.frequency)))fail('Invalid recurring schedule.');
       const refs=t.type==='transfer'?[t.fromAccountId,t.toAccountId]:[t.accountId];if(refs.some(id=>!ids.has(id)))fail('A transaction refers to an account missing from the backup.');
       if(t.type==='transfer'&&t.fromAccountId===t.toAccountId)fail('Invalid transfer accounts.');
+      if(t.type==='transfer'&&(t.receivedAmount!==undefined||t.exchangeRate!==undefined)){if(!positive(t.receivedAmount)||!positive(t.exchangeRate)||FinanceCore.round(t.amount*t.exchangeRate)!==t.receivedAmount)fail('Invalid transfer conversion amounts.');}
       for(const k of ['description','category','subcategory'])if(t[k]!==undefined&&typeof t[k]!=='string')fail('Invalid '+k+'.');
       if(t.tags!==undefined&&(!Array.isArray(t.tags)||t.tags.some(x=>typeof x!=='string')))fail('Invalid transaction tags.');
       if(list==='scheduledPayments'&&!['pending','paid','skipped'].includes(t.status))fail('Invalid pending-payment status.');
@@ -2257,10 +2299,12 @@ function validateBackupData(d){
   }
   for(const b of d.budgets||[]){if(!obj(b)||typeof b.cat!=='string'||!finite(b.limit)||b.limit<0||!Array.isArray(b.subs)||b.subs.some(x=>!obj(x)||typeof x.name!=='string'||!finite(x.limit)||x.limit<0))fail('Invalid budget.');}
   for(const g of d.goals||[])if(!obj(g)||typeof g.name!=='string'||!finite(g.target)||g.target<0)fail('Invalid savings goal.');
+  for(const r of d.importRules||[])if(!obj(r)||typeof r.phrase!=='string'||!['income','expense'].includes(r.type)||typeof r.category!=='string'||(r.subcategory!==undefined&&typeof r.subcategory!=='string'))fail('Invalid description rule.');
   for(const h of d.importHistory||[])if(!obj(h)||typeof h.filename!=='string'||!Number.isInteger(h.count)||h.count<0)fail('Invalid import history.');
   return d;
 }
 function applyBackupData(d){
+  importRules=Array.isArray(d.importRules)?d.importRules:[];
   txns=d.txns||[];
   budgets=d.budgets||[];budgets.forEach(b=>{if(!b.period)b.period="month";});
   accounts=d.accounts||[{id:"cash",name:"Cash",type:"cash",color:"#22c55e"}];
@@ -2308,7 +2352,7 @@ function deleteTx(id){const idx=txns.findIndex(t=>t.id===id);if(idx<0)return;con
 function duplicateTx(id){
   const t=txns.find(x=>x.id===id);if(!t)return;
   const copy={...t,id:uid(),date:toLocalISODate(new Date()),cleared:false}; // a duplicate is a fresh, not-yet-confirmed entry
-  delete copy.bankAlertId;delete copy.externalReference;
+  delete copy.bankAlertId;delete copy.externalReference;delete copy.statementMatches;delete copy.clearedAccountIds;
   delete copy.occurrenceKey;delete copy.scheduledDate;
   delete copy.splitGroupId; // stand alone — must NOT silently join the original's split group and change its displayed total
   txns.push(copy);save();showModal("close");render();
@@ -2349,32 +2393,33 @@ function showModal(type,id){
 
   if(type==="edit"&&id){const t=txns.find(x=>x.id===id);if(t&&t.type==="transfer"){
     window._tfFrom=t.fromAccountId;window._tfTo=t.toAccountId;
-    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">&#8646; Edit Transfer</span><div class="flex g6"><button class="btn btn-sm btn-g" onclick="duplicateTx('${t.id}')" title="Duplicate">&#128203;</button><button class="btn btn-sm btn-rd" onclick="deleteTx('${t.id}');showModal('close')">&#128465;</button><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div></div>
+    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg transfer-modal" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">&#8646; Edit Transfer</span><div class="flex g6"><button class="btn btn-sm btn-g" onclick="duplicateTx('${t.id}')" title="Duplicate">&#128203;</button><button class="btn btn-sm btn-rd" onclick="deleteTx('${t.id}');showModal('close')">&#128465;</button><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div></div>
     <div class="flex g4 mb14"><button class="btn w100 btn-g btn-sm" onclick="convertFromTransfer('${t.id}','expense')">Make Expense</button><button class="btn w100 btn-g btn-sm" onclick="convertFromTransfer('${t.id}','income')">Make Income</button></div>
-    <div style="display:grid;gap:12px">
+    <div class="transfer-body"><div style="display:grid;gap:12px">
       <div><span class="edit-label">Date</span><input class="inp" type="date" id="tfDate" value="${t.date}"></div>
       <div><span class="edit-label">Description</span><input class="inp" id="tfDesc" value="${esc(t.description)}" placeholder="e.g. Move to savings"></div>
-      <div><span class="edit-label">Amount (selected account currency)</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="tfAmt" value="${t.amount.toLocaleString("en-US",{maximumFractionDigits:2})}" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('tfAmt')" title="Calculator">&#129518;</button></div></div>
+      <div><span class="edit-label">Amount (selected account currency)</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="tfAmt" value="${t.amount.toLocaleString("en-US",{maximumFractionDigits:2})}" oninput="formatAmountInput(this);updateTransferPreview()"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('tfAmt')" title="Calculator">&#129518;</button></div></div>
       <div><span class="edit-label">From Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_tfFrom','tfFromLabel')"><span id="tfFromLabel"></span><span class="muted">&#8250;</span></button></div>
       <div><span class="edit-label">To Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_tfTo','tfToLabel')"><span id="tfToLabel"></span><span class="muted">&#8250;</span></button></div>
     </div>
-    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="saveTransfer('${t.id}')">&#10003; Save</button></div></div>`;
-    $("tfFromLabel").textContent=accName(t.fromAccountId);$("tfToLabel").textContent=accName(t.toAccountId);
+    ${transferFieldsHTML(t.exchangeRate||'')}
+    </div><button class="btn btn-p w100 mt16 transfer-save" style="justify-content:center;padding:14px;font-size:14px" onclick="saveTransfer('${t.id}')">&#10003; Save</button></div></div>`;
+    $("tfFromLabel").textContent=accName(t.fromAccountId);$("tfToLabel").textContent=accName(t.toAccountId);updateTransferPreview();
     return;}}
 
   if(type==="edit"){const t=txns.find(x=>x.id===id);if(!t)return;
     window._eType=t.type;window._eCat=t.category;window._eSub=t.subcategory||"";window._eAcc=t.accountId;window._eReceipt=t.receipt||null;window._eTags=(t.tags||[]).slice();
-    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Edit Transaction</span><div class="flex g6"><button class="btn btn-sm btn-g" onclick="duplicateTx('${t.id}')" title="Duplicate">&#128203;</button><button class="btn btn-sm btn-rd" onclick="deleteTx('${t.id}');showModal('close')">&#128465;</button><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div></div>
-    <div style="display:grid;gap:12px"><div><span class="edit-label">Type</span><div class="flex g4"><button class="btn w100" id="eExp" style="border:1px solid ${t.type==="expense"?"var(--red)":"var(--border)"};background:${t.type==="expense"?"rgba(239,68,68,.1)":"transparent"};color:${t.type==="expense"?"var(--red)":"var(--muted)"};padding:11px" onclick="eSetType('expense')">Expense</button><button class="btn w100" id="eInc" style="border:1px solid ${t.type==="income"?"var(--green)":"var(--border)"};background:${t.type==="income"?"rgba(34,197,94,.1)":"transparent"};color:${t.type==="income"?"var(--green)":"var(--muted)"};padding:11px" onclick="eSetType('income')">Income</button><button class="btn w100 btn-g" style="padding:11px" onclick="convertToTransfer('${t.id}')">&#8646; Transfer</button></div></div>
-    <div><span class="edit-label">Date</span><input class="inp" type="date" id="eDate" value="${t.date}"></div>
+    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg entry-modal edit-entry" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Edit Transaction</span><div class="flex g6"><button class="btn btn-sm btn-g" onclick="duplicateTx('${t.id}')" title="Duplicate">&#128203;</button><button class="btn btn-sm btn-rd" onclick="deleteTx('${t.id}');showModal('close')">&#128465;</button><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div></div>
+    <div><span class="edit-label">Type</span><div class="flex g4"><button class="btn w100" id="eExp" style="border:1px solid ${t.type==="expense"?"var(--red)":"var(--border)"};background:${t.type==="expense"?"rgba(239,68,68,.1)":"transparent"};color:${t.type==="expense"?"var(--red)":"var(--muted)"};padding:11px" onclick="eSetType('expense')">Expense</button><button class="btn w100" id="eInc" style="border:1px solid ${t.type==="income"?"var(--green)":"var(--border)"};background:${t.type==="income"?"rgba(34,197,94,.1)":"transparent"};color:${t.type==="income"?"var(--green)":"var(--muted)"};padding:11px" onclick="eSetType('income')">Income</button><button class="btn w100 btn-g" style="padding:11px" onclick="convertToTransfer('${t.id}')">&#8646; Transfer</button></div></div>
+    <div class="entry-body" style="display:grid;gap:6px"><div><span class="edit-label">Date</span><input class="inp" type="date" id="eDate" value="${t.date}"></div>
     <div style="position:relative"><span class="edit-label">Description</span><input class="inp" id="eDesc" value="${esc(t.description)}" autocomplete="off" oninput="onDescInput('e')"><div class="suggest-box" id="eDescSuggest"></div></div>
-    <div><span class="edit-label">Tags</span><div id="eTagsBox">${tagPickerHTML("_eTags","e")}</div></div>
+
     <div><span class="edit-label">Amount (selected account currency)</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="eAmt" value="${t.amount.toLocaleString("en-US",{maximumFractionDigits:2})}" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('eAmt')" title="Calculator">&#129518;</button></div></div>
     <div><span class="edit-label">Category</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openCatPicker('_eType','_eCat','_eSub','eCatLabel')"><span id="eCatLabel"></span><span class="muted">&#8250;</span></button></div>
     <div><span class="edit-label">Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_eAcc','eAccLabel')"><span id="eAccLabel"></span><span class="muted">&#8250;</span></button></div>
-    <div><span class="edit-label">Receipt</span><div id="eReceiptBox">${receiptBoxHTML("_eReceipt","e")}</div></div>
-    <div class="toggle-wrap" style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px"><div><div class="fz12 fw6">&#9989; Reconciled</div><div class="fz10 muted mt4">Confirmed against your bank statement</div></div><label class="toggle"><input type="checkbox" id="eCleared" ${t.cleared?"checked":""}><span class="toggle-slider"></span></label></div></div>
-    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="saveTx('${t.id}')">&#10003; Save</button></div></div>`;
+    <details class="entry-extras"><summary>Receipt and reconciliation</summary><div><span class="edit-label">Receipt</span><div id="eReceiptBox">${receiptBoxHTML("_eReceipt","e")}</div></div>
+    <div class="toggle-wrap" style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px"><div><div class="fz12 fw6">&#9989; Reconciled</div><div class="fz10 muted mt4">Confirmed against your bank statement</div></div><label class="toggle"><input type="checkbox" id="eCleared" ${t.cleared?"checked":""}><span class="toggle-slider"></span></label></div></details></div>
+    <button class="btn btn-p w100 entry-footer" style="justify-content:center;padding:14px;font-size:14px" onclick="saveTx('${t.id}')">&#10003; Save</button></div></div>`;
     $("eCatLabel").textContent=window._eSub?window._eCat+" / "+window._eSub:window._eCat;
     $("eAccLabel").textContent=accName(t.accountId);
   }
@@ -2392,24 +2437,24 @@ function showModal(type,id){
     if(!window._skipSplitReset){window._txSplitMode=false;window._txSplits=[];window._txTags=[];}
     window._skipSplitReset=false;
     const sm=window._txSplitMode;
-    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Add Transaction</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div>
+    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg entry-modal ${sm?'split-entry':''}" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">Add Transaction</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div>
     <div class="flex g4 mb14"><button class="btn w100" id="typeExp" style="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red);padding:11px" onclick="setTT('expense')">Expense</button><button class="btn w100" id="typeInc" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="setTT('income')">Income</button><button class="btn w100" id="typeTrf" style="border:1px solid var(--border);color:var(--muted);padding:11px" onclick="showModal('transfer')">&#8646; Transfer</button></div>
-    <div style="display:grid;gap:12px">
+    <div class="entry-body" style="display:grid;gap:6px">
       <div><span class="edit-label">Date</span><input class="inp" type="date" id="txDate" value="${toLocalISODate(new Date())}"></div>
       <div style="position:relative"><span class="edit-label">Description</span><input class="inp" id="txDesc" placeholder="e.g. Grocery run" autocomplete="off" oninput="onDescInput('tx')"><div class="suggest-box" id="txDescSuggest"></div></div>
-      <div><span class="edit-label">Tags</span><div id="txTagsBox">${tagPickerHTML("_txTags","tx")}</div></div>
+
       ${sm?`<div><div class="flex-b"><span class="edit-label" style="margin:0">Split across categories</span><button type="button" class="btn" style="background:none;border:none;color:var(--accent);font-size:11px;padding:0" onclick="toggleSplitMode()">Use one category instead</button></div><div id="txSplitBox">${splitLinesHTML()}</div></div>`:`
       <div><span class="edit-label">Amount (selected account currency)</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="txAmt" placeholder="0.00" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('txAmt')" title="Calculator">&#129518;</button></div></div>
       <div><span class="edit-label">Category</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openCatPicker('_txT','_txCat','_txSub','txCatLabel')"><span id="txCatLabel"></span><span class="muted">&#8250;</span></button></div>
       <div class="tar"><button type="button" class="btn" style="background:none;border:none;color:var(--accent);font-size:11px;padding:0" onclick="toggleSplitMode()">&#8646; Split into multiple categories</button></div>`}
       <div><span class="edit-label">Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_txAcc','txAccLabel')"><span id="txAccLabel"></span><span class="muted">&#8250;</span></button></div>
-      ${sm?"":`<div><span class="edit-label">Receipt</span><div id="txReceiptBox">${receiptBoxHTML("_txReceipt","tx")}</div></div>
+      ${sm?"":`<details class="entry-extras"><summary>Receipt and recurring options</summary><div><span class="edit-label">Receipt</span><div id="txReceiptBox">${receiptBoxHTML("_txReceipt","tx")}</div></div>
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px">
         <div class="flex-b mb6"><span class="fz12 fw6">&#128257; Make Recurring</span><label class="toggle"><input type="checkbox" id="txRec" onchange="toggleRecUI(this.checked)"><span class="toggle-slider"></span></label></div>
         <div id="recUI" style="display:none"><select class="inp" id="txFreq" style="margin-top:8px"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly" selected>Monthly</option><option value="yearly">Yearly</option></select></div>
-      </div>`}
+      </div></details>`}
     </div>
-    <div class="flex g6 mt16"><button class="btn btn-g" style="flex:1;justify-content:center;padding:14px;font-size:14px" onclick="addTx(true)">&#128260; Save &amp; Add New</button><button class="btn btn-p" style="flex:1;justify-content:center;padding:14px;font-size:14px" onclick="addTx(false)">+ Add Transaction</button></div></div></div>`;
+    <div class="flex g6 entry-footer"><button class="btn btn-g" style="flex:1;justify-content:center;padding:14px;font-size:14px" onclick="addTx(true)">&#128260; Save &amp; New</button><button class="btn btn-p" style="flex:1;justify-content:center;padding:14px;font-size:14px" onclick="addTx(false)">Save</button></div></div></div>`;
     if($("txCatLabel"))$("txCatLabel").textContent=window._txSub?firstCat+" / "+window._txSub:firstCat;
     $("txAccLabel").textContent=accName(window._txAcc);
   }
@@ -2417,22 +2462,23 @@ function showModal(type,id){
   if(type==="transfer"){
     if(accounts.length<2){mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb12"><span class="fz14 fw7">&#8646; Transfer</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div><div class="fz12 muted tac" style="padding:20px 0">Add a second account first to transfer between accounts.</div></div></div>`;return;}
     window._tfFrom=accounts[0]?.id;window._tfTo=accounts[1]?.id||accounts[0]?.id;
-    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">&#8646; Transfer Between Accounts</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div>
-    <div style="display:grid;gap:12px">
+    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal modal-lg transfer-modal" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb16"><span class="fz16 fw7">&#8646; Transfer Between Accounts</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div>
+    <div class="transfer-body"><div style="display:grid;gap:12px">
       <div><span class="edit-label">Date</span><input class="inp" type="date" id="tfDate" value="${toLocalISODate(new Date())}"></div>
       <div><span class="edit-label">Description (optional)</span><input class="inp" id="tfDesc" placeholder="e.g. Move to savings"></div>
-      <div><span class="edit-label">Amount (selected account currency)</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="tfAmt" placeholder="0.00" oninput="formatAmountInput(this)"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('tfAmt')" title="Calculator">&#129518;</button></div></div>
+      <div><span class="edit-label">Amount (selected account currency)</span><div class="flex g6"><input class="inp" type="text" inputmode="decimal" id="tfAmt" placeholder="0.00" oninput="formatAmountInput(this);updateTransferPreview()"><button type="button" class="btn btn-g" style="padding:12px" onclick="openCalc('tfAmt')" title="Calculator">&#129518;</button></div></div>
       <div><span class="edit-label">From Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_tfFrom','tfFromLabel')"><span id="tfFromLabel"></span><span class="muted">&#8250;</span></button></div>
       <div><span class="edit-label">To Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_tfTo','tfToLabel')"><span id="tfToLabel"></span><span class="muted">&#8250;</span></button></div>
     </div>
-    <button class="btn btn-p w100 mt16" style="justify-content:center;padding:14px;font-size:14px" onclick="addTransfer()">&#8646; Transfer</button></div></div>`;
-    $("tfFromLabel").textContent=accName(window._tfFrom);$("tfToLabel").textContent=accName(window._tfTo);
+    ${transferFieldsHTML()}
+    </div><button class="btn btn-p w100 mt16 transfer-save" style="justify-content:center;padding:14px;font-size:14px" onclick="addTransfer()">&#8646; Transfer</button></div></div>`;
+    $("tfFromLabel").textContent=accName(window._tfFrom);$("tfToLabel").textContent=accName(window._tfTo);updateTransferPreview();
   }
 
   if(type==="upload"){
     statementReview=null;pendingTx=[];statementLoadToken++;
     window._uploadAcc=accounts[0]?.id||"cash";
-    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb12"><span class="fz14 fw7">Upload Statement</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div><div class="mb8"><span class="edit-label">Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_uploadAcc','uploadAccLabel')"><span id="uploadAccLabel"></span><span class="muted">&#8250;</span></button></div><div class="drop-zone" id="dz" onclick="$('fi').click()"><div style="font-size:28px;margin-bottom:6px">&#128196;</div><div class="fz12 fw6">Tap to select CSV file</div><div class="fz10 muted mt4">Bank statement in CSV format</div><input type="file" id="fi" accept=".csv,.tsv,.txt" style="display:none" onchange="handleFile(this.files[0])"></div><div id="uMsg"></div><div id="uPrev"></div><div id="uAct"></div></div></div>`;
+    mc.innerHTML=`<div class="modal-bg" onclick="showModal('close')"><div class="modal" onclick="event.stopPropagation()"><div class="modal-handle"></div><div class="flex-b mb12"><span class="fz14 fw7">Upload Statement</span><button class="btn" style="padding:2px;color:var(--muted)" onclick="showModal('close')">&#10005;</button></div><div class="mb8"><span class="edit-label">Account</span><button type="button" class="inp" style="text-align:left;display:flex;align-items:center;justify-content:space-between" onclick="openAccPicker('_uploadAcc','uploadAccLabel')"><span id="uploadAccLabel"></span><span class="muted">&#8250;</span></button></div><div class="drop-zone" id="dz" onclick="$('fi').click()"><div style="font-size:28px;margin-bottom:6px">&#128196;</div><div class="fz12 fw6">Tap to select CSV, Excel or PDF</div><div class="fz10 muted mt4">CSV, XLSX or a text-based PDF (4 MB maximum)</div><input type="file" id="fi" accept=".csv,.tsv,.txt,.xlsx,.pdf" style="display:none" onchange="handleFile(this.files[0])"></div><div id="uMsg"></div><div id="uPrev"></div><div id="uAct"></div></div></div>`;
     $("uploadAccLabel").textContent=accName(window._uploadAcc);
     const dz=$("dz");dz.ondragover=e=>{e.preventDefault();dz.classList.add("over");};dz.ondragleave=()=>dz.classList.remove("over");dz.ondrop=e=>{e.preventDefault();dz.classList.remove("over");handleFile(e.dataTransfer.files[0]);};}
 }
@@ -2462,9 +2508,10 @@ function convertToTransfer(id){
 function convertFromTransfer(id,newType){
   const t=txns.find(x=>x.id===id);if(!t)return;
   const cats=newType==="income"?getIC():getEC();const firstCat=Object.keys(cats)[0]||"";
+  if(newType==='income')t.amount=Number(t.receivedAmount??t.amount);
   t.type=newType;t.accountId=(newType==="income"?t.toAccountId:t.fromAccountId)||accounts[0]?.id;
   t.category=firstCat;t.subcategory=(cats[firstCat]||[])[0]||"";
-  delete t.fromAccountId;delete t.toAccountId;
+  delete t.fromAccountId;delete t.toAccountId;delete t.receivedAmount;delete t.exchangeRate;delete t.sentCurrency;delete t.receivedCurrency;delete t.clearedAccountIds;delete t.statementMatches;t.cleared=false;
   save();showModal("edit",id);
 }
 function setTT(t){
@@ -2583,9 +2630,10 @@ function addTransfer(){
   const from=window._tfFrom,to=window._tfTo;
   if(!from||!to)return alert("Select both accounts");
   if(from===to)return alert("From and To accounts must be different");
-  if(!validTransfer(from,to))return;
+  if(!validTransfer(from,to,$('tfRate')?.value))return;
+  let values;try{values=transferValues();}catch(e){return alert(e.message);}
   if(!validEntry(a,$("tfDate").value,from))return;
-  const t={id:uid(),type:"transfer",date:$("tfDate").value,description:$("tfDesc").value,amount:a,fromAccountId:from,toAccountId:to,source:"Manual"};
+  const t={id:uid(),type:"transfer",date:$("tfDate").value,description:$("tfDesc").value,...values,sentCurrency:accounts.find(x=>x.id===from).currency||currency.code,receivedCurrency:accounts.find(x=>x.id===to).currency||currency.code,fromAccountId:from,toAccountId:to,source:"Manual"};
   txns.push(t);save();
   showModal("close");render();
   showToast("⇄ Transferred "+fmt(a)+" "+accName(from)+" → "+accName(to),"green");
@@ -2596,9 +2644,10 @@ function saveTransfer(id){
   const from=window._tfFrom,to=window._tfTo;
   if(!from||!to)return alert("Select both accounts");
   if(from===to)return alert("From and To accounts must be different");
-  if(!validTransfer(from,to))return;
+  if(!validTransfer(from,to,$('tfRate')?.value))return;
+  let values;try{values=transferValues();}catch(e){return alert(e.message);}
   if(!validEntry(a,$("tfDate").value,from))return;
-  t.date=$("tfDate").value;t.description=$("tfDesc").value;t.amount=a;t.fromAccountId=from;t.toAccountId=to;
+  t.date=$("tfDate").value;t.description=$("tfDesc").value;Object.assign(t,values);t.sentCurrency=accounts.find(x=>x.id===from).currency||currency.code;t.receivedCurrency=accounts.find(x=>x.id===to).currency||currency.code;t.cleared=false;delete t.clearedAccountIds;t.fromAccountId=from;t.toAccountId=to;
   save();showModal("close");render();
 }
 
@@ -2611,11 +2660,35 @@ function statementDate(value){
   }
   const d=parseFlexibleDate(v);return d?toLocalISODate(d):null;
 }
+function statementRuleMatches(description,phrase){const text=' '+statementDescriptionKey(description)+' ',key=statementDescriptionKey(phrase);return key.length>=3&&text.includes(' '+key+' ');}
+function importRulesHTML(){return `<div class="fz12 muted mb12">Match a description phrase to a category. Rules apply only to the chosen Income/Expense direction; conflicting rules require review.</div><label class="edit-label" for="rulePhrase">Description phrase</label><input class="inp mb8" id="rulePhrase" placeholder="e.g. ABC membership"><label class="edit-label" for="ruleType">Direction</label><select class="inp mb8" id="ruleType" onchange="renderRuleCategories()"><option value="expense">Expense</option><option value="income">Income</option></select><div id="ruleCategories">${ruleCategoryFields('expense')}</div><button class="btn btn-p w100 mt8" onclick="addImportRule()">Save rule</button>${importRules.map((r,i)=>`<div class="bud-item"><div>${esc(r.phrase)} → ${esc(r.category)}${r.subcategory?' / '+esc(r.subcategory):''} (${esc(r.type)})</div><button class="btn btn-rd btn-sm" onclick="removeImportRule(${i})">Delete rule</button></div>`).join('')}`;}
+function ruleCategoryFields(type){const cats=type==='income'?getIC():getEC();return `<label class="edit-label" for="ruleCat">Category</label><select class="inp" id="ruleCat" onchange="renderRuleSubcategories()">${Object.keys(cats).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('')}</select><label class="edit-label" for="ruleSub">Subcategory</label><select class="inp" id="ruleSub"><option value="">No subcategory</option></select>`;}
+function renderRuleCategories(){$('ruleCategories').innerHTML=ruleCategoryFields($('ruleType').value);renderRuleSubcategories();}
+function renderRuleSubcategories(){const cats=$('ruleType').value==='income'?getIC():getEC();$('ruleSub').innerHTML='<option value="">No subcategory</option>'+(cats[$('ruleCat').value]||[]).map(sub=>`<option value="${esc(sub)}">${esc(sub)}</option>`).join('');}
+function addImportRule(){const phrase=$('rulePhrase').value.trim(),type=$('ruleType').value,category=$('ruleCat').value,subcategory=$('ruleSub').value;const cats=type==='income'?getIC():getEC();if(statementDescriptionKey(phrase).length<3)return alert('Use a description phrase of at least 3 characters.');if(!Object.hasOwn(cats,category)||(subcategory&&!(cats[category]||[]).includes(subcategory)))return alert('Choose valid categories.');importRules.push({id:uid(),phrase,type,category,subcategory});save();render();}
+function removeImportRule(index){if(!confirm('Delete this description rule?'))return;importRules.splice(index,1);save();render();}
+function accountEntryAmount(t,id){if(t.type==='transfer')return t.fromAccountId===id?-Number(t.amount):t.toAccountId===id?Number(t.receivedAmount??t.amount):0;return t.accountId===id?(t.type==='income'?Number(t.amount):-Number(t.amount)):0;}
+function accountEntryCleared(t,id){return t.type==='transfer'?!!t.cleared||(t.clearedAccountIds||[]).includes(id):!!t.cleared;}
+function setAccountEntryCleared(t,id,value){if(t.type==='transfer'){const all=t.cleared?[t.fromAccountId,t.toAccountId]:[...(t.clearedAccountIds||[])];t.cleared=false;t.clearedAccountIds=value?[...new Set([...all,id])]:all.filter(x=>x!==id);}else t.cleared=value;}
+function reconcileSummary(id,date){const rows=txns.filter(t=>t.date<=date&&(t.accountId===id||t.fromAccountId===id||t.toAccountId===id));return {rows,balance:FinanceCore.round(rows.reduce((n,t)=>n+accountEntryAmount(t,id),0)),cleared:FinanceCore.round(rows.filter(t=>accountEntryCleared(t,id)).reduce((n,t)=>n+accountEntryAmount(t,id),0))};}
+function openReconciliation(id){const account=accounts.find(a=>a.id===id);if(!account)return;window._reconcileAccount=id;$('modal-container').innerHTML=`<div class="modal-bg"><div class="modal modal-lg"><div class="flex-b mb8"><h2 class="fz16">Reconcile ${esc(account.name)}</h2><button class="btn btn-g" aria-label="Close reconciliation" onclick="showModal('close')">Close</button></div><label class="edit-label" for="reconcileDate">Statement closing date</label><input class="inp" type="date" id="reconcileDate" value="${toLocalISODate(new Date())}" onchange="renderReconciliation()"><label class="edit-label" for="reconcileBalance">Statement closing balance (${esc(account.currency||currency.code)})</label><input class="inp" id="reconcileBalance" type="number" step="0.01" oninput="renderReconciliation()"><div id="reconcileRows"></div><button class="btn btn-p w100 mt8" onclick="finishReconciliation()">Confirm reconciliation</button></div></div>`;renderReconciliation();}
+function renderReconciliation(){const id=window._reconcileAccount,date=$('reconcileDate').value;if(!FinanceCore.date(date))return;const s=reconcileSummary(id,date),account=accounts.find(a=>a.id===id),code=account.currency||currency.code,raw=$('reconcileBalance').value,statement=Number(raw),difference=FinanceCore.round(statement-s.cleared);
+  $('reconcileRows').innerHTML=`<div class="msg msg-ok">Ledger balance: ${fmtCur(s.balance,code)} · Checked balance: ${fmtCur(s.cleared,code)}${raw!==''&&Number.isFinite(statement)?' · Difference: '+fmtCur(difference,code):''}</div><div class="fz11 muted">Check only entries confirmed on the bank statement. Opening balances must already be represented in your records. This does not create balancing transactions.</div><div style="max-height:240px;overflow:auto">${s.rows.map(t=>`<label class="flex g8 bud-item"><input type="checkbox" ${accountEntryCleared(t,id)?'checked':''} onchange="toggleReconcileEntry('${escJs(t.id)}',this.checked)"><span>${esc(t.date)} · ${esc(t.description||t.type)} · ${fmtCur(accountEntryAmount(t,id),code)}</span></label>`).join('')}</div>`;
+}
+function toggleReconcileEntry(txId,value){const t=txns.find(x=>x.id===txId);if(!t)return;setAccountEntryCleared(t,window._reconcileAccount,value);save();renderReconciliation();}
+function finishReconciliation(){const id=window._reconcileAccount,date=$('reconcileDate').value,raw=$('reconcileBalance').value,statement=Number(raw);if(raw===''||!Number.isFinite(statement)||!FinanceCore.date(date))return alert('Enter a valid closing date and balance.');const s=reconcileSummary(id,date);if(FinanceCore.round(statement-s.cleared)!==0)return alert('The checked balance differs from the statement. Review unchecked entries, missing opening balances and duplicates.');if(!confirm('Confirm checked entries match the statement closing balance?'))return;const a=accounts.find(x=>x.id===id);a.lastReconciliation={date,balance:statement,confirmedAt:new Date().toISOString()};save();showModal('close');render();showToast('Account reconciled','green');}
+function statementMatchCandidates(t){return txns.filter(x=>x.date===t.date&&FinanceCore.round(accountEntryAmount(x,t.accountId))===(t.type==='income'?t.amount:-t.amount));}
+function statementMatchHTML(r,index){if(!r.tx||(!r.possibleDuplicate&&!r.duplicate))return '';const candidates=statementMatchCandidates(r.tx);return candidates.length?`<select class="inp mt8" aria-label="Match existing transaction for row ${r.row}" onchange="matchStatementRow(${index},this.value)"><option value="">Match an existing entry instead of adding</option>${candidates.map(t=>`<option value="${esc(t.id)}">${esc(t.description||t.type)} · ${esc(t.date)} · ${esc(t.category||'Transfer')}</option>`).join('')}</select>`:'';}
+function matchStatementRow(index,id){if(!id)return;const r=statementReview?.review[index],t=txns.find(x=>x.id===id);if(!r?.tx||!t||!statementMatchCandidates(r.tx).includes(t))return;if(!confirm('Match this statement row to the selected existing entry? This marks only this account as reconciled and adds no transaction.'))return;setAccountEntryCleared(t,r.tx.accountId,true);r.selected=false;r.matchedId=id;const key=r.key||StatementImport.signature(r.tx);t.statementMatches=[...(t.statementMatches||[]).filter(m=>m.key!==key),{key,accountId:r.tx.accountId}];save();renderStatementReview();}
 function statementDescriptionKey(value){return String(value||'').toLowerCase().replace(/\b(?:ref|reference|session id|transaction id)\s*[:#=-]?\s*[a-z0-9_-]+/g,' ').replace(/[^a-z0-9]+/g,' ').trim();}
 function statementCategoryKey(t){return JSON.stringify([t.accountId,t.date,t.type,t.amount,t.description]);}
 function suggestStatementCategory(t){
   const cats=t.type==='income'?getIC():getEC(),d=statementDescriptionKey(t.description);
   const valid=(c,sub)=>Object.hasOwn(cats,c)&&(!sub||(cats[c]||[]).includes(sub));
+  const explicit=importRules.filter(r=>r.type===t.type&&statementRuleMatches(d,r.phrase)&&valid(r.category,r.subcategory));
+  const ruleChoices=new Set(explicit.map(r=>JSON.stringify([r.category,r.subcategory||''])));
+  if(ruleChoices.size===1){const r=explicit[0];return {...t,category:r.category,subcategory:r.subcategory||'',categoryReason:'Your description rule: '+r.phrase};}
+  if(ruleChoices.size>1)return {...t,category:Object.hasOwn(cats,'Other')?'Other':'',subcategory:'',categoryReason:'Conflicting description rules — review'};
   const previous=txns.filter(x=>x.type===t.type&&!x.splitGroupId&&statementDescriptionKey(x.description)===d&&valid(x.category,x.subcategory)&&x.category!=='Other');
   const choices=new Map(previous.map(x=>[JSON.stringify([x.category,x.subcategory||'']),x]));
   if(d.length>=4&&choices.size===1){const x=choices.values().next().value;return {...t,category:x.category,subcategory:x.subcategory||'',categoryReason:'Matches your previous classification'};}
@@ -2665,6 +2738,7 @@ function importControlsHTML(){
   const cols=s.rows[s.header]||[];
   const labels={date:'Date',description:'Description',debit:'Debit',credit:'Credit',amount:'Amount',type:'Type / Direction',reference:'Reference',currency:'Currency'};
   return `<div class="msg msg-ok fz11">Map your columns, check all rows, then select which entries to add. Nothing is recorded until you confirm.</div>
+    ${s.sheetIndex!==undefined?`<label class="edit-label" for="statementSheet">Worksheet</label><select id="statementSheet" class="inp mb8" onchange="selectStatementSheet(this.value)">${window._statementSheets.map((sheet,i)=>`<option value="${i}" ${i===s.sheetIndex?'selected':''}>${esc(sheet.name)}</option>`).join('')}</select><div class="fz11 muted">${esc(window._statementWarning||'Verify date and amount formats before importing.')}</div>`:''}
     <span class="edit-label">Header row</span><select class="inp mb8" onchange="setStatementHeader(this.value)">${s.rows.slice(0,20).map((r,i)=>`<option value="${i}" ${i===s.header?'selected':''}>Row ${i+1}: ${esc(r.join(' · ').slice(0,90))}</option>`).join('')}</select>
     <div class="grid2 mb8">${Object.entries(labels).map(([k,label])=>`<div><span class="edit-label">${label}</span><select class="inp" onchange="setStatementMapping('${k}',this.value)"><option value="-1">Not mapped</option>${cols.map((c,i)=>`<option value="${i}" ${s.mapping[k]===i?'selected':''}>${esc(c||'Column '+(i+1))}</option>`).join('')}</select></div>`).join('')}</div>
     <span class="edit-label">Numeric date order</span><select class="inp mb8" onchange="statementReview.dateOrder=this.value;reviewStatement()"><option value="dmy" ${s.dateOrder==='dmy'?'selected':''}>Day / Month / Year</option><option value="mdy" ${s.dateOrder==='mdy'?'selected':''}>Month / Day / Year</option></select>
@@ -2688,7 +2762,7 @@ function renderStatementReview(){
   const total=type=>selected.filter(r=>r.tx.type===type).reduce((sum,r)=>FinanceCore.round(sum+r.tx.amount),0);
   const account=accounts.find(a=>a.id===s.accountId),code=account?.currency||currency.code;
   $('uMsg').innerHTML=`<div class="fz11 muted mt8">${esc(s.name)} · ${s.review.length} rows · ${selected.length} selected · ${duplicates.length} duplicate/match flags · ${s.review.filter(r=>r.error).length} invalid/summary rows</div>`;
-  $('uPrev').innerHTML=importControlsHTML()+(s.error?`<div class="msg msg-err">${esc(s.error)}</div>`:`<div class="fz11 fw6 mb8">Selected inflow: ${fmtCur(total('income'),code)} · outflow: ${fmtCur(total('expense'),code)}</div><div style="max-height:320px;overflow:auto">${s.review.map((r,i)=>`<div class="bud-item"><label class="flex g8"><input type="checkbox" ${r.selected?'checked':''} ${r.error?'disabled':''} onchange="toggleStatementRow(${i},this.checked)"><span class="fz11">Row ${r.row}: ${r.tx?`${esc(r.tx.date)} · ${esc(r.tx.description)} · ${r.tx.type==='income'?'+':'−'}${fmtCur(r.tx.amount,code)} · ${esc(r.tx.category)}`:esc(r.error)}</span></label>${statementCategoryControls(r,i)}${r.duplicate?'<div class="fz10 muted">Already recorded — excluded by default.</div>':r.possibleDuplicate?'<div class="fz10 muted">Same account/date/amount matches an existing entry or transfer — review before including.</div>':''}</div>`).join('')}</div>`);
+  $('uPrev').innerHTML=importControlsHTML()+(s.error?`<div class="msg msg-err">${esc(s.error)}</div>`:`<div class="fz11 fw6 mb8">Selected inflow: ${fmtCur(total('income'),code)} · outflow: ${fmtCur(total('expense'),code)}</div><div style="max-height:320px;overflow:auto">${s.review.map((r,i)=>`<div class="bud-item"><label class="flex g8"><input type="checkbox" ${r.selected?'checked':''} ${r.error||r.matchedId?'disabled':''} onchange="toggleStatementRow(${i},this.checked)"><span class="fz11">Row ${r.row}: ${r.tx?`${esc(r.tx.date)} · ${esc(r.tx.description)} · ${r.tx.type==='income'?'+':'−'}${fmtCur(r.tx.amount,code)} · ${esc(r.tx.category)}`:esc(r.error)}</span></label>${statementCategoryControls(r,i)}${statementMatchHTML(r,i)}${r.matchedId?'<div class="fz10 green">Matched to existing entry — no new transaction.</div>':''}${r.duplicate?'<div class="fz10 muted">Already recorded — excluded by default.</div>':r.possibleDuplicate?'<div class="fz10 muted">Same account/date/amount matches an existing entry or transfer — review before including.</div>':''}</div>`).join('')}</div>`);
   $('uAct').innerHTML=selected.length?`<button class="btn btn-p w100 mt8" onclick="addPend()">Confirm ${selected.length} selected transactions</button>`:'';
 }
 function toggleStatementRow(index,selected){const item=statementReview?.review[index];if(!item||item.error)return;if(selected&&(item.duplicate||item.possibleDuplicate)&&!confirm('Include this flagged row? Only continue if it is a separate genuine transaction.'))return;item.selected=selected;item.override=selected&&(item.duplicate||item.possibleDuplicate);renderStatementReview();}
@@ -2697,15 +2771,33 @@ async function handleFile(file){
   $('uPrev').innerHTML='';$('uAct').innerHTML='';
   if(file.size>4*1024*1024){$('uMsg').textContent='File exceeds 4 MB. Split the CSV into smaller statements.';return;}
   try{
+    const extension=file.name.split('.').pop().toLowerCase();
+    if(extension==='xlsx'||extension==='pdf'){
+      if(!window.Android?.decodeStatement)throw Error('Excel/PDF extraction is available in the Android APK.');
+      let password='';if(extension==='pdf'){const entered=prompt('PDF password, if required (leave blank for an unlocked PDF).','');if(entered===null)return;password=entered;}
+      const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=16384)binary+=String.fromCharCode(...bytes.subarray(i,i+16384));
+      if(token!==statementLoadToken)return;window._statementDocumentName=file.name;$('uMsg').textContent='Extracting statement locally…';window.Android.decodeStatement(extension,btoa(binary),password,token);return;
+    }
     const text=await file.text();if(token!==statementLoadToken||!$('uPrev'))return;
     const rows=parseCSV(text);if(rows.length>10001)throw new Error('Limit: 10,000 statement rows per import.');
     const header=StatementImport.headerRow(rows);statementReview={rows,header,mapping:StatementImport.mapping(rows[header]),dateOrder:'dmy',polarity:'explicit',name:file.name||'statement.csv',review:[]};reviewStatement();
   }catch(e){if(token===statementLoadToken&&$('uMsg'))$('uMsg').innerHTML=`<div class="msg msg-err">${esc(e.message)}</div>`;}
 }
+window.onStatementDecoded=function(token,json){
+  if(token!==statementLoadToken||!$('uPrev'))return;
+  try{const data=JSON.parse(json);if(data.error)throw Error(data.error);if(!Array.isArray(data.sheets)||!data.sheets.length)throw Error('No readable sheets');
+    window._statementSheets=data.sheets;window._statementWarning=data.warning||'';selectStatementSheet(0);
+  }catch(e){$('uMsg').textContent=e.message;}
+};
+function selectStatementSheet(index){
+  const sheet=window._statementSheets[index];if(!sheet)return;
+  const rows=sheet.rows.filter(r=>Array.isArray(r)&&r.some(c=>String(c).trim()));if(rows.length<2)throw Error('Selected sheet has no transaction table');
+  const header=StatementImport.headerRow(rows);statementReview={rows,header,mapping:StatementImport.mapping(rows[header]),name:window._statementDocumentName+' · '+sheet.name,dateOrder:'dmy',polarity:'explicit',review:[],sheetIndex:Number(index)};reviewStatement();
+}
 function addPend(){
   const s=statementReview;if(!s||s.error)return;
   if(window._uploadAcc!==s.accountId){reviewStatement();return alert('Account changed. Review the updated rows first.');}
-  const selected=s.review.filter(r=>r.selected&&r.tx);if(!selected.length)return;
+  const selected=s.review.filter(r=>r.selected&&r.tx&&!r.matchedId);if(!selected.length)return;
   const fresh=StatementImport.review(s.rows,s.mapping,{header:s.header,accountId:s.accountId,currency:accounts.find(a=>a.id===s.accountId)?.currency||currency.code,parseDate:statementDate,polarity:s.polarity},txns);
   if(selected.some(r=>{const now=fresh.find(x=>x.row===r.row);return !now?.tx||(!r.override&&(now.duplicate||now.possibleDuplicate));})){reviewStatement();return alert('Records changed. Review duplicate flags again.');}
   if(selected.some(r=>{const cats=r.tx.type==='income'?getIC():getEC();return !Object.hasOwn(cats,r.tx.category)||(r.tx.subcategory&&!(cats[r.tx.category]||[]).includes(r.tx.subcategory));}))return alert('Choose a valid category for every selected row.');
@@ -2873,7 +2965,7 @@ function applyBulkTransfer(){
   let count=0;
   selectedTxIds.forEach(id=>{
     const t=txns.find(x=>x.id===id);if(!t)return;
-    t.type="transfer";t.fromAccountId=from;t.toAccountId=to;
+    t.type="transfer";t.fromAccountId=from;t.toAccountId=to;t.receivedAmount=t.amount;t.exchangeRate=1;t.sentCurrency=accounts.find(a=>a.id===from).currency||currency.code;t.receivedCurrency=accounts.find(a=>a.id===to).currency||currency.code;t.cleared=false;delete t.clearedAccountIds;delete t.statementMatches;
     delete t.category;delete t.subcategory;delete t.accountId;
     count++;
   });

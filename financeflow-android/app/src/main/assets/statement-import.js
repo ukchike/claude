@@ -47,7 +47,7 @@
   function review(rows,m,opt,existing){
     if(m.date<0||m.description<0||(!(m.debit>=0||m.credit>=0)&&m.amount<0))throw new Error('Map Date, Description, and Debit/Credit or Amount.');
     const used=Object.values(m).filter(i=>i>=0);if(new Set(used).size!==used.length)throw new Error('A column cannot be mapped to more than one field.');
-    const counts=new Map();existing.forEach(t=>counts.set(signature(t),(counts.get(signature(t))||0)+1));
+    const counts=new Map();existing.forEach(t=>{const keys=new Set([signature(t),...(t.statementMatches||[]).map(m=>m.key)]);keys.forEach(key=>counts.set(key,(counts.get(key)||0)+1));});
     const inFile=new Map(),result=[];
     const val=(row,k)=>m[k]>=0?row[m[k]]||'':'';
     rows.slice(opt.header+1).forEach((row,i)=>{

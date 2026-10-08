@@ -15,6 +15,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      FF_SIGNING_KEYSTORE_BASE64: ${{ secrets.FF_SIGNING_KEYSTORE_BASE64 }}
+      FF_SIGNING_STORE_PASSWORD: ${{ secrets.FF_SIGNING_STORE_PASSWORD }}
+      FF_SIGNING_KEY_ALIAS: ${{ secrets.FF_SIGNING_KEY_ALIAS }}
+      FF_SIGNING_KEY_PASSWORD: ${{ secrets.FF_SIGNING_KEY_PASSWORD }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,6 +32,12 @@ jobs:
 
       - name: Financial accuracy regression tests
         run: node --test tests/*.test.cjs
+
+      - name: Compact entry and transfer browser checks
+        run: |
+          npm install --no-save --prefix /tmp/financeflow-ui playwright@1.56.1
+          /tmp/financeflow-ui/node_modules/.bin/playwright install --with-deps chromium
+          NODE_PATH=/tmp/financeflow-ui/node_modules node tests/ui-regression.cjs
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -48,8 +60,23 @@ jobs:
         run: chmod +x gradlew
         working-directory: financeflow-android
 
+      - name: Prepare private signing store when configured
+        if: env.FF_SIGNING_KEYSTORE_BASE64 != ''
+        shell: python
+        run: |
+          import os, base64
+          from pathlib import Path
+          required = ['FF_SIGNING_STORE_PASSWORD', 'FF_SIGNING_KEY_ALIAS', 'FF_SIGNING_KEY_PASSWORD']
+          if not all(os.environ.get(k) for k in required):
+              raise RuntimeError('Signing secrets are incomplete')
+          store = Path(os.environ['RUNNER_TEMP']) / 'financeflow-release.keystore'
+          store.write_bytes(base64.b64decode(os.environ['FF_SIGNING_KEYSTORE_BASE64'], validate=True))
+          store.chmod(0o600)
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write('FF_SIGNING_STORE_FILE=' + str(store) + '\n')
+
       - name: Build Release APKs (standard + full)
-        run: ./gradlew assembleStandardRelease assembleFullRelease
+        run: ./gradlew testStandardDebugUnitTest assembleStandardRelease assembleFullRelease
         working-directory: financeflow-android
 
       - name: Rename APKs
@@ -79,8 +106,8 @@ jobs:
             FinanceFlow Android APK
 
             Two builds are provided:
-            - **FinanceFlow.apk** (recommended) — never asks for notification access, so Google Play Protect won't flag it on install.
-            - **FinanceFlow-Full.apk** — adds the optional "Bank Alerts" auto-detect feature (reads notification text for bank debit/credit alerts). Because it requests notification access, Play Protect may show a one-time warning on sideloaded installs — this is expected for that permission and can be dismissed.
+            - **FinanceFlow.apk** (recommended) — omits notification-access bank-alert detection.
+            - **FinanceFlow-Full.apk** — adds the optional "Bank Alerts" auto-detect feature (reads notification text for bank debit/credit alerts). Review the requested permission and install only from the release source you trust.
 
             **Install instructions:**
             1. Download the APK you want below

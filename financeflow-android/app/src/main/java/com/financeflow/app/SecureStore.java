@@ -19,7 +19,8 @@ public final class SecureStore {
     private static final String ALIAS="financeflow_records_v1";
     private final SharedPreferences prefs;
     public SecureStore(Context context){prefs=context.getSharedPreferences("encrypted_records",Context.MODE_PRIVATE);}
-    private SecretKey key() throws Exception {
+    private static final Object KEY_LOCK=new Object();
+    private SecretKey key() throws Exception {synchronized(KEY_LOCK){
         KeyStore store=KeyStore.getInstance("AndroidKeyStore");store.load(null);
         if(store.containsAlias(ALIAS))return (SecretKey)store.getKey(ALIAS,null);
         if(!prefs.getAll().isEmpty())throw new IllegalStateException("Encryption key unavailable. Restore an exported backup.");
@@ -27,7 +28,7 @@ public final class SecureStore {
         generator.init(new KeyGenParameterSpec.Builder(ALIAS,KeyProperties.PURPOSE_ENCRYPT|KeyProperties.PURPOSE_DECRYPT)
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).setKeySize(256).build());
         return generator.generateKey();
-    }
+    }}
     private static void check(String name){if(name==null||!name.startsWith("ffd_"))throw new IllegalArgumentException("Invalid record key");}
     public synchronized String get(String name){
         JSONObject result=new JSONObject();

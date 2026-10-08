@@ -17,6 +17,10 @@ public final class BankAlertParserTest {
         check(BankAlertParser.parse("NGN15,00 debited from account")==null,"malformed grouping rejected");
         check(BankAlertParser.parse("NGN15000.001 debited from account")==null,"excess decimal precision rejected");
         check(BankAlertParser.parse("N5G network on account")==null,"bare N not treated as currency");
-        System.out.println("Bank-alert parser: 10 checks passed.");
+        r=BankAlertParser.parse("USD100.50 credited to account. Balance: USD500");check(r!=null&&r.currency.equals("USD")&&r.amount==100.50,"USD alert");
+        r=BankAlertParser.parse("€50 debited for purchase");check(r!=null&&r.currency.equals("EUR"),"EUR alert");
+        r=BankAlertParser.parse("GBP25 debited from account");check(r!=null&&r.currency.equals("GBP"),"GBP alert");
+        check(BankAlertParser.parse("USD100 credited and NGN150000 debited") == null,"mixed-currency notification needs manual review");
+        System.out.println("Bank-alert parser: 14 checks passed.");
     }
 }
