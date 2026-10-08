@@ -266,3 +266,8 @@ test('statement matching marks an existing transfer endpoint and adds no financi
   const run=app();run(`accounts=[{id:'u',name:'USD',currency:'USD'},{id:'n',name:'NGN',currency:'NGN'}];txns=[{id:'t',type:'transfer',amount:100,receivedAmount:150000,fromAccountId:'u',toAccountId:'n',date:'2026-10-08'}];statementReview={review:[{tx:{accountId:'n',type:'income',amount:150000,date:'2026-10-08'},selected:false,possibleDuplicate:true}],rows:[],mapping:{},accountId:'n'};renderStatementReview=()=>{};matchStatementRow(0,'t');`);
   assert.equal(run('txns.length'),1);assert.equal(run('statementReview.review[0].matchedId'),'t');assert.equal(run(`accountEntryCleared(txns[0],'n')`),true);assert.equal(run(`accountEntryCleared(txns[0],'u')`),false);
 });
+
+test('editing matched financial values invalidates the old match and reconciliation',()=>{
+ const run=app();run(`accounts=[{id:'a',name:'Cash',currency:'NGN'}];txns=[{id:'t',accountId:'a',type:'expense',amount:100,date:'2026-10-08',category:'Other',cleared:true,statementMatches:[{key:'old',accountId:'a'}]}];window._eAcc='a';window._eType='expense';window._eCat='Other';$('eAmt').value='200';$('eDate').value='2026-10-08';$('eDesc').value='Correct amount';$('eCleared').checked=true;saveTx('t');`);
+ assert.equal(run('txns[0].amount'),200);assert.equal(run('txns[0].statementMatches'),undefined);assert.equal(run('txns[0].cleared'),false);
+});

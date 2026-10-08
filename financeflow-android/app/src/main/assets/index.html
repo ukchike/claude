@@ -2493,7 +2493,7 @@ function eSetType(t){
   if(t==="expense"){e.style.cssText="border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red)";i.style.cssText="border:1px solid var(--border);background:transparent;color:var(--muted)";}
   else{i.style.cssText="border:1px solid var(--green);background:rgba(34,197,94,.1);color:var(--green)";e.style.cssText="border:1px solid var(--border);background:transparent;color:var(--muted)";}
 }
-function saveTx(id){const t=txns.find(x=>x.id===id);if(!t)return;const a=parseAmount($("eAmt")?.value);if(!a)return alert("Enter amount");if(!validEntry(a,$("eDate").value,window._eAcc))return;t.date=$("eDate").value;t.description=$("eDesc").value;t.amount=a;t.type=window._eType||t.type;t.category=window._eCat;t.subcategory=window._eSub||"";t.accountId=window._eAcc;t.receipt=window._eReceipt||null;t.cleared=!!$("eCleared")?.checked;t.tags=(window._eTags||[]).slice();save();showModal("close");render();}
+function saveTx(id){const t=txns.find(x=>x.id===id);if(!t)return;const a=parseAmount($("eAmt")?.value);if(!a)return alert("Enter amount");if(!validEntry(a,$("eDate").value,window._eAcc))return;const financialChanged=t.amount!==a||t.date!==$("eDate").value||t.accountId!==window._eAcc||t.type!==(window._eType||t.type);if(financialChanged)delete t.statementMatches;t.date=$("eDate").value;t.description=$("eDesc").value;t.amount=a;t.type=window._eType||t.type;t.category=window._eCat;t.subcategory=window._eSub||"";t.accountId=window._eAcc;t.receipt=window._eReceipt||null;t.cleared=!financialChanged&&!!$("eCleared")?.checked;t.tags=(window._eTags||[]).slice();save();showModal("close");render();}
 // Convert between income/expense and transfer while editing, without losing date/amount/description
 function convertToTransfer(id){
   const t=txns.find(x=>x.id===id);if(!t)return;
@@ -2647,7 +2647,7 @@ function saveTransfer(id){
   if(!validTransfer(from,to,$('tfRate')?.value))return;
   let values;try{values=transferValues();}catch(e){return alert(e.message);}
   if(!validEntry(a,$("tfDate").value,from))return;
-  t.date=$("tfDate").value;t.description=$("tfDesc").value;Object.assign(t,values);t.sentCurrency=accounts.find(x=>x.id===from).currency||currency.code;t.receivedCurrency=accounts.find(x=>x.id===to).currency||currency.code;t.cleared=false;delete t.clearedAccountIds;t.fromAccountId=from;t.toAccountId=to;
+  t.date=$("tfDate").value;t.description=$("tfDesc").value;Object.assign(t,values);t.sentCurrency=accounts.find(x=>x.id===from).currency||currency.code;t.receivedCurrency=accounts.find(x=>x.id===to).currency||currency.code;t.cleared=false;delete t.clearedAccountIds;delete t.statementMatches;t.fromAccountId=from;t.toAccountId=to;
   save();showModal("close");render();
 }
 
